@@ -277,5 +277,504 @@
     "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
     "weight_class": "other",
     "notes": "govdocs1 thread 000, member 000/000011.pdf. Producer: acrobat distiller (windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_000_000013.pdf",
+    "sha256": "76c4dfb49667db90af7acdfba9e1d366fe14c4af6197d9f1daacb39a6511d0a1",
+    "tier": "public",
+    "categories": [
+      "inline_images",
+      "subset_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/000.zip#000/000013.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 000, member 000/000013.pdf. Producer: acrobat distiller for windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_000_000015.pdf",
+    "sha256": "eca0f217f9fdbc5f9509894e45b247dc4cb611f534832bd368f791f4bd14796b",
+    "tier": "public",
+    "categories": [
+      "inline_images",
+      "subset_fonts",
+      "symbolic_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/000.zip#000/000015.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 000, member 000/000015.pdf. Producer: acrobat distiller for windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_000_000016.pdf",
+    "sha256": "58fe21359f9caba5bb1224d65026c5333f9747c1fe8d9d94d8f21294ecc1f53a",
+    "tier": "public",
+    "categories": [
+      "contents_array",
+      "inline_images",
+      "subset_fonts",
+      "symbolic_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/000.zip#000/000016.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 000, member 000/000016.pdf. Producer: acrobat distiller for windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_000_000018.pdf",
+    "sha256": "ed65a432e4091cf9a7b9ff7983055dbeee91752c864dca14baa35b1e85ce1103",
+    "tier": "public",
+    "categories": [
+      "annotation_appearance_streams",
+      "contents_array",
+      "encrypted",
+      "symbolic_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/000.zip#000/000018.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 000, member 000/000018.pdf. Producer: fdfmerge lite windows spdf_+ may. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_000_000019.pdf",
+    "sha256": "dc738585d318b2992a41b12832788b24fed94d318ef962103fbeaa613c7ca93c",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "symbolic_fonts",
+      "type0_identity_h"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/000.zip#000/000019.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 000, member 000/000019.pdf. Producer: acrobat distiller (windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_000_000024.pdf",
+    "sha256": "dfa3b40bd8422184f589df4329e3f5a5f07884905d3d82e529cc75f6082eb8bb",
+    "tier": "public",
+    "categories": [
+      "contents_array"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/000.zip#000/000024.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 000, member 000/000024.pdf. Producer: acrobat distiller for macintosh. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_000_000025.pdf",
+    "sha256": "c6df45d7788b84731ab863999834f7e196b8561f15541690c6a096bedd1a22eb",
+    "tier": "public",
+    "categories": [
+      "contents_array",
+      "subset_fonts",
+      "symbolic_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/000.zip#000/000025.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 000, member 000/000025.pdf. Producer: acrobat distiller for windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_000_000026.pdf",
+    "sha256": "7f0d5dffdf7aebaf5a6aa5c9344b8685a68a670fe0904c3162c770e68cc8da2e",
+    "tier": "public",
+    "categories": [
+      "contents_array"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/000.zip#000/000026.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 000, member 000/000026.pdf. Producer: acrobat distiller (windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_000_000028.pdf",
+    "sha256": "99ec2ff852b8692a7f1a2a27de8b6d8125faa8aba8a35c6f88b4a0c68ca6e3fc",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "symbolic_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/000.zip#000/000028.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 000, member 000/000028.pdf. Producer: acrobat distiller (windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_000_000029.pdf",
+    "sha256": "0688ba309c87485dd8d96c1d9d29db420f59973b50c65324ce040dca8d34a817",
+    "tier": "public",
+    "categories": [
+      "contents_array",
+      "encrypted",
+      "symbolic_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/000.zip#000/000029.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 000, member 000/000029.pdf. Producer: acrobat distiller (windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_000_000135.pdf",
+    "sha256": "677d1055b3490d275fb9abfadc03d0b5be9d9ae5f17e89e0aed6935a59c1bce7",
+    "tier": "public",
+    "categories": [
+      "contents_array",
+      "subset_fonts",
+      "symbolic_fonts",
+      "type0_identity_h",
+      "type3"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/000.zip#000/000135.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 000, member 000/000135.pdf. Producer: acrobat distiller for windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_000_000137.pdf",
+    "sha256": "a17891eddc4266fab4282fd397372a5e188eec545359d7a85e87c8a2b2fd0ece",
+    "tier": "public",
+    "categories": [
+      "contents_array"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/000.zip#000/000137.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 000, member 000/000137.pdf. Producer: unknown. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_001_001024.pdf",
+    "sha256": "58711fbe3c949f107873eb89d423a682422e891a9dda9a6404a14596ff9d4d19",
+    "tier": "public",
+    "categories": [
+      "inline_images",
+      "subset_fonts",
+      "symbolic_fonts",
+      "type0_identity_h"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/001.zip#001/001024.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 001, member 001/001024.pdf. Producer: acrobat distiller (windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_001_001028.pdf",
+    "sha256": "944a15d32ff64dc2fce0836f502c2f29e8b6c650dc9f3949b455de943d2f2de2",
+    "tier": "public",
+    "categories": [
+      "contents_array",
+      "inline_images",
+      "subset_fonts",
+      "symbolic_fonts",
+      "type0_identity_h"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/001.zip#001/001028.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 001, member 001/001028.pdf. Producer: acrobat distiller (windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_001_001029.pdf",
+    "sha256": "ec2bee6100dd9d7d50a4f6f5400618403ccfadf5f82cb1a3ca8b6b2cebcd8b49",
+    "tier": "public",
+    "categories": [
+      "contents_array",
+      "inline_images",
+      "subset_fonts",
+      "symbolic_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/001.zip#001/001029.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 001, member 001/001029.pdf. Producer: corel pdf engine version. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_001_001030.pdf",
+    "sha256": "51af1f89b9a4747d75f8777908eedf8b945d5aaeced9211651ca6c881110811e",
+    "tier": "public",
+    "categories": [
+      "inline_images",
+      "subset_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/001.zip#001/001030.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 001, member 001/001030.pdf. Producer: acrobat distiller (windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_001_001031.pdf",
+    "sha256": "068bd51d5c74ad032d97a0ccf7964a92c48e19c3b51a87929f35c11018322ad6",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "symbolic_fonts",
+      "type0_identity_h"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/001.zip#001/001031.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 001, member 001/001031.pdf. Producer: acrobat distiller (windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_001_001032.pdf",
+    "sha256": "4674cd019e9463f5766ee553e16cd067fcb7b793ac0a82e6973d3d95e4654cea",
+    "tier": "public",
+    "categories": [
+      "symbolic_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/001.zip#001/001032.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 001, member 001/001032.pdf. Producer: acrobat pdfwriter for windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_001_001033.pdf",
+    "sha256": "055db9930276ac42d0c12f3ea0babb65ef8ff4414b6c5033e415450a16afc84d",
+    "tier": "public",
+    "categories": [
+      "inline_images",
+      "subset_fonts",
+      "symbolic_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/001.zip#001/001033.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 001, member 001/001033.pdf. Producer: corel pdf engine version. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_001_001034.pdf",
+    "sha256": "72fa826808b7e0fa049692c93ea59155cd0c6d3e77641d5b7cc85d21ab258e77",
+    "tier": "public",
+    "categories": [
+      "inline_images"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/001.zip#001/001034.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 001, member 001/001034.pdf. Producer: acrobat distiller (windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_001_001035.pdf",
+    "sha256": "cdbc61c3ebb7ea0724706028f8b9f43f85a5790bfef89a4da0de3c5f550e3b88",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "symbolic_fonts",
+      "type0_identity_h"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/001.zip#001/001035.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 001, member 001/001035.pdf. Producer: acrobat distiller (windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_001_001036.pdf",
+    "sha256": "24cf5b6736214b8c47fdce90c5dffdd1148a9230b8731eee1fc1252af5a1d268",
+    "tier": "public",
+    "categories": [
+      "contents_array",
+      "subset_fonts",
+      "symbolic_fonts",
+      "type0_identity_h"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/001.zip#001/001036.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 001, member 001/001036.pdf. Producer: acrobat distiller (windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_001_001037.pdf",
+    "sha256": "40056fcc4f430680f3a98ad73e5b6ad6a3504de8fe9862e1cc27e367ca05d274",
+    "tier": "public",
+    "categories": [
+      "contents_array",
+      "encrypted",
+      "subset_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/001.zip#001/001037.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 001, member 001/001037.pdf. Producer: creo normalizer jtp. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_001_001038.pdf",
+    "sha256": "feb775427f37db1f5c41581098499663784bff7cd3f5b8d88e744532f1b6279b",
+    "tier": "public",
+    "categories": [
+      "annotation_appearance_streams",
+      "contents_array",
+      "subset_fonts",
+      "symbolic_fonts",
+      "type0_identity_h"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/001.zip#001/001038.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 001, member 001/001038.pdf. Producer: acrobat distiller (windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_002_002014.pdf",
+    "sha256": "355eb1d1398055718992c2c1a0b7d3457fd5d7028e84ee33d56ca4b1ff364ad4",
+    "tier": "public",
+    "categories": [
+      "contents_array"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/002.zip#002/002014.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 002, member 002/002014.pdf. Producer: wwwinputsolutionscom. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_002_002021.pdf",
+    "sha256": "7d8fb27fddb49ac74466b31bf8c6788e763073df226bda04eaca5e80bd217f31",
+    "tier": "public",
+    "categories": [
+      "contents_array",
+      "inline_images",
+      "subset_fonts",
+      "symbolic_fonts",
+      "type0_identity_h"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/002.zip#002/002021.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 002, member 002/002021.pdf. Producer: acrobat distiller (windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_002_002145.pdf",
+    "sha256": "248bde7e3d07bf0a696c84b64e86a06c92a2284a5a93d3645ad8610e621f4739",
+    "tier": "public",
+    "categories": [
+      "inline_images",
+      "subset_fonts",
+      "symbolic_fonts",
+      "type3"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/002.zip#002/002145.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 002, member 002/002145.pdf. Producer: afpl ghostscript. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_002_002154.pdf",
+    "sha256": "997463fa22b20f63904cbde4f2635c611cabc8fe4da703b985d49524e1a655eb",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "symbolic_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/002.zip#002/002154.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 002, member 002/002154.pdf. Producer: acrobat pdfwriter for windows nt. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_002_002166.pdf",
+    "sha256": "257f0d64f33090ebc1fd4bd9408dfd25ad0829d4eaf56bc23c89c24d78493a9f",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "symbolic_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/002.zip#002/002166.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 002, member 002/002166.pdf. Producer: openofficeorg. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_002_002167.pdf",
+    "sha256": "5c73fa3f6a97fad9ebf0072241f5bdf1264186d4b8aeb7352713451e6c5dade2",
+    "tier": "public",
+    "categories": [
+      "contents_array",
+      "subset_fonts",
+      "symbolic_fonts",
+      "type3"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/002.zip#002/002167.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 002, member 002/002167.pdf. Producer: toolkit http://wwwactivepdfcom. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_002_002168.pdf",
+    "sha256": "d87258f2ce60b9a826a12535c710266bf5d1dde552634f2b29aacb6715eccaa2",
+    "tier": "public",
+    "categories": [
+      "contents_array",
+      "inline_images",
+      "subset_fonts",
+      "symbolic_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/002.zip#002/002168.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 002, member 002/002168.pdf. Producer: acrobat distiller for macintosh. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_002_002169.pdf",
+    "sha256": "302c8024884e70074735e24d237bdc0bdc311c4318b70f51fba84dd4fef11ebb",
+    "tier": "public",
+    "categories": [
+      "inline_images",
+      "subset_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/002.zip#002/002169.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 002, member 002/002169.pdf. Producer: corel pdf engine version. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_002_002173.pdf",
+    "sha256": "37ab57b022081ccbcbb5f02b1937d07667494c2ff42f00dfac15ad47eb8e0a2b",
+    "tier": "public",
+    "categories": [
+      "inline_images",
+      "subset_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/002.zip#002/002173.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 002, member 002/002173.pdf. Producer: corel pdf engine version. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_002_002174.pdf",
+    "sha256": "c11fa6fc26ead66fcde1b4466a4386184d10816266393871287083d10110216f",
+    "tier": "public",
+    "categories": [
+      "contents_array",
+      "inline_images",
+      "subset_fonts",
+      "symbolic_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/002.zip#002/002174.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 002, member 002/002174.pdf. Producer: acrobat pdfwriter for windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_002_002176.pdf",
+    "sha256": "8745c527425a4e1dd2316a0833a29f180cfe5d3276e1af113f83d1e959f1b91a",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "symbolic_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/002.zip#002/002176.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 002, member 002/002176.pdf. Producer: mac os x quartz pdfcontext. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_002_002177.pdf",
+    "sha256": "b1883cc51949f3342648e912c8623ffd4abd741636699e7b222a01b121980751",
+    "tier": "public",
+    "categories": [
+      "subset_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/002.zip#002/002177.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 002, member 002/002177.pdf. Producer: mac os x quartz pdfcontext. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
   }
 ]
