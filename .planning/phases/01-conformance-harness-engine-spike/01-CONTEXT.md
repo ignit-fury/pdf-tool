@@ -28,19 +28,19 @@ release was unvalidated.
 
 ### Corpus Sourcing
 
-- **D-01: Two-tier corpus — public tier committed to the repo, private tier never committed.**
+- **D-01:** Two-tier corpus — public tier committed to the repo, private tier never committed.
   The public tier runs on every PR. The private tier holds real invoices and contracts, is fetched
   from a bucket via CI secrets, and exists locally for the maintainer. Chosen because the roadmap
   requires weighting toward invoices and contracts, and those are exactly the documents that carry
   third-party personal data and cannot be committed to a repo that may not stay private.
 
-- **D-02: The private tier gates `main` and release branches; it is skipped where credentials are
-  absent (fork PRs, fresh clones).** Nothing ships with a private-tier regression, and outside
+- **D-02:** The private tier gates `main` and release branches; it is skipped where credentials are
+  absent (fork PRs, fresh clones). Nothing ships with a private-tier regression, and outside
   contribution still works. Accepted cost: two CI configurations, and a class of failure that
   surfaces at merge rather than on the PR that caused it. The harness must therefore handle a
   partially-absent corpus gracefully rather than erroring — absence is a normal state, not a fault.
 
-- **D-03: Every structural category must have public-tier coverage.** At least one public example
+- **D-03:** Every structural category must have public-tier coverage. At least one public example
   of each of: subset fonts, Type0/Identity-H, symbolic fonts, Type3, CID-keyed CFF, `/Contents`
   arrays, inline images, Form XObjects, annotation appearance streams, justified and right-aligned
   text, tables, an OCR'd scan, vector-outlined text, encrypted files, malformed files. The private
@@ -49,7 +49,7 @@ release was unvalidated.
   Follows directly from D-02: private-only categories plus skip-on-fork means an untested branch
   can sit behind a green PR.
 
-- **D-04: Category membership is recorded in a manifest and verified independently in CI.** Each
+- **D-04:** Category membership is recorded in a manifest and verified independently in CI. Each
   document declares its categories; a CI script probes the file and fails if a declared category is
   absent, or if any category has dropped to zero documents. **The prober must do plain structural
   inspection (e.g. does any font resource have `Subtype /Type0`) and must NOT reuse the
