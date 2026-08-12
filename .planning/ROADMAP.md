@@ -279,7 +279,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → (5 ∥ 6 ∥ 7) → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Conformance Harness + Engine Spike | 6/6 | Complete   | 2026-08-12 |
+| 1. Conformance Harness + Engine Spike | 7/7 | Complete   | 2026-08-12 |
 | 2. Text Model | 0/TBD | Not started | - |
 | 3. Rewrite Engine + Font Pipeline | 0/TBD | Not started | - |
 | 4. Web Tier Walking Skeleton + Hardening | 0/TBD | Not started | - |
