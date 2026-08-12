@@ -1,0 +1,19 @@
+[project]
+name = "pdf-tool-engine"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fonttools==4.63.0",
+    "pikepdf==10.11.0",
+    "pillow==12.3.0",
+    "playa-pdf==1.1.0",
+    "pypdfium2==5.12.1",
+    "uharfbuzz==0.56.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
