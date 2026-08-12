@@ -1,0 +1,21 @@
+name: Harness
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  corpus-harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Build the pinned CI image (Dockerfile.ci)
+        run: docker build -f Dockerfile.ci -t pdf-tool-harness:ci .
+
+      - name: Render -> cross-engine diff -> structural validation, public tier
+        run: >
+          docker run --rm pdf-tool-harness:ci
+          uv run python harness/run_corpus_harness.py corpus/manifest.json corpus/public

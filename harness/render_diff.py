@@ -64,6 +64,11 @@ def render_poppler(pdf_path: str | Path, page_index: int, output_dir: str | Path
             "-png",
             "-r",
             str(RENDER_DPI),
+            # pypdfium2/pdfium renders to the CropBox by default; pdftoppm defaults to the
+            # MediaBox. Without -cropbox, a page whose CropBox differs from its MediaBox
+            # (e.g. nasa_graphics_standards_manual.pdf) renders to a genuinely different
+            # pixel size per engine — not an antialiasing artifact, an actual box mismatch.
+            "-cropbox",
             "-f",
             str(page_number),
             "-l",
@@ -101,6 +106,10 @@ def render_mupdf(pdf_path: str | Path, page_index: int, output_dir: str | Path) 
             "draw",
             "-r",
             str(RENDER_DPI),
+            # -b CropBox: match pdfium's default of rendering the CropBox, not the MediaBox
+            # (mutool defaults to MediaBox otherwise) — see the -cropbox comment above.
+            "-b",
+            "CropBox",
             "-o",
             str(out_path),
             str(pdf_path),
