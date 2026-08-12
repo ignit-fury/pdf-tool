@@ -32,7 +32,9 @@ happened.** If everything else on this list fails, this one capability must work
 - [ ] Reorder, rotate, and delete pages
 - [ ] Apply a font from a bundled open-license set to edited text, subset and embedded on save
 - [ ] Apply basic formatting to edited text — size, weight, style, color
-- [ ] Detect a scanned page with no text layer and say so clearly instead of failing silently
+- [ ] Classify every page and every text run for editability *before* the user types — scanned,
+      OCR'd scan, vector-outlined text, unwritable font — name the reason in plain language, and
+      keep every other operation available on pages that can't be edited
 - [ ] Export to PDF variants — flatten, compress, split, PDF/A
 - [ ] Export pages as images (PNG/JPEG) at a chosen DPI
 - [ ] Export to HTML, plain text, and Markdown
@@ -49,7 +51,9 @@ happened.** If everything else on this list fails, this one capability must work
   but produces visible artifacts on non-white and textured backgrounds, and is exactly the
   low-quality result this project exists to avoid.
 - **OCR of scanned pages** — deferred to v2. OCR'd text has no original content stream to rewrite,
-  so it needs a separate overlay-editing path through the engine, not a free addition.
+  so it needs a separate overlay-editing path through the engine, not a free addition. The v1
+  refusal screen names a specific external OCR route and offers a one-click "tell me when OCR
+  ships" — the cheapest available signal on whether v2 OCR is worth building at all.
 - **User accounts, saved documents, edit history** — v1 is anonymous. Accounts are an entire phase
   of work before anyone can edit a single PDF, and nothing in the core value needs them.
 - **User-uploaded fonts** — embedding a user's own font file into an exported PDF is
@@ -93,15 +97,34 @@ deletion is immediate and verifiable, and the policy is stated plainly in the pr
   lines or pages — replaced text occupies the original text run's space.
 - **Fonts**: Bundled open-license families only (Liberation, Noto, Source, DejaVu or similar),
   subset and embedded on save. Fixed set means fixed metrics to test against.
-- **Privacy**: Uploaded documents are processed ephemerally and deleted immediately. No retention,
-  no analytics on document content. This is a product promise, not just an implementation detail.
+- **Privacy**: Ephemerality is a *structural property*, not a retention policy — "the server has no
+  state whose loss is observable," testable by killing the cache mid-session and having the session
+  survive. Client holds the authoritative bytes; the server cache is content-addressed and evictable
+  at any moment; scratch is tmpfs; queues carry opaque handles, never document bytes; no document
+  content in logs or error reports. The novel user-facing claim is **per-operation local/server
+  disclosure** — the UI shows which actions stay in the browser and which don't. Deletion windows are
+  table stakes (every competitor claims 1–2 hours) and privacy reviewers discount them.
+  **Never claim** "files never leave your device," "we never see your file," or "deleted immediately"
+  without stating the mechanism. The first is false for the text engine and is the claim users check.
+- **Licensing**: No AGPL anywhere in the runtime dependency tree, *including transitively* — CI must
+  fail on AGPL in the resolved lockfile, not top-level metadata. Rules out PyMuPDF, mupdf.js, and
+  Ghostscript. GPL/LGPL permitted only as a subprocess with a file-in/file-out interface (GPL
+  triggers on distribution, and a hosted service distributes nothing) — this keeps Poppler and
+  veraPDF available. AGPL permitted only in CI and dev tooling no served request can reach.
+  Known trap: `pdf2docx` is MIT at the top level and pulls `PyMuPDF>=1.26.7` transitively.
 - **Auth**: No accounts in v1. Anyone can open the site and edit a file.
 - **DOCX fidelity**: Best-effort, explicitly not pixel-faithful. Producing a Word document requires
   inferring paragraphs, tables, and styles from absolute glyph positions — the same reflow problem
   ruled out of scope above. Complex layouts will degrade. Sequenced last so it cannot block
   anything that matters.
-- **Tech stack**: To be determined by research. Content-stream editing plus font subsetting points
-  toward Python tooling for the engine, but this is to be verified rather than assumed.
+- **Tech stack**: Resolved by research. Python 3.13 engine — `pikepdf` 10.11.0 (MPL-2.0, object layer
+  and content-stream rewrite), `playa-pdf` 1.1.0 (MIT, encoding decode and glyph geometry),
+  `fontTools` 4.63.0 + `uharfbuzz` (MIT, subsetting and shaped advances), `pypdfium2` (BSD/Apache,
+  rasterization). FastAPI service, React/Vite SPA, `@cantoo/pdf-lib` (maintained fork — upstream
+  `pdf-lib` last published 2021-11-06) + `pdfjs-dist` on the client. No single permissive library
+  does both halves of content-stream editing; the one that does is AGPL. `playa-pdf` is the
+  least-corroborated choice and sits on the critical path — validated in Phase 0, with
+  `pdfminer.six` as the drop-in fallback.
 
 ## Key Decisions
 
@@ -111,10 +134,13 @@ deletion is immediate and verifiable, and the policy is stated plainly in the pr
 | Web app, not desktop | Reach and zero install. Cost is the privacy story, addressed by the ephemeral-processing constraint. | — Pending |
 | Hybrid client/server processing | Fully client-side WASM caps file size and constrains font subsetting; fully server-side makes every interaction a round trip. Hybrid gets responsive page ops and a capable engine. | — Pending |
 | Bundled open-license fonts only | Avoids font-licensing exposure from embedding user-uploaded fonts, and gives a fixed set of metrics to test against. | — Pending |
-| Scanned PDFs detected and refused in v1, OCR in v2 | Detection is nearly free and prevents the worst possible support experience — editing for ten minutes and saving nothing. OCR needs a separate overlay path through the engine. | — Pending |
+| Uneditable content detected per page *and* per run; the **operation** is refused, never the document | A 40-page contract with 3 scanned pages must stay fully editable on the other 37 and page-op-able on all 40. Blanket rejection loses the user permanently. Four buckets — scan, OCR'd scan, vector-outlined text, unwritable font — via three signals: visible glyph count, image coverage, invisible:visible ratio. | ✓ Good |
+| Refusal UX is the substitute for a white-box fallback | Overlay always works and every competitor has it — Sejda officially recommends it. The moment it exists it becomes the fallback for every hard case, the quality claim silently dies, and users can't tell which mode ran. Permanent anti-feature. | ✓ Good |
 | Anonymous v1, no accounts | Nothing in the core value requires identity. Accounts would be a full phase of work before a single PDF could be edited. | — Pending |
-| DOCX export included but sequenced last | User asked for it explicitly after being told the fidelity risk. Scoped best-effort and placed last so it cannot block the core value. | ⚠️ Revisit |
-| Stack chosen by research, not assumed | The engine's viability rests on PDF and font library capability. Worth verifying current tooling rather than defaulting to a familiar language. | — Pending |
+| DOCX export kept, sequenced last, generated as **direct OOXML from the text model** — not LibreOffice, not `pdf2docx` | `pdf2docx` is out on licensing (AGPL transitively). LibreOffice imports PDF through Draw, producing disconnected text frames rather than paragraphs, and brings profile locking, no timeout, memory leaks, zombie processes, and a large native attack surface that fights the sandboxing posture. It buys almost nothing, because the fidelity ceiling is set by our own layout inference either way. Optimize for editability, not fidelity. | ✓ Good |
+| Text addressing: the **server owns the addresses** | pdf.js `TextItem` has no operator index, byte offset, or object number, and its reconstruction is lossy in documented ways. pikepdf has addresses but no reliable Unicode. Client has Unicode without addresses; server has addresses without Unicode. Reconciling them after the fact is a fuzzy join on the critical path — works on 90% of PDFs and silently corrupts the rest. One walker, two modes (index / rewrite), same traversal so they cannot drift. | ✓ Good |
+| Replace and font subsetting ship in the **same phase** | Embedded fonts are subsets, so typing a character the document never used is the common case, not an edge case. Replace without subsetting *is* PDF-XChange's shipped limitation, which the market already has and nobody likes. | ✓ Good |
+| Stack resolved by research | Confirmed no permissive library does both halves; the one that does is AGPL. See Constraints. | ✓ Good |
 
 ## Evolution
 
@@ -134,4 +160,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-11 after initialization*
+*Last updated: 2026-08-12 after project research (see `.planning/research/SUMMARY.md`)*
