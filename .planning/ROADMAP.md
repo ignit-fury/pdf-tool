@@ -59,7 +59,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-02-PLAN.md — Public-tier corpus assembly + manifest, all 15 D-03 categories (ENG-01)
+- [x] 01-02-PLAN.md — Public-tier corpus assembly + manifest, all 15 D-03 categories (ENG-01)
 - [ ] 01-06-PLAN.md — TJ-refit width-fitting prototype (ENG-05)
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -277,7 +277,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → (5 ∥ 6 ∥ 7) → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Conformance Harness + Engine Spike | 1/6 | In Progress|  |
+| 1. Conformance Harness + Engine Spike | 2/6 | In Progress|  |
 | 2. Text Model | 0/TBD | Not started | - |
 | 3. Rewrite Engine + Font Pipeline | 0/TBD | Not started | - |
 | 4. Web Tier Walking Skeleton + Hardening | 0/TBD | Not started | - |
