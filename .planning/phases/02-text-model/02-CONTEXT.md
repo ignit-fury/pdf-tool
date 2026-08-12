@@ -26,11 +26,17 @@ Still CLI-only. No web tier work begins before Gate G2b passes in Phase 3.
 ### Run Model
 
 - **D-01:** **A run is a visual line.** Glyphs are merged across text-showing-operator boundaries
-  into what reads as a line on the page, breaking on font change, size change, baseline shift, or a
-  horizontal gap wider than the tuned threshold. Chosen because it matches what a user believes they
-  are clicking. Accepted cost: one visual line commonly spans several `Tj`/`TJ` operators, so a
-  replacement must rewrite all of them coherently — the run model and the rewrite engine are
-  therefore coupled, and Phase 3 inherits this.
+  into what reads as a line on the page, breaking on font change, size change, baseline shift,
+  **fill colour change**, or a horizontal gap wider than the tuned threshold. Chosen because it
+  matches what a user believes they are clicking. Accepted cost: one visual line commonly spans
+  several `Tj`/`TJ` operators, so a replacement must rewrite all of them coherently — the run model
+  and the rewrite engine are therefore coupled, and Phase 3 inherits this.
+
+  *Colour was added 2026-08-13 after Phase 2 research flagged that D-01 did not name it. A run is
+  the unit of replacement, so text spanning two colours would force the rewrite to pick one and
+  silently change the other — the common real case being a coloured hyperlink or a highlighted term
+  mid-sentence. Stroke mode and text render mode were considered as additional break conditions and
+  deliberately NOT adopted; only fill colour breaks a run.*
 
 - **D-02:** **Sub-runs are the addressable unit when a line splits.** Where a line contains an
   unmappable glyph, each editable fragment gets its own run ID and is independently selectable; the
