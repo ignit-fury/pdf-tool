@@ -3,3 +3,11 @@ __pycache__/
 .venv/
 .pytest_cache/
 *.egg-info/
+
+# macOS Finder metadata
+.DS_Store
+
+# Machine-local agent state. Scoped narrowly so a shared .claude/settings.json
+# or .claude/skills/ can still be tracked if the project adds them.
+.claude/settings.local.json
+.claude/worktrees/
