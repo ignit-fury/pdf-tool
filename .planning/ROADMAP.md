@@ -45,7 +45,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Success Criteria** (what must be TRUE):
 
   1. A corpus of 100–300 wild-harvested PDFs (not generated), weighted toward invoices and contracts and covering subset fonts, Type0/Identity-H, symbolic fonts, Type3, CID-keyed CFF, `/Contents` arrays, inline images, Form XObjects, annotation appearance streams, justified and right-aligned text, tables, an OCR'd scan, vector-outlined text, encrypted and malformed files, is checked in and enumerated
-  2. The three-engine differential rasterizer (pdfium, Poppler, MuPDF) runs in CI and asserts a *masked* image diff of the unedited region is pixel-identical — not merely similar — passing on an identity transform across the whole corpus, with `qpdf --check` and `pdfcpu validate` run on every engine output
+  2. The three-engine differential rasterizer (pdfium, Poppler, MuPDF) runs in CI over the whole corpus with `qpdf --check` and `pdfcpu validate` on every engine output, asserting at two distinct layers: **same-engine** before/after renders of the unedited region are exactly pixel-identical (zero tolerance); **cross-engine** renders agree within a measured tolerance. *(Corrected during execution — see 01-04-SUMMARY.md. Cross-engine pixel identity is empirically impossible: measured across 2,476 corpus pages, two engines rendering the same untouched page disagree 0–98% purely from antialiasing, gamma, and subpixel hinting. The 8% threshold is derived from that measurement, pinned above the worst observed case of ~7.2%.)*
   3. `playa-pdf` decodes encodings and glyph geometry on at least 4 real documents including one Type0/Identity-H and one subset-font document — or the switch to `pdfminer.six` is made and recorded in this phase, not later
   4. A TJ-refit prototype fits replacement text into an original run's width within |Δwidth| < 0.5pt on a hand-picked run
   5. CI fails the build on an AGPL package anywhere in the resolved lockfile — proven by deliberately adding a transitively-AGPL dependency (`pdf2docx`) and watching the build go red — and the one-page data-flow retention map is written *before* any infrastructure is selected
@@ -65,7 +65,7 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [x] 01-04-PLAN.md — Three-engine differential rendering harness + structural validators (ENG-02, ENG-03)
-- [ ] 01-05-PLAN.md — playa-pdf decode spike against real documents (ENG-04)
+- [x] 01-05-PLAN.md — playa-pdf decode spike against real documents (ENG-04)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -104,8 +104,10 @@ Plans:
 **Requirements**: EDIT-02, EDIT-03, EDIT-04, FONT-01, FONT-02, FONT-03, FONT-04, FONT-05, FONT-06
 **Success Criteria** (what must be TRUE):
 
-  1. **G2a** — replacing a run whose glyphs all exist in the embedded subset produces a `qpdf --qdf` normalization diff confined to the edited operators, |Δwidth| < 0.5pt, a text matrix after the edited run bit-identical within epsilon to what it was before, `qpdf --check` clean, and a zero masked pixel diff outside the run in all three engines
-  2. **G2b — THE PROJECT GATE** — the same result when the replacement uses a character *absent from the embedded font subset*: pixel-identical outside the edited run in pdfium, Poppler and MuPDF; opens without a repair prompt in Acrobat Reader, macOS Preview and Chrome; copy-paste out of Acrobat yields the correct Unicode; the output font passes OTS
+  1. **G2a** — replacing a run whose glyphs all exist in the embedded subset produces a `qpdf --qdf` normalization diff confined to the edited operators, |Δwidth| < 0.5pt, a text matrix after the edited run bit-identical within epsilon to what it was before, `qpdf --check` clean, and — per the two-layer assertion below — a **zero** masked pixel diff outside the run under same-engine before/after comparison, plus cross-engine agreement within the measured tolerance
+  2. **G2b — THE PROJECT GATE** — the same result when the replacement uses a character *absent from the embedded font subset*: **same-engine** before/after renders pixel-identical outside the edited run with zero tolerance (this is the preservation guarantee — an edit that shifts untouched text fails loudly), **cross-engine** renders in pdfium, Poppler and MuPDF agreeing within the measured tolerance (this catches a document that renders ambiguously); opens without a repair prompt in Acrobat Reader, macOS Preview and Chrome; copy-paste out of Acrobat yields the correct Unicode; the output font passes OTS
+
+**Assertion layering (corrected in Phase 1, plan 01-04).** The original wording — "pixel-identical across all three engines" — is empirically unachievable and was never possible. Two engines rendering the *same untouched page* disagree 0–98% purely from antialiasing, gamma, and subpixel hinting; a separate CropBox-vs-MediaBox default difference between pdfium and pdftoppm/mutool alone produced a 98% false diff until forced to a common box. The gate's intent is preserved by splitting it: exact zero-tolerance comparison belongs to **same-engine** before/after, where bit-identity genuinely is the right expectation and where a shifted line or wrong glyph must fail; **cross-engine** agreement uses `harness/run_corpus_harness.py`'s measured tolerance (3px blur, 20/255 per-channel delta, 8% pixel-count threshold). `harness/masked_diff.py`'s `masked_pixel_diff()` remains the exact, unit-tested, zero-tolerance primitive for the same-engine layer.
   3. Untouched text elsewhere in the document that uses the same font still renders correctly after a re-subset — subsetting runs once at save over the whole-document glyph union, every re-subset gets a fresh subset tag so two subsets of the same family never collide, and `/Widths` are regenerated with a consistency assertion against the font program's own metrics so no code outside `FirstChar..LastChar` falls back to a `/MissingWidth` of 0
   4. Substitution picks its face from a static mapping table (never a heuristic), re-encodes the entire visual run rather than half of one, and survives side-by-side review at 100% zoom against the corpus with no visible seam mid-paragraph
   5. An edit that cannot be performed correctly is refused with a named reason rather than guessed at, and overflow is measured and reported before commit — condensed only within 90–95%, visibly refused beyond
@@ -277,7 +279,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → (5 ∥ 6 ∥ 7) → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Conformance Harness + Engine Spike | 4/6 | In Progress|  |
+| 1. Conformance Harness + Engine Spike | 5/6 | In Progress|  |
 | 2. Text Model | 0/TBD | Not started | - |
 | 3. Rewrite Engine + Font Pipeline | 0/TBD | Not started | - |
 | 4. Web Tier Walking Skeleton + Hardening | 0/TBD | Not started | - |
