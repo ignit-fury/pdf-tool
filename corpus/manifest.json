@@ -183,12 +183,12 @@
     "sha256": "2aebec98b6c21ae8868f56f9c3a19c6605bcdc302a050923234cced3d8a46b24",
     "tier": "public",
     "categories": [
-      "vector_outlined_text"
+      "ocr_scan"
     ],
     "source_url": "https://commons.wikimedia.org/wiki/File:NASA_Graphics_Standards_Manual.pdf",
     "license": "Public Domain (U.S. Government Work, NASA, 17 U.S.C. SS 105)",
     "weight_class": "other",
-    "notes": "The 1976 NASA Graphics Standards Manual (the 'worm' logo manual). Page 1.3 (page index 6) renders the NASA wordmark as a filled vector shape, not font-based text - visually confirmed via pypdfium2 render; the logotype geometry does not correspond to any Tj/TJ text run at that position."
+    "notes": "OCR'd scan, NOT vector-outlined text. /Producer 'Adobe Acrobat Pro 11.0.0 Paper Capture Plug-in', /Creator 'Canon DR-7550C TWAIN'; every glyph is drawn in render mode 3 (invisible) over scanned page images, with no visible text. Originally mislabelled vector_outlined_text; caught during Phase 2 research. vector_outlined_text is in probe_corpus.UNVERIFIED_CATEGORIES, so the prober could not catch this label the way it caught the earlier subset_fonts one."
   },
   {
     "filename": "irs_form_w9_encrypted.pdf",
