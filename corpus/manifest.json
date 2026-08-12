@@ -237,5 +237,45 @@
     "license": "CC BY 4.0 (veraPDF Consortium, per veraPDF-corpus repository README)",
     "weight_class": "other",
     "notes": "GAP DISCLOSURE: no wild-harvested document in the sourced set embedded a Type3 font (checked government forms/publications, sheet music, CJK documents, and posters). This is a constructed ISO 32000 conformance fixture from veraPDF-corpus (font /Subtype /Type3, no /BaseFont, per ISO 14289 Unicode-mapping conformance testing), not an independently wild-harvested document - flagged here and in corpus/README.md and the plan SUMMARY per the phase's explicit-gap-disclosure requirement."
+  },
+  {
+    "filename": "govdocs1_000_000009.pdf",
+    "sha256": "3fcfd899850be006b2d6616f8161e49479bc41424fa80e404f41233b77256ff3",
+    "tier": "public",
+    "categories": [
+      "contents_array",
+      "inline_images",
+      "subset_fonts",
+      "symbolic_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/000.zip#000/000009.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 000, member 000/000009.pdf. Producer: xpp. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_000_000010.pdf",
+    "sha256": "7832f844839ed04e2979bc565642f36bf76e1682137071f0786d4c7418bf81d7",
+    "tier": "public",
+    "categories": [
+      "contents_array",
+      "subset_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/000.zip#000/000010.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 000, member 000/000010.pdf. Producer: acrobat distiller (windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "govdocs1_000_000011.pdf",
+    "sha256": "44d4296ee6750f96a34455cf5d6d6e0a574ffe1419928780b5d2fddea0af3778",
+    "tier": "public",
+    "categories": [
+      "subset_fonts"
+    ],
+    "source_url": "https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/000.zip#000/000011.pdf",
+    "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
+    "weight_class": "other",
+    "notes": "govdocs1 thread 000, member 000/000011.pdf. Producer: acrobat distiller (windows. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
   }
 ]
