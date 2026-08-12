@@ -55,7 +55,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 **Wave 1**
 
-- [ ] 01-01-PLAN.md — Retention map, repo scaffolding, and the AGPL lockfile gate proof (ENG-06, ENG-07)
+- [x] 01-01-PLAN.md — Retention map, repo scaffolding, and the AGPL lockfile gate proof (ENG-06, ENG-07)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -277,7 +277,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → (5 ∥ 6 ∥ 7) → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Conformance Harness + Engine Spike | 0/TBD | Not started | - |
+| 1. Conformance Harness + Engine Spike | 1/6 | In Progress|  |
 | 2. Text Model | 0/TBD | Not started | - |
 | 3. Rewrite Engine + Font Pipeline | 0/TBD | Not started | - |
 | 4. Web Tier Walking Skeleton + Hardening | 0/TBD | Not started | - |
