@@ -157,10 +157,21 @@ def producer_of(pdf_path: Path) -> str:
 
 
 def _normalize_producer(raw: str) -> str:
-    """Collapse version noise so 'Distiller 9.0' and 'Distiller 10.1' count as one producer."""
-    s = re.sub(r"[\d.]+", "", raw).strip(" -_/()")
-    s = re.sub(r"\s+", " ", s)
-    return (s or "unknown").lower()[:60]
+    """Collapse version and punctuation noise so variants of one product count as ONE producer.
+
+    This is the cap's key, so a sloppy normalizer silently defeats the diversity limit. An earlier
+    version stripped digits but left punctuation, which split "Acrobat Distiller 4.0 for Windows"
+    and "Acrobat Distiller 5.0 (Windows)" into two buckets — each landing under the cap while the
+    real product sat at nearly double it. Strip all punctuation and collapse whitespace so the key
+    reflects the product, not its version string.
+    """
+    s = re.sub(r"[\d.]+", " ", raw)
+    s = re.sub(r"[^a-zA-Z ]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip().lower()
+    # "Distiller 4.0 for Windows" vs "Distiller 5.0 (Windows)" are one product; filler words are
+    # the last thing keeping them in separate buckets.
+    s = " ".join(w for w in s.split() if w not in {"for", "version", "ver", "by", "the", "on"})
+    return (s or "unknown")[:60]
 
 
 @dataclass
