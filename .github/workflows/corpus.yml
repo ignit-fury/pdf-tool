@@ -68,3 +68,16 @@ jobs:
         run: >
           docker run --rm pdf-tool-harness:ci
           uv run python harness/run_corpus_harness.py corpus/private-manifest.json corpus/private
+
+  # Branch-conditional (main/release only), same as corpus-private-gate. Mechanical, hard-stop
+  # enforcement of Gate G0 Success Criterion #1 (100-300 combined documents) — intentionally
+  # fails the build below 100 rather than warning, so Gate G0 cannot be silently declared
+  # passed while the private tier sits empty or under-populated (T-03-04).
+  corpus-size-gate:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check combined public+private corpus size against Gate G0's 100-document floor
+        run: python3 tools/check_corpus_size.py corpus/manifest.json corpus/private-manifest.json
