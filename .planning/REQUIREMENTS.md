@@ -179,13 +179,92 @@ Explicitly excluded. Documented to prevent scope creep.
 
 Which phases cover which requirements. Updated during roadmap creation.
 
-*(Populated by the roadmapper.)*
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| ENG-01 | Phase 1 — Conformance Harness + Engine Spike | Pending |
+| ENG-02 | Phase 1 — Conformance Harness + Engine Spike | Pending |
+| ENG-03 | Phase 1 — Conformance Harness + Engine Spike | Pending |
+| ENG-04 | Phase 1 — Conformance Harness + Engine Spike | Pending |
+| ENG-05 | Phase 1 — Conformance Harness + Engine Spike | Pending |
+| ENG-06 | Phase 1 — Conformance Harness + Engine Spike | Pending |
+| ENG-07 | Phase 1 — Conformance Harness + Engine Spike | Pending |
+| TEXT-01 | Phase 2 — Text Model | Pending |
+| TEXT-02 | Phase 2 — Text Model | Pending |
+| TEXT-03 | Phase 2 — Text Model | Pending |
+| TEXT-04 | Phase 2 — Text Model | Pending |
+| TEXT-05 | Phase 2 — Text Model | Pending |
+| TEXT-06 | Phase 2 — Text Model | Pending |
+| TEXT-07 | Phase 2 — Text Model | Pending |
+| TEXT-08 | Phase 2 — Text Model | Pending |
+| CLAS-01 | Phase 2 — Text Model | Pending |
+| CLAS-02 | Phase 2 — Text Model | Pending |
+| CLAS-03 | Phase 2 — Text Model | Pending |
+| CLAS-04 | Phase 2 — Text Model | Pending |
+| CLAS-05 | Phase 2 — Text Model | Pending |
+| EDIT-02 | Phase 3 — Rewrite Engine + Font Pipeline | Pending |
+| EDIT-03 | Phase 3 — Rewrite Engine + Font Pipeline | Pending |
+| EDIT-04 | Phase 3 — Rewrite Engine + Font Pipeline | Pending |
+| FONT-01 | Phase 3 — Rewrite Engine + Font Pipeline | Pending |
+| FONT-02 | Phase 3 — Rewrite Engine + Font Pipeline | Pending |
+| FONT-03 | Phase 3 — Rewrite Engine + Font Pipeline | Pending |
+| FONT-04 | Phase 3 — Rewrite Engine + Font Pipeline | Pending |
+| FONT-05 | Phase 3 — Rewrite Engine + Font Pipeline | Pending |
+| FONT-06 | Phase 3 — Rewrite Engine + Font Pipeline | Pending |
+| INGE-01 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| INGE-02 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| INGE-03 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| INGE-04 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| PRIV-01 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| PRIV-02 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| PRIV-03 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| PRIV-04 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| PRIV-05 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| PRIV-06 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| PRIV-07 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| VIEW-01 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| VIEW-02 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| VIEW-03 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| VIEW-04 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| CLAS-06 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| CLAS-07 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| EDIT-01 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| EDIT-05 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| FONT-07 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
+| FIND-01 | Phase 5 — Find and Replace Across All Pages | Pending |
+| FIND-02 | Phase 5 — Find and Replace Across All Pages | Pending |
+| FIND-03 | Phase 5 — Find and Replace Across All Pages | Pending |
+| FIND-04 | Phase 5 — Find and Replace Across All Pages | Pending |
+| FIND-05 | Phase 5 — Find and Replace Across All Pages | Pending |
+| FIND-06 | Phase 5 — Find and Replace Across All Pages | Pending |
+| PAGE-01 | Phase 6 — Page Ops and Merge | Pending |
+| PAGE-02 | Phase 6 — Page Ops and Merge | Pending |
+| PAGE-03 | Phase 6 — Page Ops and Merge | Pending |
+| PAGE-04 | Phase 6 — Page Ops and Merge | Pending |
+| PAGE-05 | Phase 6 — Page Ops and Merge | Pending |
+| PAGE-06 | Phase 6 — Page Ops and Merge | Pending |
+| PAGE-07 | Phase 6 — Page Ops and Merge | Pending |
+| PAGE-08 | Phase 6 — Page Ops and Merge | Pending |
+| PAGE-09 | Phase 6 — Page Ops and Merge | Pending |
+| EXPO-01 | Phase 7 — Exports | Pending |
+| EXPO-02 | Phase 7 — Exports | Pending |
+| EXPO-03 | Phase 7 — Exports | Pending |
+| EXPO-04 | Phase 7 — Exports | Pending |
+| EXPO-05 | Phase 7 — Exports | Pending |
+| EXPO-06 | Phase 8 — PDF/A, then DOCX | Pending |
+| EXPO-07 | Phase 8 — PDF/A, then DOCX | Pending |
+| EXPO-08 | Phase 8 — PDF/A, then DOCX | Pending |
 
 **Coverage:**
 - v1 requirements: 72 total
-- Mapped to phases: 0
-- Unmapped: 72 ⚠️
+- Mapped to phases: 72 ✓
+- Unmapped: 0
+
+**Notes on placement** (full rationale in ROADMAP.md "Deviations from the research sequence"):
+- `EDIT-01` sits in Phase 4, not Phase 3, because its observable behaviour is a browser interaction
+  and Phase 3 is CLI-only until Gate G2b passes. FONT-01..06 and EDIT-02..04 still ship together.
+- `CLAS-06` and `CLAS-07` sit in Phase 4 for the same reason — they are the UI surfaces of the
+  Phase 2 classification work. All engine-side classification (CLAS-01..05) is in Phase 2.
 
 ---
 *Requirements defined: 2026-08-12*
-*Last updated: 2026-08-12 after initial definition*
+*Last updated: 2026-08-12 after roadmap creation — traceability populated, 72/72 mapped*
