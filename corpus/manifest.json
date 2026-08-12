@@ -1,0 +1,242 @@
+[
+  {
+    "filename": "irs_form_1040.pdf",
+    "sha256": "3d31c226df0d189ced80e039d01cf0f8820c1019681a0f0ca6264de277b7e982",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "annotation_appearance_streams",
+      "contents_array",
+      "justified_right_aligned"
+    ],
+    "source_url": "https://www.irs.gov/pub/irs-pdf/f1040.pdf",
+    "license": "U.S. Government Work - Public Domain (17 U.S.C. SS 105)",
+    "weight_class": "other",
+    "notes": "IRS Form 1040 (2025). Fillable AcroForm widgets carry /AP appearance streams; body fonts are subset-tagged (e.g. XXXXXX+ prefix)."
+  },
+  {
+    "filename": "irs_form_w9.pdf",
+    "sha256": "2d420cbb4123dcf1fb82595b2359cfbb5d81f00b9df9d359fcc7af361d093f53",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "annotation_appearance_streams",
+      "contents_array"
+    ],
+    "source_url": "https://www.irs.gov/pub/irs-pdf/fw9.pdf",
+    "license": "U.S. Government Work - Public Domain (17 U.S.C. SS 105)",
+    "weight_class": "other",
+    "notes": "IRS Form W-9. Also the source document for irs_form_w9_encrypted.pdf."
+  },
+  {
+    "filename": "irs_form_w4.pdf",
+    "sha256": "92444d8856ce55d9e25dca8b6d1420634fc68b11e1ab1f760916ea29ddd312b2",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "symbolic_fonts",
+      "cid_keyed_cff",
+      "annotation_appearance_streams",
+      "contents_array"
+    ],
+    "source_url": "https://www.irs.gov/pub/irs-pdf/fw4.pdf",
+    "license": "U.S. Government Work - Public Domain (17 U.S.C. SS 105)",
+    "weight_class": "other",
+    "notes": "IRS Form W-4. Embeds AdobePiStd, a symbolic Type0/CIDFontType0 dingbat font (FontDescriptor /Flags symbolic bit set, FontFile3 /CIDFontType0C) - real-world CID-keyed CFF and symbolic-font evidence in one object."
+  },
+  {
+    "filename": "irs_1040_instructions.pdf",
+    "sha256": "482e9c487c608f1bbeaceef35bc3c0933e8b35443cfff447e4279d590468364a",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "type0_identity_h",
+      "form_xobjects",
+      "contents_array",
+      "tables",
+      "justified_right_aligned"
+    ],
+    "source_url": "https://www.irs.gov/pub/irs-pdf/i1040gi.pdf",
+    "license": "U.S. Government Work - Public Domain (17 U.S.C. SS 105)",
+    "weight_class": "other",
+    "notes": "IRS 1040 instructions booklet, 126 pages. Type0 fonts use /Identity-H encoding with CIDFontType2 (TrueType) descendants (e.g. JDHUQF+TimesNewRomanPSMT). Visually verified: fully justified 3-column body text (page 6)."
+  },
+  {
+    "filename": "irs_publication_17.pdf",
+    "sha256": "2d2381d62c7c77ed4b64b83ac23c28ed85b7c8304eb580c09bd9fd660be0840b",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "type0_identity_h",
+      "cid_keyed_cff",
+      "form_xobjects",
+      "contents_array",
+      "tables",
+      "justified_right_aligned"
+    ],
+    "source_url": "https://www.irs.gov/pub/irs-pdf/p17.pdf",
+    "license": "U.S. Government Work - Public Domain (17 U.S.C. SS 105)",
+    "weight_class": "other",
+    "notes": "IRS Publication 17 (Your Federal Income Tax), 142 pages. Embeds WHERZU+NotoSansCJKjp-Regular as Type0/Identity-H with CIDFontType0 descendant and FontFile3 /CIDFontType0C - genuine CID-keyed CFF CJK font in a real federal publication."
+  },
+  {
+    "filename": "irs_1040_tax_tables.pdf",
+    "sha256": "8ae019bd3b28b07b37e46e18597d8e899222a2224ce7482c015b130033403532",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "type0_identity_h",
+      "cid_keyed_cff",
+      "form_xobjects",
+      "contents_array",
+      "tables"
+    ],
+    "source_url": "https://www.irs.gov/pub/irs-pdf/i1040tt.pdf",
+    "license": "U.S. Government Work - Public Domain (17 U.S.C. SS 105)",
+    "weight_class": "other",
+    "notes": "IRS 2025 Tax Table booklet. Visually verified: dense multi-column numeric grid tables (page 4/28)."
+  },
+  {
+    "filename": "irs_form_1040_spanish.pdf",
+    "sha256": "9101c329a977fb5eb65e7f8d471eb1253e6d9f082ecf20de771b601886ef347e",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "annotation_appearance_streams",
+      "contents_array"
+    ],
+    "source_url": "https://www.irs.gov/pub/irs-pdf/f1040sp.pdf",
+    "license": "U.S. Government Work - Public Domain (17 U.S.C. SS 105)",
+    "weight_class": "other",
+    "notes": "Spanish-language IRS Form 1040 (Formulario 1040-SP). Fillable AcroForm widgets with appearance streams."
+  },
+  {
+    "filename": "far_federal_acquisition_regulation.pdf",
+    "sha256": "f22a17e30ff99682edcba9f6827e349cac0ecbe8908888c08616a81397e85bca",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "type0_identity_h",
+      "symbolic_fonts"
+    ],
+    "source_url": "https://www.acquisition.gov/sites/default/files/current/far/pdf/FAR.pdf",
+    "license": "U.S. Government Work - Public Domain (17 U.S.C. SS 105)",
+    "weight_class": "contract",
+    "notes": "Federal Acquisition Regulation, full text (2026 pages) - the federal contracting rulebook. Type0/Identity-H TimesNewRoman subsets plus a Type1 ZapfDingbats symbolic font."
+  },
+  {
+    "filename": "wikipedia_zh_monthly_magazine.pdf",
+    "sha256": "a6a4b43e49d44dd5629bf437bd19b2c267cc6aa0b190630dcb82b007f545be3b",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "type0_identity_h",
+      "cid_keyed_cff"
+    ],
+    "source_url": "https://commons.wikimedia.org/wiki/File:%E4%B8%AD%E6%96%87%E7%BB%B4%E5%9F%BA%E7%99%BE%E7%A7%91%E6%9C%88%E5%88%8A%E7%AC%AC%E4%BA%94%E6%9C%9F.pdf",
+    "license": "CC BY-SA 3.0 (Wikimedia Commons, uploader Yhz1221)",
+    "weight_class": "other",
+    "notes": "Chinese Wikipedia Monthly, issue 5. Embeds MULJDG+HiraginoSansGB-W6 and GQDNIH+HiraginoSansGB-W3 as Type0/CIDFontType0 with FontFile3 /CIDFontType0C (CID-keyed CFF) and Identity-H encoding - real CJK typesetting."
+  },
+  {
+    "filename": "mutopia_vocalise_abt.pdf",
+    "sha256": "d2ae7acc4fb75e96422898c0684e13c08f9df3dd2b4ce7cc6bd65311e2fd0bb9",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "symbolic_fonts"
+    ],
+    "source_url": "https://www.mutopiaproject.org/ftp/AbtF/Vocalise1/Vocalise1-a4.pdf",
+    "license": "Public Domain (typesetting placed in the public domain by the Mutopia Project typesetter; underlying composition by Franz Abt, 1819-1885)",
+    "weight_class": "other",
+    "notes": "LilyPond-typeset sheet music. Embeds the Emmentaler music-notation font (symbolic FontDescriptor flags) as subset Type1/TrueType."
+  },
+  {
+    "filename": "invoice_1905_james_green.pdf",
+    "sha256": "729de70b655ec244fbc51d8228d49cc1a8b82c84c0093d7ac30bd135f4e37277",
+    "tier": "public",
+    "categories": [
+      "form_xobjects",
+      "contents_array"
+    ],
+    "source_url": "https://commons.wikimedia.org/wiki/File:James_Green_-_invoice,_1905-03-06_-_etc_-_19570121889d02.pdf",
+    "license": "Public Domain (Wikimedia Commons / DPLA)",
+    "weight_class": "invoice",
+    "notes": "Real historical invoice (1905), scanned as an image wrapped in a Form XObject. No embedded fonts - the page content is entirely a raster scan (no OCR text layer), unlike invoice_book_1842.pdf."
+  },
+  {
+    "filename": "invoice_book_1842.pdf",
+    "sha256": "5490ffd78898bada781c1c62e97d6dc3ac12326465540a687b9ef5055be5b421",
+    "tier": "public",
+    "categories": [
+      "type0_identity_h",
+      "contents_array",
+      "ocr_scan"
+    ],
+    "source_url": "https://commons.wikimedia.org/wiki/File:Invoice_Book_1842_(IA_010-museum-invoice-book-images).pdf",
+    "license": "Public Domain (Wikimedia Commons / Internet Archive)",
+    "weight_class": "invoice",
+    "notes": "Real 1842 invoice book, scanned. Structurally verified OCR-scan signature: each page has an /Image XObject plus an invisible text layer (Tr 3 render mode) in embedded Type0/CIDFontType2 - the canonical Internet-Archive OCR pipeline output."
+  },
+  {
+    "filename": "nasa_graphics_standards_manual.pdf",
+    "sha256": "2aebec98b6c21ae8868f56f9c3a19c6605bcdc302a050923234cced3d8a46b24",
+    "tier": "public",
+    "categories": [
+      "subset_fonts",
+      "vector_outlined_text"
+    ],
+    "source_url": "https://commons.wikimedia.org/wiki/File:NASA_Graphics_Standards_Manual.pdf",
+    "license": "Public Domain (U.S. Government Work, NASA, 17 U.S.C. SS 105)",
+    "weight_class": "other",
+    "notes": "The 1976 NASA Graphics Standards Manual (the 'worm' logo manual). Page 1.3 (page index 6) renders the NASA wordmark as a filled vector shape, not font-based text - visually confirmed via pypdfium2 render; the logotype geometry does not correspond to any Tj/TJ text run at that position."
+  },
+  {
+    "filename": "irs_form_w9_encrypted.pdf",
+    "sha256": "89bacabe9da17b9b19b7cb15eac06844bcbcee38ac533cdec01e68beb53c42ad",
+    "tier": "public",
+    "categories": [
+      "encrypted"
+    ],
+    "source_url": "https://www.irs.gov/pub/irs-pdf/fw9.pdf",
+    "license": "U.S. Government Work - Public Domain (17 U.S.C. SS 105) - base document; encryption applied locally",
+    "weight_class": "other",
+    "notes": "Real document (irs_form_w9.pdf), encryption applied for fixture purposes: owner password + AES-256 (R=6) via pikepdf.Encryption, empty user password so the fixture is still readable while /Encrypt is present and pikepdf.Pdf.is_encrypted is True."
+  },
+  {
+    "filename": "verapdf_isartor_malformed_trailer.pdf",
+    "sha256": "cc4447e0a6a7a56317c28efabb91a4913fecdc77a2dc08bbdba3ad0dd1096e5d",
+    "tier": "public",
+    "categories": [
+      "malformed"
+    ],
+    "source_url": "https://github.com/veraPDF/veraPDF-corpus/blob/staging/Isartor%20test%20files/PDFA-1b/6.1%20File%20structure/6.1.3%20File%20trailer/isartor-6-1-3-t01-fail-a.pdf",
+    "license": "CC BY 4.0 (veraPDF Consortium, per veraPDF-corpus repository README)",
+    "weight_class": "other",
+    "notes": "Isartor PDF/A-1b conformance test file with an intentionally broken file trailer (ISO 19005 clause 6.1.3 fail case). Named directly by the phase context as the sanctioned source for the malformed category."
+  },
+  {
+    "filename": "verapdf_inline_image_fixture.pdf",
+    "sha256": "a0e71dea9ab1983424cf369f8e2e316467069b7ca738482c1874a79df0b12477",
+    "tier": "public",
+    "categories": [
+      "inline_images"
+    ],
+    "source_url": "https://github.com/veraPDF/veraPDF-corpus/blob/staging/PDF_A-2b/6.1%20File%20structure/6.1.10%20Inline%20image%20dictionaries/veraPDF%20test%20suite%206-1-10-t01-fail-a.pdf",
+    "license": "CC BY 4.0 (veraPDF Consortium, per veraPDF-corpus repository README)",
+    "weight_class": "other",
+    "notes": "GAP DISCLOSURE: no wild-harvested document in the sourced set contained a real BI/ID/EI inline image (verified by scanning every page of all other public-tier files with pikepdf.parse_content_stream). This is a constructed ISO 32000 conformance fixture from veraPDF-corpus, not an independently wild-harvested document - flagged here and in corpus/README.md and the plan SUMMARY per the phase's explicit-gap-disclosure requirement. Content stream verified to contain a literal 'BI ... ID <LZW data> EI' sequence."
+  },
+  {
+    "filename": "verapdf_type3_font_fixture.pdf",
+    "sha256": "c77ba0dd71e43823e1fb6a087889a1774ae8c3ea127a8e6861b7b0180eaf2c94",
+    "tier": "public",
+    "categories": [
+      "type3"
+    ],
+    "source_url": "https://github.com/veraPDF/veraPDF-corpus/blob/staging/PDF_A-2u/6.2%20Graphics/6.2.11%20Fonts/6.2.11.7%20Unicode%20character%20maps/6.2.11.7.2%20Level%20A%20and%20Level%20U%20conformance/veraPDF%20test%20suite%206-2-11-7-2-t01-pass-f.pdf",
+    "license": "CC BY 4.0 (veraPDF Consortium, per veraPDF-corpus repository README)",
+    "weight_class": "other",
+    "notes": "GAP DISCLOSURE: no wild-harvested document in the sourced set embedded a Type3 font (checked government forms/publications, sheet music, CJK documents, and posters). This is a constructed ISO 32000 conformance fixture from veraPDF-corpus (font /Subtype /Type3, no /BaseFont, per ISO 14289 Unicode-mapping conformance testing), not an independently wild-harvested document - flagged here and in corpus/README.md and the plan SUMMARY per the phase's explicit-gap-disclosure requirement."
+  }
+]
