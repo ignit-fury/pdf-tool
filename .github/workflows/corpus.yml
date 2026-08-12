@@ -1,0 +1,70 @@
+name: Corpus
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  # Unconditional - runs on every push/PR, including forks with no CI secrets. Only needs
+  # pikepdf/pypdfium2 (pure-wheel Python deps), no system CLI tools, so it runs directly on
+  # the host runner rather than the Dockerfile.ci image.
+  corpus-public:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.10.4"
+
+      - name: Sync resolved dependencies (locked, no upgrades)
+        run: uv sync --locked
+
+      - name: Probe public-tier manifest against corpus bytes (D-04)
+        run: uv run python tools/probe_corpus.py corpus/manifest.json corpus/public
+
+  # Branch-conditional (main/release only) - private-tier bytes require CI secrets that forks
+  # never have (D-02: GitHub Actions omits/masks secrets on fork PRs, naturally producing the
+  # skip case below). Three sequential steps: fetch, then (only on a successful fetch) probe
+  # and render/validate the private tier through the SAME checks the public tier gets.
+  corpus-private-gate:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch private tier (absent credentials is a normal, non-failing state - D-02)
+        id: fetch
+        env:
+          PRIVATE_CORPUS_BASE_URL: ${{ secrets.PRIVATE_CORPUS_BASE_URL }}
+          PRIVATE_CORPUS_TOKEN: ${{ secrets.PRIVATE_CORPUS_TOKEN }}
+        # tools/fetch_private_corpus.py is stdlib-only (urllib.request) - no uv sync needed
+        # to run it. Its final `status=` line is parsed into a step output so later steps can
+        # branch on it without parsing prose.
+        run: |
+          OUTPUT="$(python3 tools/fetch_private_corpus.py)"
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep '^status=' >> "$GITHUB_OUTPUT"
+
+      # Built AFTER fetch (not before, unlike harness.yml's public-tier build) so
+      # Dockerfile.ci's `COPY . .` bakes in the just-fetched corpus/private/ files - reuses
+      # the same pinned poppler/mupdf/qpdf/pdfcpu image the public tier's harness.yml builds,
+      # rather than re-declaring those tool installs a second time in this workflow.
+      - name: Build the pinned CI image (Dockerfile.ci) with the fetched private tier baked in
+        if: steps.fetch.outputs.status == 'ok'
+        run: docker build -f Dockerfile.ci -t pdf-tool-harness:ci .
+
+      - name: Probe private-tier manifest against fetched bytes (D-04)
+        if: steps.fetch.outputs.status == 'ok'
+        run: >
+          docker run --rm pdf-tool-harness:ci
+          uv run python tools/probe_corpus.py corpus/private-manifest.json corpus/private --no-coverage-check
+
+      - name: Render / validate private-tier corpus (harness/run_corpus_harness.py, reused unmodified from Plan 01-04)
+        if: steps.fetch.outputs.status == 'ok'
+        run: >
+          docker run --rm pdf-tool-harness:ci
+          uv run python harness/run_corpus_harness.py corpus/private-manifest.json corpus/private

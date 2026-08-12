@@ -12,8 +12,39 @@ D-01 through D-04).
 - **Private tier**: never committed. Holds real invoices and contracts that carry third-party
   personal data. Fetched from a bucket via CI secrets, gates `main` and release branches, and is
   skipped where credentials are absent. The private tier adds volume and real-world messiness —
-  never unique structural categories (D-02, D-03). Its fetch mechanism and manifest schema land
-  in Plan 01-03; this plan only builds the public tier.
+  never unique structural categories (D-02, D-03).
+
+## Private tier: fetch mechanism and manifest (Plan 01-03)
+
+`corpus/private-manifest.json` — same schema as `corpus/manifest.json` (see table above) with
+two differences: `tier` is always `"private"`, and there is no `source_url` field (private-tier
+files are not independently redistributable, so there is no public URL to record). It is
+checked into git; the PDF bytes it describes are not. It starts as `[]` — the maintainer
+populates it by hand as real documents are added to the private bucket (see Plan 01-03's
+blocking checkpoint).
+
+`tools/fetch_private_corpus.py` downloads every file `corpus/private-manifest.json` declares
+from a bearer-token-gated HTTPS object store (any of S3/R2/GCS work — stdlib
+`urllib.request` only, no cloud SDK) into `corpus/private/` (gitignored — never committed),
+verifying each download's sha256 against the manifest entry. Reads
+`PRIVATE_CORPUS_BASE_URL`/`PRIVATE_CORPUS_TOKEN` from the environment
+(`${{ secrets.PRIVATE_CORPUS_BASE_URL }}`/`${{ secrets.PRIVATE_CORPUS_TOKEN }}` in CI). Absent
+credentials (fork PRs, fresh clones) is a normal, non-failing state (D-02): the script prints
+`status=skipped` and exits 0, never a warning-level failure. Present-but-wrong credentials or a
+hash mismatch is a genuine, distinguishable `status=error` (nonzero exit) — absence and error
+never collapse into the same outcome.
+
+Once fetched, `corpus/private-manifest.json` + `corpus/private/` are run through the same two
+checks as the public tier — `tools/probe_corpus.py ... --no-coverage-check` (D-04; coverage-check
+disabled because D-03 never requires the private tier to independently cover all 15 categories)
+and `harness/run_corpus_harness.py` (render/validate, reused unmodified) — wired as the
+`corpus-private-gate` CI job in `.github/workflows/corpus.yml`, conditioned on the fetch step's
+`status=ok` output.
+
+`tools/check_corpus_size.py` is the mechanical Gate G0 floor check: combined
+`corpus/manifest.json` + `corpus/private-manifest.json` entry count must reach 100 before Gate G0
+can be signed off (roadmap's 100-300 target) — wired as the `corpus-size-gate` CI job, blocking
+on `main`/`release/*`.
 
 ## `corpus/manifest.json` schema
 
