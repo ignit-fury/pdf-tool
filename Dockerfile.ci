@@ -1,0 +1,53 @@
+# CI-only image for harness/run_corpus_harness.py.
+#
+# Bundles two AGPL tools (mupdf-tools) and one GPL tool (poppler-utils) as CLI subprocesses
+# only. Per CLAUDE.md's Licensing constraint, AGPL is permitted here because this image is
+# reachable only from CI/test code paths, never from a served request — no served request
+# can reach `mutool`. GPL/LGPL (poppler) is fine as a subprocess with a file-in/file-out
+# interface even outside CI, since GPL triggers on distribution and a hosted service
+# distributes nothing; kept CI-only here anyway to match the rest of this pipeline.
+#
+# Every version below is pinned exactly (never `latest`) so a renderer upgrade that changes
+# antialiasing cannot masquerade as a regression in our own code (T-04-03).
+# Digest verified against Docker Hub's registry API for the `python:3.13-slim-trixie` tag
+# (Debian 13 "trixie"), 2026-08-12 — pinned by digest, not just tag, so a repush of the tag
+# cannot silently change the base image under this build.
+FROM python:3.13-slim-trixie@sha256:ffb752e139c0a19692a43af8d8523b274222dd68eebad5d583b45c2201c6e30a AS ci
+
+ARG POPPLER_UTILS_VERSION=25.03.0-5+deb13u4
+ARG MUPDF_TOOLS_VERSION=1.25.1+ds1-6+deb13u1
+ARG QPDF_VERSION=12.2.0-1
+ARG PDFCPU_VERSION=0.15.0
+
+# apt package versions above are Debian 13 "trixie" versions (verified via the Debian
+# Sources API, sources.debian.org/api/src/<pkg>/, 2026-08-12) to match the trixie base image
+# pinned above. Apt requires an exact version string for `pkg=version` — no globbing.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl ca-certificates xz-utils \
+        poppler-utils="${POPPLER_UTILS_VERSION}" \
+        mupdf-tools="${MUPDF_TOOLS_VERSION}" \
+        qpdf="${QPDF_VERSION}" && \
+    rm -rf /var/lib/apt/lists/*
+
+# pdfcpu ships as a GitHub release binary, not a Debian/Ubuntu package — pinned by exact
+# release tag.
+RUN curl -fsSL -o /tmp/pdfcpu.tar.xz \
+        "https://github.com/pdfcpu/pdfcpu/releases/download/v${PDFCPU_VERSION}/pdfcpu_${PDFCPU_VERSION}_Linux_x86_64.tar.xz" && \
+    mkdir -p /tmp/pdfcpu && \
+    tar -xJf /tmp/pdfcpu.tar.xz -C /tmp/pdfcpu && \
+    find /tmp/pdfcpu -type f -name pdfcpu -exec install -m 755 {} /usr/local/bin/pdfcpu \; && \
+    rm -rf /tmp/pdfcpu /tmp/pdfcpu.tar.xz
+
+RUN pdftoppm -v && mutool -v && qpdf --version && pdfcpu version
+
+# uv installed by copying its published static binary — the project itself is installed via
+# `uv sync --locked`, matching Plan 01-01's pinned lockfile exactly.
+COPY --from=ghcr.io/astral-sh/uv:0.10.4 /uv /uvx /usr/local/bin/
+
+WORKDIR /workspace
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --no-install-project
+
+COPY . .
+RUN uv sync --locked
