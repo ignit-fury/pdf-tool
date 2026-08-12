@@ -26,7 +26,7 @@ survives the renumber.
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Conformance Harness + Engine Spike** - Real-world corpus, three-engine masked-diff CI, and the two bets that gate everything downstream — no product code
+- [x] **Phase 1: Conformance Harness + Engine Spike** - Real-world corpus, three-engine masked-diff CI, and the two bets that gate everything downstream — no product code (completed 2026-08-12)
 - [ ] **Phase 2: Text Model** - The keystone: content-stream interpreter with per-glyph provenance, plus per-page and per-run editability classification
 - [ ] **Phase 3: Rewrite Engine + Font Pipeline** - Replace text with correct widths AND subset/embed a bundled font in one phase — the project gate
 - [ ] **Phase 4: Web Tier Walking Skeleton + Hardening** - First untrusted input: isolation, structural ephemerality, viewer, and the first in-browser edit with undo
@@ -69,7 +69,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 01-03-PLAN.md — Independent structural prober + private-tier fetch mechanism (ENG-01, D-01/D-02/D-04)
+- [x] 01-03-PLAN.md — Independent structural prober + private-tier fetch mechanism (ENG-01, D-01/D-02/D-04)
 
 **Research**: yes — phase is itself the spike; no separate `--research-phase` pass needed
 **Parallel**: no — gates everything
@@ -279,7 +279,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → (5 ∥ 6 ∥ 7) → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Conformance Harness + Engine Spike | 5/6 | In Progress|  |
+| 1. Conformance Harness + Engine Spike | 6/6 | Complete   | 2026-08-12 |
 | 2. Text Model | 0/TBD | Not started | - |
 | 3. Rewrite Engine + Font Pipeline | 0/TBD | Not started | - |
 | 4. Web Tier Walking Skeleton + Hardening | 0/TBD | Not started | - |

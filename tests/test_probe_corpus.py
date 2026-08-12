@@ -19,23 +19,26 @@ sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 import probe_corpus  # noqa: E402
 
-# Known, pre-existing data issue in corpus/manifest.json (Plan 01-02's output): this entry
-# declares "subset_fonts" but nasa_graphics_standards_manual.pdf embeds no subset-tagged or
-# custom-embedded fonts at all (page resources, Form XObject resources, and AcroForm /DR were
-# all independently checked). This plan's executor instructions forbid modifying
-# corpus/manifest.json, so the fix is out of scope here — this is D-04's independent verifier
-# correctly catching a real wrong label, not a bug in probe_corpus.py. Documented in
-# 01-03-SUMMARY.md under Deviations/Known Issues.
-KNOWN_REAL_MANIFEST_ISSUES = {
-    "nasa_graphics_standards_manual.pdf: declared category 'subset_fonts' not detected by probe_file()",
-}
+# The real public manifest must probe clean. It did not, once: Plan 01-02 labelled
+# nasa_graphics_standards_manual.pdf "subset_fonts", but that document embeds no subset-tagged
+# or custom font anywhere — only Base-14 Helvetica/Times (page resources, Form XObject
+# resources and AcroForm /DR were all independently checked). D-04's prober caught that wrong
+# label on its first live run, which is exactly what it exists to do. Plan 01-03's executor was
+# forbidden from editing corpus/manifest.json so it recorded the finding instead; the
+# orchestrator removed the label afterwards, and this set is empty because there is nothing
+# left to excuse.
+#
+# Keep this set EMPTY. It is not a place to park new wrong labels — a manifest whose coverage
+# claims are wrong is worse than one making none (D-04). If the prober starts reporting an
+# error, fix the manifest, do not add the error here.
+KNOWN_REAL_MANIFEST_ISSUES: set[str] = set()
 
 
 def test_real_public_manifest_has_no_unexpected_wrong_labels():
     errors = probe_corpus.check_manifest(str(MANIFEST_PATH), str(CORPUS_DIR))
     assert set(errors) == KNOWN_REAL_MANIFEST_ISSUES, (
-        "check_manifest() against the real public manifest should surface only the one "
-        f"known, documented, out-of-scope issue; got: {errors}"
+        "check_manifest() against the real public manifest must surface no wrong labels; "
+        f"got: {errors}"
     )
 
 
