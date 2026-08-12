@@ -50,7 +50,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. A TJ-refit prototype fits replacement text into an original run's width within |Δwidth| < 0.5pt on a hand-picked run
   5. CI fails the build on an AGPL package anywhere in the resolved lockfile — proven by deliberately adding a transitively-AGPL dependency (`pdf2docx`) and watching the build go red — and the one-page data-flow retention map is written *before* any infrastructure is selected
 
-**Plans**: 6 plans
+**Plans**: 7 plans
 
 Plans:
 **Wave 1**
@@ -70,6 +70,12 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [x] 01-03-PLAN.md — Independent structural prober + private-tier fetch mechanism (ENG-01, D-01/D-02/D-04)
+
+**Wave 5** *(added during execution — see below)*
+
+- [x] 01-07-PLAN.md — Grow public corpus to Gate G0's floor, selected for producer diversity (ENG-01)
+
+*Wave 5 was not in the original plan set. Plan 01-03's blocking checkpoint left Gate G0 short at 17 documents and dependent on the maintainer supplying private invoices. 01-07 was added so the gate clears from public sources alone — 216 documents across 57 producers — turning the private tier into later enrichment rather than a blocker on Phase 2.*
 
 **Research**: yes — phase is itself the spike; no separate `--research-phase` pass needed
 **Parallel**: no — gates everything
