@@ -1,0 +1,2 @@
+license_gate: no AGPL/Affero licensed distributions found
+exit_code=0
