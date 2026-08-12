@@ -46,7 +46,15 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. `playa-pdf` decodes encodings and glyph geometry on at least 4 real documents including one Type0/Identity-H and one subset-font document — or the switch to `pdfminer.six` is made and recorded in this phase, not later
   4. A TJ-refit prototype fits replacement text into an original run's width within |Δwidth| < 0.5pt on a hand-picked run
   5. CI fails the build on an AGPL package anywhere in the resolved lockfile — proven by deliberately adding a transitively-AGPL dependency (`pdf2docx`) and watching the build go red — and the one-page data-flow retention map is written *before* any infrastructure is selected
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Retention map, repo scaffolding, and the AGPL lockfile gate proof (ENG-06, ENG-07)
+- [ ] 01-02-PLAN.md — Public-tier corpus assembly + manifest, all 15 D-03 categories (ENG-01)
+- [ ] 01-03-PLAN.md — Independent structural prober + private-tier fetch mechanism (ENG-01, D-01/D-02/D-04)
+- [ ] 01-04-PLAN.md — Three-engine differential rendering harness + structural validators (ENG-02, ENG-03)
+- [ ] 01-05-PLAN.md — playa-pdf decode spike against real documents (ENG-04)
+- [ ] 01-06-PLAN.md — TJ-refit width-fitting prototype (ENG-05)
 **Research**: yes — phase is itself the spike; no separate `--research-phase` pass needed
 **Parallel**: no — gates everything
 **UI hint**: no
