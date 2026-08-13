@@ -99,12 +99,27 @@ from __future__ import annotations
 import bisect
 from typing import Iterator
 
-from playa.content import TextObject
+from playa.content import GlyphObject, TextObject
 from playa.document import Document
+from playa.font import Font
 from playa.interp import LazyInterpreter
 from playa.page import Page
 from playa.parser import ObjectParser
 from playa.pdftypes import ContentStream, PSKeyword
+
+# Re-exported so consumers get real types without a second `import playa` anywhere in the
+# repo (there is a test asserting exactly one file imports playa). The file boundary is
+# the swap mechanism, so the types cross it too -- an alias layer would defeat the point.
+__all__ = [
+    "Document",
+    "Font",
+    "GlyphObject",
+    "Page",
+    "TextObject",
+    "glyph_byte_offsets",
+    "operator_table",
+    "walk_page",
+]
 
 TEXT_OPS = {b"Tj", b"TJ", b"'", b'"'}
 
@@ -147,6 +162,37 @@ def operator_table(buffer: bytes, doc: Document) -> list[tuple[int, bytes, list[
         else:
             stack.append(obj)
     return out
+
+
+def glyph_byte_offsets(font: Font, data: bytes) -> list[int]:
+    """Byte offset of each glyph within its OWN string operand, using the font's own
+    decoder rather than a reimplementation of it.
+
+    This is a playa *decode* call, which is why it lives here and not in walker.py: the
+    project constraint is that playa decoding stays in this one module. walker.py consumes
+    the returned offsets, which are plain ints.
+
+    Two cases, both taken from playa 1.1.0's own `Font.decode` implementations:
+    - Simple fonts (Type1/TrueType/Type3) decode `data` byte-by-byte -- both branches of
+      `SimpleFont.decode` iterate the raw bytes -- so glyph i sits at byte i. The
+      ToUnicode branch is a `zip`, which truncates to the shorter side, so the caller
+      must not assume len(data) glyphs; it gets exactly as many offsets as playa yields.
+    - CID fonts consume a variable number of bytes per code via the CMap.
+      `CIDFont.cmap.decode` yields `(substr, cid)` where `substr` is the raw bytes
+      consumed, so the spans are read off playa's decoder directly.
+
+    Duck-typed on the presence of `cmap` rather than `isinstance(font, CIDFont)` -- an
+    isinstance check would be a second playa import surface for no gain.
+    """
+    cmap = getattr(font, "cmap", None)
+    if cmap is None:
+        return [i for i, _ in enumerate(font.decode(data))]
+    offsets: list[int] = []
+    pos = 0
+    for substr, _cid in cmap.decode(data):
+        offsets.append(pos)
+        pos += len(substr)
+    return offsets
 
 
 def _coalesce_parts(parts: list[ContentStream]) -> tuple[bytes, list[tuple[int, int]]]:
