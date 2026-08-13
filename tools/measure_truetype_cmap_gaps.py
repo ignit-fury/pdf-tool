@@ -30,17 +30,24 @@ corpus/public, 217 documents): 80 embedded, symbolic, no-/Encoding TrueType font
 deduplicated by PDF object) found across 25 documents.
     TT-d (only (3,1), no (3,0)/(1,0)): 0
     TT-e (no cmap table):              0
-    usable ((3,0) or (1,0) present):   49
-    unparseable (fontTools could not decompile the cmap table): 31
+    usable ((3,0) or (1,0) present):   80
+    unparseable (cmap subtable directory itself unreadable): 0
   Zero document-level open/traversal failures across the 217-document manifest.
   Headline: 0 of 80 examined TT-b fonts (0%) hit TT-d or TT-e -- the measured refusal-rate
-  contribution from these two branches is 0%, not "nearer 2% or nearer 10%". The 31 unparseable
-  fonts (39% of the TT-b population) are a distinct, separately-reported finding: fontTools'
-  strict cmap-format-4 header-length check (`len(data) == length`) rejects a cmap subtable that
-  many of the corpus's subset TrueType fonts (all TimesNewRoman family, IKH*+ subset tags)
-  actually embed with a mismatched declared length -- a real-world font-subsetting defect, not a
-  TT-d/TT-e case, and not evidence for or against the D-04 refusal-rate range by itself; 02-06
-  should cite it as its own line item, not fold it into TT-d/TT-e.
+  contribution from these two branches is 0%, not "nearer 2% or nearer 10%".
+
+  An earlier run of this script classified 31 of the 80 as "unparseable" because it read the
+  cmap via `TTFont()["cmap"]`, which decompiles every subtable body on access -- one malformed
+  body then aborted the whole table read. All 31 carry a perfectly readable directory with both
+  a (1,0) format-0 and a (3,0) format-4 subtable; only the outer cmap table's declared length in
+  the sfnt directory is a few bytes short of what the format-4 subtable body needs (a real
+  font-subsetting defect in those fonts, all TimesNewRoman family with IKH*+ subset tags -- see
+  parse_cmap_subtable_ids()). Since classify_font_bytes() only needs platformID/platEncID, both
+  of which live in the subtable directory ahead of any subtable body, reading the directory
+  directly (this module's current approach) classifies all 31 correctly as "usable" without
+  touching the malformed bodies at all. "unparseable" remains a real category -- reachable when
+  the sfnt table directory or the cmap subtable directory itself cannot be read -- it is just not
+  populated by this corpus.
 """
 
 from __future__ import annotations
@@ -48,12 +55,14 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import struct
 import sys
 from pathlib import Path
 from typing import Iterator
 
 import pikepdf
 from fontTools.ttLib import TTFont
+from fontTools.ttLib.sfnt import SFNTReader
 
 # FontDescriptor /Flags bit 3 (1-indexed) == decimal value 4 -- same bit tools/probe_corpus.py
 # checks for the `symbolic_fonts` category.
@@ -67,18 +76,9 @@ def is_symbolic(font_descriptor: pikepdf.Object | None) -> bool:
     return flags is not None and bool(int(flags) & SYMBOLIC_FLAG_BIT)
 
 
-def classify_font(tt: TTFont) -> str:
-    """Classify an already-loaded fontTools TTFont's cmap into "TT-d", "TT-e", or "usable" per
-    the exact rule in this module's docstring / 02-RESEARCH.md A-2/A-3.
-
-    Never raises for a structurally sound cmap. A corrupt cmap subtable can raise inside
-    fontTools while `tt["cmap"]` itself decompiles -- that happens before this function is ever
-    called; see classify_font_bytes() and measure(), which catch it and record "unparseable"
-    instead, per this module's convention.
-    """
-    if "cmap" not in tt:
-        return "TT-e"
-    subtable_ids = {(t.platformID, t.platEncID) for t in tt["cmap"].tables}
+def classify_from_subtable_ids(subtable_ids: set[tuple[int, int]]) -> str:
+    """Classify a cmap by its set of (platformID, platEncID) subtable ids into "TT-d", "TT-e",
+    or "usable" per the exact rule in this module's docstring / 02-RESEARCH.md A-2/A-3."""
     if not subtable_ids:
         return "TT-e"
     has_3_0 = (3, 0) in subtable_ids
@@ -89,13 +89,56 @@ def classify_font(tt: TTFont) -> str:
     return "usable"
 
 
-def classify_font_bytes(font_bytes: bytes) -> str:
-    """Load `font_bytes` as a TrueType font program and classify its cmap. Raises whatever
-    fontTools raises on a malformed program (AssertionError, struct.error, KeyError, ...) --
-    callers must catch and record "unparseable" per this module's convention.
+def classify_font(tt: TTFont) -> str:
+    """Classify an already-loaded fontTools TTFont's cmap. Used by this module's unit tests,
+    which build small in-memory TTFont fixtures directly. The corpus measurement path does not
+    call this -- see classify_font_bytes(), which reads the cmap subtable directory without
+    building a TTFont at all (C1 fix, see that function's docstring)."""
+    if "cmap" not in tt:
+        return "TT-e"
+    subtable_ids = {(t.platformID, t.platEncID) for t in tt["cmap"].tables}
+    return classify_from_subtable_ids(subtable_ids)
+
+
+def parse_cmap_subtable_ids(font_bytes: bytes) -> set[tuple[int, int]]:
+    """Read the sfnt table directory and, if present, the cmap table's own subtable directory --
+    the (platformID, platEncID, offset) triples at the front of the 'cmap' table -- without
+    decompiling any subtable body.
+
+    This exists because `TTFont()["cmap"]` (fontTools' normal access path) decompiles every
+    cmap subtable's body on first touch, and one malformed body raises for the whole table even
+    though the directory preceding it is perfectly readable. This module's real corpus has 31
+    fonts exactly like that: a (1,0) format-0 and a (3,0) format-4 subtable, both present in the
+    directory, where the outer cmap table's declared length in the sfnt directory is a few bytes
+    short of what the format-4 subtable body needs -- a font-subsetting defect that has nothing
+    to do with which platform/encoding subtables exist. classify_font() needs only platformID/
+    platEncID, both of which live in the directory, so this reads only that.
+
+    Raises whatever the sfnt reader / struct.unpack raises when the *table directory itself* is
+    unreadable (bad sfnt header, truncated cmap directory, ...) -- callers must catch and record
+    "unparseable" per this module's convention.
     """
-    tt = TTFont(io.BytesIO(font_bytes), lazy=True, fontNumber=0)
-    return classify_font(tt)
+    reader = SFNTReader(io.BytesIO(font_bytes))
+    if "cmap" not in reader:
+        return set()
+    cmap_bytes = reader["cmap"]
+    _version, num_subtables = struct.unpack_from(">HH", cmap_bytes, 0)
+    subtable_ids = set()
+    offset = 4
+    for _ in range(num_subtables):
+        platform_id, plat_enc_id, _subtable_offset = struct.unpack_from(">HHI", cmap_bytes, offset)
+        subtable_ids.add((platform_id, plat_enc_id))
+        offset += 8
+    return subtable_ids
+
+
+def classify_font_bytes(font_bytes: bytes) -> str:
+    """Classify `font_bytes`'s cmap by reading its subtable directory only -- see
+    parse_cmap_subtable_ids() for why. Raises whatever that function raises when the table
+    directory itself is unreadable -- callers must catch and record "unparseable" per this
+    module's convention.
+    """
+    return classify_from_subtable_ids(parse_cmap_subtable_ids(font_bytes))
 
 
 def iter_tt_b_fonts(pdf: pikepdf.Pdf) -> Iterator[tuple[str, pikepdf.Object]]:
@@ -113,7 +156,6 @@ def iter_tt_b_fonts(pdf: pikepdf.Pdf) -> Iterator[tuple[str, pikepdf.Object]]:
                 continue
             if key in seen:
                 continue
-            seen.add(key)
 
             if str(font.get("/Subtype", "")) != "/TrueType":
                 continue
@@ -125,6 +167,10 @@ def iter_tt_b_fonts(pdf: pikepdf.Pdf) -> Iterator[tuple[str, pikepdf.Object]]:
             if font_descriptor.get("/FontFile2") is None:
                 continue
 
+            # Only qualifying fonts populate `seen` -- a dedup-key add before this point would
+            # let the first direct (non-indirect, objgen == (0,0)) font dict of *any* kind, not
+            # just TT-b, poison every later direct font dict in the same document (I1b).
+            seen.add(key)
             yield str(name), font
 
 
@@ -150,7 +196,7 @@ def measure(manifest_path: str, corpus_dir: str) -> dict:
 
         try:
             pdf = pikepdf.open(file_path)
-        except pikepdf.PdfError as exc:
+        except Exception as exc:  # noqa: BLE001 -- adversarial corpus, see module docstring
             doc_failures.append({"filename": filename, "reason": f"pikepdf.open failed: {exc}"})
             continue
 

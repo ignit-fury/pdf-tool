@@ -74,14 +74,13 @@ def test_classify_font_bytes_raises_on_garbage_is_caught_by_measure():
 
 
 def test_measure_against_real_corpus_exits_clean():
+    """Pins the actual measured population (module docstring [VERIFIED] block, C1 fix) so any
+    drift in enumeration or classification turns this test red -- not just "still an int"."""
     result = m.measure(str(MANIFEST_PATH), str(CORPUS_DIR))
-    counts = result["counts"]
-    assert counts["TT-d"] >= 0
-    assert counts["TT-e"] >= 0
-    assert counts["usable"] >= 0
-    assert counts["unparseable"] >= 0
-    # Every row is one of the four known classifications -- nothing silently dropped.
-    assert {row["classification"] for row in result["rows"]} <= set(counts)
+    assert result["counts"] == {"TT-d": 0, "TT-e": 0, "usable": 80, "unparseable": 0}
+    assert len(result["rows"]) == 80
+    assert len({row["filename"] for row in result["rows"]}) == 25
+    assert result["doc_failures"] == []
 
 
 def test_document_level_traversal_survives_malformed_font_resources(tmp_path):
@@ -108,6 +107,39 @@ def test_document_level_traversal_survives_malformed_font_resources(tmp_path):
     assert len(result["doc_failures"]) == 1
     assert result["doc_failures"][0]["filename"] == pdf_path.name
     assert "traversal failed" in result["doc_failures"][0]["reason"]
+
+
+def test_pikepdf_open_non_pdferror_exception_recorded_not_raised(tmp_path):
+    """pikepdf.open() can raise something other than pikepdf.PdfError -- e.g. an unreadable file
+    raises PermissionError, an OSError subclass that pikepdf.PdfError is NOT (verified above).
+    measure() must catch this at the pikepdf.open() call and record a doc_failures row, not let
+    it escape and abort every remaining document in the manifest (I1: the traversal try/except
+    was already broadened to bare Exception; the open() try/except was not). A second, readable
+    document after it in the manifest must still be processed, proving the run survived.
+    """
+    assert not issubclass(pikepdf.PdfError, OSError)
+
+    unreadable_path = tmp_path / "unreadable.pdf"
+    unreadable_path.write_bytes(b"%PDF-1.4\n%not a real pdf")
+    unreadable_path.chmod(0o000)
+
+    ok_pdf = pikepdf.Pdf.new()
+    ok_pdf.add_blank_page()
+    ok_path = tmp_path / "ok.pdf"
+    ok_pdf.save(ok_path)
+    ok_pdf.close()
+
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps([{"filename": unreadable_path.name}, {"filename": ok_path.name}]))
+
+    try:
+        result = m.measure(str(manifest_path), str(tmp_path))
+    finally:
+        unreadable_path.chmod(0o644)
+
+    assert len(result["doc_failures"]) == 1
+    assert result["doc_failures"][0]["filename"] == unreadable_path.name
+    assert "pikepdf.open failed" in result["doc_failures"][0]["reason"]
 
 
 def test_never_reuses_content_stream_interpreter_or_imports_engine():
