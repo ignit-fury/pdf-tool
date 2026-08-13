@@ -4,8 +4,13 @@ from conftest import docs_with_category, open_doc
 
 
 def test_manifest_has_correct_size(manifest):
-    """Verify the manifest contains exactly 216 entries."""
-    assert len(manifest) == 216
+    """Verify the manifest contains exactly 217 entries.
+
+    216 wild/disclosed-substitution documents plus vector_outlined_text_sample.pdf, added by
+    Plan 02-02 Task 1 to close the vector_outlined_text zero-count gap (see corpus/sources.md
+    "Disclosed Substitutions").
+    """
+    assert len(manifest) == 217
 
 
 def test_corpus_dir_exists(corpus_dir):
