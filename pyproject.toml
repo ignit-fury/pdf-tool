@@ -29,3 +29,10 @@ markers = [
 [tool.mypy]
 strict = true
 files = ["engine"]
+
+# fontTools ships no py.typed marker, so strict mode cannot see its types. Scoped to
+# fontTools alone -- never a blanket ignore_missing_imports, which would silently hide a
+# genuinely missing import anywhere in the engine.
+[[tool.mypy.overrides]]
+module = ["fontTools.*"]
+ignore_missing_imports = true
