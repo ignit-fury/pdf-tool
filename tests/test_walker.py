@@ -40,7 +40,7 @@ from playa.exceptions import PDFEncryptionError
 from playa.parser import ObjectParser
 from playa.pdftypes import PSKeyword
 
-from engine.playa_boundary import walk_page
+from engine.playa_boundary import _coalesce_parts, walk_page
 
 REPO_ROOT = Path(__file__).parent.parent
 CORPUS_DIR = REPO_ROOT / "corpus" / "public"
@@ -63,7 +63,7 @@ def test_walk_page_first_kw_off_irs_form_w9() -> None:
     doc = playa.open(str(CORPUS_DIR / "irs_form_w9.pdf"))
     page = doc.pages[0]
 
-    part_offset, part_objid, operands, text_obj = next(walk_page(page, doc))
+    part_offset, part_index, operands, text_obj = next(walk_page(page, doc))
 
     assert part_offset == 204
 
@@ -146,3 +146,33 @@ def test_naive_join_fuses_qbt_govdocs1_002_002167() -> None:
     assert naive_tokens != separated_tokens
     # The fusion also costs a token: "Q" + "BT" (2 tokens) become "QBT" (1 token).
     assert len(separated_tokens) == len(naive_tokens) + 1
+
+
+def test_coalesce_parts_prevents_fusion_govdocs1_008_008012() -> None:
+    """TEXT-07, driving the actual code under guard: the QBT test above proves the bug
+    against pikepdf's raw bytes, but never calls `_coalesce_parts` or `walk_page` --  if the
+    separator were silently dropped from `_coalesce_parts`, that test would never notice.
+    This one calls `_coalesce_parts` directly and reproduces a token fusion that IS
+    observable through playa's own `.buffer` (unlike the govdocs1_002_002167.pdf case,
+    where playa's generous past-/Length reading happens to add protective whitespace --
+    see that test's docstring): page 24 has a part ending "q" immediately followed by a
+    part starting "1", which naive b"".join fuses into the single wrong keyword "q1",
+    one token short of the correct count."""
+    doc = playa.open(str(CORPUS_DIR / "govdocs1_008_008012.pdf"))
+    page = list(doc.pages)[24]
+    parts = list(page.streams)
+
+    naive = b"".join(bytes(p.buffer) for p in parts)
+    joined, _part_ranges = _coalesce_parts(parts)
+
+    def keyword_names(buffer: bytes) -> list[bytes]:
+        return [
+            obj.name for _pos, obj in ObjectParser(buffer, doc) if isinstance(obj, PSKeyword)
+        ]
+
+    naive_tokens = keyword_names(naive)
+    joined_tokens = keyword_names(joined)
+
+    assert b"q1" in naive_tokens
+    assert b"q1" not in joined_tokens
+    assert len(joined_tokens) == len(naive_tokens) + 1
