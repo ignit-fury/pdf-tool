@@ -17,3 +17,9 @@ dependencies = [
 dev = [
     "pytest>=9.1.1",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "corpus: exercises the full corpus/public tier (slower, excluded from the quick per-commit run)",
+]
