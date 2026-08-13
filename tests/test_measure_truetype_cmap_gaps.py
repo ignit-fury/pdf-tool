@@ -6,9 +6,11 @@ tt["cmap"].tables), then runs measure() against the real public corpus to prove 
 executes clean end to end.
 """
 
+import json
 import sys
 from pathlib import Path
 
+import pikepdf
 from fontTools.fontBuilder import buildCmapSubTable
 from fontTools.ttLib import TTFont, newTable
 
@@ -80,6 +82,32 @@ def test_measure_against_real_corpus_exits_clean():
     assert counts["unparseable"] >= 0
     # Every row is one of the four known classifications -- nothing silently dropped.
     assert {row["classification"] for row in result["rows"]} <= set(counts)
+
+
+def test_document_level_traversal_survives_malformed_font_resources(tmp_path):
+    """A page whose /Resources /Font entry is not dict-like (e.g. a bare int) makes
+    iter_tt_b_fonts()'s `resources.get("/Font").items()` raise AttributeError, not
+    pikepdf.PdfError. measure() must catch this at the document level and record a
+    doc_failures row for that file -- not let the exception escape and abort every
+    remaining document in the run. Reviewer-reported repro (see task-3-report.md addendum).
+    """
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page()
+    pdf.pages[0].Resources = pikepdf.Dictionary({"/Font": 5})
+    pdf_path = tmp_path / "malformed_font_resources.pdf"
+    pdf.save(pdf_path)
+    pdf.close()
+
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps([{"filename": pdf_path.name}]))
+
+    # measure() itself must not raise -- that is the crash this test guards against.
+    result = m.measure(str(manifest_path), str(tmp_path))
+
+    assert result["rows"] == []
+    assert len(result["doc_failures"]) == 1
+    assert result["doc_failures"][0]["filename"] == pdf_path.name
+    assert "traversal failed" in result["doc_failures"][0]["reason"]
 
 
 def test_never_reuses_content_stream_interpreter_or_imports_engine():

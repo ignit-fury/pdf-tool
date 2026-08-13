@@ -175,7 +175,7 @@ def measure(manifest_path: str, corpus_dir: str) -> dict:
                     }
                 )
                 counts[classification] += 1
-        except pikepdf.PdfError as exc:
+        except Exception as exc:  # noqa: BLE001 - any open failure is a recorded result, not a crash
             doc_failures.append({"filename": filename, "reason": f"traversal failed: {exc}"})
         finally:
             pdf.close()
