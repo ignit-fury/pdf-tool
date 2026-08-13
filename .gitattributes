@@ -1,3 +1,1 @@
 corpus/public/**/*.pdf filter=lfs diff=lfs merge=lfs -text
-tests/fixtures/mixed_scanned.pdf filter=lfs diff=lfs merge=lfs -text
-tests/fixtures/render_mode_7.pdf filter=lfs diff=lfs merge=lfs -text
