@@ -108,13 +108,36 @@ vector-outlined fixture is a **Wave 0 blocker**.
 
 ## Per-Task Verification Map
 
-Populated by the planner from `02-RESEARCH.md` §"Phase Requirements → Test Map", which already maps
-every one of TEXT-01..TEXT-08 and CLAS-01..CLAS-05 to a named test file, test function, and
-automated command, with an `Exists?` column marking Wave 0 items.
+Extracted mechanically from the ten plans' `<verify>` blocks on 2026-08-13. Every command below is the plan's own stated verification, not a restatement.
 
-| Task ID | Plan | Wave | Requirement | Test Type | Automated Command | Exists | Status |
-|---------|------|------|-------------|-----------|-------------------|--------|--------|
-| *(planner fills from RESEARCH.md §Phase Requirements → Test Map)* | | | | | | | |
+| Plan · Task | Wave | Requirements | Automated command |
+|---|---|---|---|
+| 01 · Task 1 | 1 | TEXT-05 | `uv run --frozen pytest tests/test_conftest_smoke.py -q` |
+| 01 · Task 2 | 1 | TEXT-05 | `uv run --frozen mypy engine/ && python tools/license_gate.py` |
+| 02 · Task 1 | 1 | CLAS-02, CLAS-03, CLAS-05 | `python tools/probe_corpus.py corpus/manifest.json corpus/public && python co…` |
+| 02 · Task 2 | 1 | CLAS-02, CLAS-03, CLAS-05 | `python tools/build_mixed_fixture.py && pytest tests/test_measure_truetype_cm…` |
+| 02 · Task 3 | 1 | CLAS-02, CLAS-03, CLAS-05 | `pytest tests/test_measure_truetype_cmap_gaps.py -q && python tools/measure_t…` |
+| 03 · Task 1 | 2 | TEXT-02, TEXT-03, TEXT-05 | `pytest tests/test_types.py -q` |
+| 03 · Task 2 | 2 | TEXT-02, TEXT-03, TEXT-05 | `pytest tests/test_run_id.py -q` |
+| 04 · Task 1 | 3 | TEXT-01, TEXT-02, TEXT-07 | `pytest tests/test_walker.py::test_curpos_alignment_holds_across_corpus -q…` |
+| 04 · Task 2 | 3 | TEXT-01, TEXT-02, TEXT-07 | `pytest tests/test_walker.py tests/test_contents_parts.py tests/test_glyph_re…` |
+| 05 · Task 1 | 4 | TEXT-06 | `pytest tests/test_outside_contents.py::test_shared_form_xobject_detection_ma…` |
+| 05 · Task 2 | 4 | TEXT-06 | `pytest tests/test_outside_contents.py -q` |
+| 06 · Task 1 | 3 | TEXT-04 | `pytest tests/test_encoding_table.py -k "not corpus" -q` |
+| 06 · Task 2 | 3 | TEXT-04 | `pytest tests/test_encoding_table.py -k "not corpus" -q` |
+| 06 · Task 3 | 3 | TEXT-04 | `pytest tests/test_encoding_table.py -m corpus -q` |
+| 07 · Task 1 | 5 | TEXT-08 | `pytest tests/test_space_threshold.py -q` |
+| 07 · Task 2 | 5 | TEXT-08 | `pytest tests/test_clustering.py -q` |
+| 07 · Task 3 | 5 | TEXT-08 | `pytest tests/test_clustering.py -m corpus -q` |
+| 08 · Task 1 | 6 | CLAS-01, CLAS-02, CLAS-03, CLAS-04, CLAS-05 | `pytest tests/test_classify.py::test_buckets_and_coverage_bounded tests/test_…` |
+| 08 · Task 2 | 6 | CLAS-01, CLAS-02, CLAS-03, CLAS-04, CLAS-05 | `pytest tests/test_classify.py::test_vector_outlined_fixture -q` |
+| 08 · Task 3 | 6 | CLAS-01, CLAS-02, CLAS-03, CLAS-04, CLAS-05 | `pytest tests/test_classify.py -q` |
+| 09 · Task 1 | 7 | TEXT-01 | `pytest tests/test_perf.py -q` |
+| 09 · Task 2 | 7 | TEXT-01 | `python tools/pdftool.py index corpus/public/irs_form_w9.pdf --page 0</automa…` |
+| 09 · Task 3 | 7 | TEXT-01 | `pytest tests/test_walker.py -m corpus -q` |
+| 10 · Task 1 | 8 | TEXT-03 | `pytest tests/test_roundtrip.py::test_identity_rewrite_preserves_run_ids -q</…` |
+| 10 · Task 2 | 8 | TEXT-03 | `pytest tests/test_roundtrip.py -k malformed -q` |
+| 10 · Task 3 | 8 | TEXT-03 | `pytest tests/test_roundtrip.py -k harness -q` |
 
 ---
 

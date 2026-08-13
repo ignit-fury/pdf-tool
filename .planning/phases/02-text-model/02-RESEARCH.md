@@ -1225,7 +1225,19 @@ This is not boilerplate. Phase 1 shipped three green checks that measured the wr
 
 ---
 
-# Open Questions
+# Open Questions (ALL RESOLVED)
+
+> Resolved 2026-08-13 during planning. Each question below is closed by a named plan task or a
+> CONTEXT.md decision; the original reasoning is preserved for the record.
+>
+> | # | Question | Resolved by |
+> |---|---|---|
+> | 1 | TT-d / TT-e refusal counts | **02-02 Task 3** — `tools/measure_truetype_cmap_gaps.py` enumerates each embedded TrueType's cmap subtables and sizes D-04's bound |
+> | 2 | Should colour break a run | **02-CONTEXT.md D-01**, extended 2026-08-13 — fill colour breaks; stroke mode and text render mode explicitly rejected |
+> | 3 | Vector-outlined fixture source | **02-02 Task 1** — targeted govdocs1 search, then construct-and-disclose if that fails |
+> | 4 | Run IDs on malformed documents | **02-10 Task 2** — identity-rewrite round trip over the 17 `malformed` documents |
+> | 5 | Cache eviction budget | **02-09 Task 1** — RunIndex cache sizing against the measured 166MB/126-page profile |
+
 
 1. **How many corpus fonts hit TT-d (symbolic TrueType with an unusable cmap set) and TT-e (no cmap)?**
    - Known: these branches exist and both are refusals. `TrueType symbolic, no /Encoding` covers 37 documents, but how many of those have a *usable* `(3,0)` or `(1,0)` is unmeasured.
