@@ -21,6 +21,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 markers = [
     "corpus: exercises the full corpus/public tier (slower, excluded from the quick per-commit run)",
 ]
