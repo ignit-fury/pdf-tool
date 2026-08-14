@@ -1060,17 +1060,6 @@ def _iter_corpus_fonts() -> Iterator[tuple[str, pikepdf.Object]]:
             pdf.close()
 
 
-def _collapsed_is_refused(font: pikepdf.Object) -> bool:
-    """The Pitfall-2 bug (see the module-level `_collapsed_is_refused` above, near
-    test_pitfall_2_...): branch on `symbolic and has_encoding` BEFORE /Subtype, so Type1
-    and TrueType wrongly share TrueType's rule. Reimplemented here (rather than reusing
-    the earlier one) only so this section reads standalone -- same logic."""
-    descriptor = font.get("/FontDescriptor")
-    flags = None if descriptor is None else descriptor.get("/Flags")
-    symbolic = flags is not None and bool(int(flags) & 4)
-    return symbolic and font.get("/Encoding") is not None
-
-
 @pytest.mark.corpus
 def test_every_corpus_font_fires_exactly_one_branch() -> None:
     """D-04 corpus-wide branch coverage. Every font dict across the full public corpus
@@ -1082,30 +1071,46 @@ def test_every_corpus_font_fires_exactly_one_branch() -> None:
     Per the explicit anti-vacuity warning (02-VALIDATION.md TEXT-04 branch-coverage-
     vacuity, Phase 1's 0/0-pass failure mode, corroborated by Assumption A8's 10-distinct-
     combination floor), a per-font contract alone is not enough: this also asserts
-    branches_fired_count > 0 (the walk actually resolved something, guarding against a
-    silently-empty corpus walk) and distinct_branches_fired >= 8 (per task-3-brief.md's
-    controller-measured census: 11 distinct branches fire on this corpus -- comfortably
-    above the floor, so this is a real gate, not a rubber stamp).
+    fonts_seen > 0 (the walk actually resolved something, guarding against a silently-
+    empty corpus walk) and distinct_branches_fired >= 8 (per task-3-brief.md's controller-
+    measured census: 11 distinct branches fire on this corpus -- comfortably above the
+    floor, so this is a real gate, not a rubber stamp).
 
-    MUTATION: hardcoding resolve_font's dispatch to always return one fixed verdict (e.g.
-    always FontVerdict("T1-a", True, False), regardless of input) still satisfies "exactly
-    one branch_id, never raises" but collapses distinct_branches_fired from 11 to 1,
-    failing the >= 8 floor. Confirmed by running that hardcode against the same walk used
-    here (standalone script, not committed): 35,071 fonts resolved, 1 distinct branch
+    A document-count floor guards the >= 8 gate itself: measured, 8 distinct branches are
+    already reached after only 10 of 212 documents (round-1 review finding), so without a
+    floor this test stays green on a corpus shrunk by 95%. `docs_seen >= 200` closes that
+    (same floor as test_refusal_rate_within_recorded_bound below, same rationale).
+
+    MUTATION 1: hardcoding resolve_font's dispatch to always return one fixed verdict
+    (e.g. always FontVerdict("T1-a", True, False), regardless of input) still satisfies
+    "exactly one branch_id, never raises" but collapses distinct_branches_fired from 11
+    to 1, failing the >= 8 floor. Confirmed by running that hardcode against the same walk
+    used here (standalone script, not committed): 35,071 fonts resolved, 1 distinct branch
     ('T1-a') -- the >= 8 assertion goes red as expected.
+
+    MUTATION 2 (the document-count floor): a corpus shrunk to its first 10 documents still
+    reaches 8 distinct branches, so distinct_branches_fired >= 8 alone stays green.
+    Confirmed by running the same walk restricted to the manifest's first 10 documents
+    (standalone script, not committed): 8 distinct branches fired but only 10 documents
+    scanned -- `docs_seen >= 200` catches what the branch-count gate alone misses.
     """
     branch_counts: dict[str, int] = {}
+    docs_seen: set[str] = set()
     fonts_seen = 0
-    for _filename, font in _iter_corpus_fonts():
+    for filename, font in _iter_corpus_fonts():
+        docs_seen.add(filename)
         verdict = resolve_font(font)  # must not raise
         assert isinstance(verdict.branch_id, str) and verdict.branch_id
         branch_counts[verdict.branch_id] = branch_counts.get(verdict.branch_id, 0) + 1
         fonts_seen += 1
 
-    branches_fired_count = fonts_seen
     distinct_branches_fired = len(branch_counts)
 
-    assert branches_fired_count > 0, "corpus walk found no font dictionaries -- vacuous population"
+    assert fonts_seen > 0, "corpus walk found no font dictionaries -- vacuous population"
+    # Guards the branch-count gate against a shrunken corpus -- see MUTATION 2 above. 212
+    # of 217 manifest documents yield >= 1 font (5 are font-less, confirmed legitimate);
+    # 200 leaves 12 documents of slack against that real denominator.
+    assert len(docs_seen) >= 200, f"expected close to the full corpus, scanned {len(docs_seen)} documents"
     assert distinct_branches_fired >= 8, (
         f"only {distinct_branches_fired} distinct branches fired: {sorted(branch_counts)} -- "
         f"expected >= 8 per the task brief's measured 11-branch census"
@@ -1179,14 +1184,23 @@ def test_refusal_rate_within_recorded_bound() -> None:
 
     MEASURED (2026-08-14, against corpus/manifest.json + corpus/public, the same walk as
     test_every_corpus_font_fires_exactly_one_branch above -- page /Resources /Font plus
-    nested Form XObject resources, 0 open/traversal errors): 26 of 217 documents (12.0%)
-    have at least one font resolve_font refuses. This matches the task brief's controller-
-    measured census exactly (26/217, 12.0%), re-derived independently here rather than
-    hardcoded from the brief.
+    nested Form XObject resources, 0 open/traversal errors): 26 of 212 documents (12.3%)
+    have at least one font resolve_font refuses.
+
+    DENOMINATOR, stated explicitly per round-1 review: 212, not the full 217-document
+    manifest. `docs_scanned` below counts only documents that yield at least one font dict
+    (page or nested-XObject) -- 5 corpus documents open cleanly but contain zero font
+    entries (verapdf_isartor_malformed_trailer, verapdf_inline_image_fixture,
+    govdocs1_002_002014, govdocs1_007_007030, vector_outlined_text_sample; confirmed
+    legitimate, not a swallowed open/traversal error). The task brief's controller-measured
+    census used 217 as its denominator (all documents scanned, whether or not they
+    contained a font). The numerator (26) matches the brief's exactly; the denominator does
+    not, because the two walks count "scanned" differently -- 26/212 = 12.3% is what this
+    test's own denominator produces, recorded as such rather than restated to 26/217.
 
     Two-sided bound per 02-VALIDATION.md's "D-04 refusal rate must be bounded two-sided"
     warning: an upper bound alone stays green if the table stops refusing anything at all.
-    Pinned range [5%, 20%], centred on the measured 12.0%:
+    Pinned range [5%, 20%], centred on the measured 12.3%:
       - lower 5%: wide enough to absorb the TT-d/TT-e contribution measured at 0% by
         tools/measure_truetype_cmap_gaps.py (02-02) -- i.e. even if that contribution had
         been nonzero, it fits -- while still excluding 0% (the table refusing nothing).
@@ -1220,8 +1234,11 @@ def test_refusal_rate_within_recorded_bound() -> None:
 
     scanned = len(docs_scanned)
     # Guards the denominator too -- a shrunken local corpus silently measuring a smaller
-    # population would itself be a vacuous-check failure mode.
-    assert scanned >= 200, f"expected close to the full 217-document corpus, scanned {scanned}"
+    # population would itself be a vacuous-check failure mode. The real denominator here
+    # is 212 (documents yielding >= 1 font, not the full 217-document manifest -- see the
+    # docstring), so 200 leaves 12 documents of slack, not the 17 it would appear to have
+    # against 217.
+    assert scanned >= 200, f"expected close to the full 212-document (font-bearing) corpus, scanned {scanned}"
 
     refusal_rate = len(docs_with_refusal) / scanned
     assert 0.05 <= refusal_rate <= 0.20, (
