@@ -149,6 +149,7 @@ __all__ = [
     "Document",
     "Font",
     "GlyphObject",
+    "GraphicState",
     "Matrix",
     "Page",
     "Resources",
