@@ -7,6 +7,7 @@ is always 0 is the vacuous-check failure this phase keeps finding. They get synt
 font programs instead, built here by packing a minimal sfnt.
 """
 
+import hashlib
 import io
 import json
 import struct
@@ -674,12 +675,18 @@ def test_glyph_presence_truetype_gid_present_and_absent() -> None:
 def test_glyph_presence_type1_real_pdf_fontfile_finds_known_glyph() -> None:
     """CRITICAL 1/2: a PDF /FontFile is NOT a PFA or PFB -- it is the raw Type1 program
     segmented by /Length1//Length2//Length3 with a BINARY eexec section (ISO 32000-1
-    Table 111). Writing raw bytes to a .pfa file and calling T1Font fails on most real
+    Table 111). Writing raw bytes straight to a font-program reader fails on most real
     fonts (see the report for the full corpus-wide re-measurement).
 
     govdocs1_012_012087.pdf's embedded Type1 font has a real '.notdef' glyph. Finding it
-    proves the fix, not just the absence of a crash -- a downgrade (found=False) would
-    pass just as silently as the bug this test exists to catch.
+    proves the fix on THIS font, not just the absence of a crash -- a downgrade
+    (found=False) would pass just as silently as the bug this test exists to catch.
+
+    NOT SUFFICIENT ON ITS OWN (round 2 review, confirmed): this font happens to be one
+    that already worked before round 2's fix, so this test alone cannot see round 2's
+    defect (trailer NUL / encoding / mandatory-Subrs). Only a corpus-wide rate can --
+    see test_type1_fontfile_corpus_wide_parse_rate below, which is this defect's real
+    acceptance test.
     """
     pdf = pikepdf.open(CORPUS_DIR / "govdocs1_012_012087.pdf")
     try:
@@ -693,6 +700,73 @@ def test_glyph_presence_type1_real_pdf_fontfile_finds_known_glyph() -> None:
     editable, substitution = glyph_presence(verdict, ".notdef", program)
     assert editable is True
     assert substitution is False  # found in the ORIGINAL program -- not downgraded
+
+
+@pytest.mark.corpus
+def test_type1_fontfile_corpus_wide_parse_rate() -> None:
+    """CRITICAL 1, round 2's actual acceptance criterion: A-6's downgrade never refuses,
+    so a single font passing proves nothing about the population -- the corpus-wide
+    parse rate is the ONLY signal that exists for a regression on this code path.
+
+    Measured through the real production path (embedded_font_bytes + glyph_presence),
+    deduped by content sha256 across corpus/public: 176 unique embedded /FontFile
+    programs (177 by (document, stream object) -- one exact byte-for-byte duplicate
+    shared by two documents).
+
+    MEASURED (round 2, all three fixes -- trailer-NUL strip, latin-1, bypassing
+    t1Lib.T1Font's mandatory-but-optional /Subrs access): 176/176 (100%). Pinned at that
+    ceiling: a rate that can only go DOWN from here is exactly the tripwire this needs.
+    round 1's fix alone (PFB rewrap, no trailer/encoding/Subrs fix) measured 87/176.
+    """
+    manifest = json.loads((REPO_ROOT / "corpus" / "manifest.json").read_text())
+    results: dict[str, bool] = {}
+
+    for entry in manifest:
+        path = CORPUS_DIR / entry["filename"]
+        if not path.exists():
+            continue
+        try:
+            pdf = pikepdf.open(path)
+        except Exception:  # noqa: BLE001 - encrypted/broken files are not this test's subject
+            continue
+        try:
+            for page in pdf.pages:
+                resources = page.get("/Resources")
+                if resources is None:
+                    continue
+                fonts = resources.get("/Font")
+                if fonts is None:
+                    continue
+                for _key, font in fonts.items():
+                    if str(font.get("/Subtype")) not in ("/Type1", "/MMType1"):
+                        continue
+                    descriptor = font.get("/FontDescriptor")
+                    if descriptor is None:
+                        continue
+                    font_file = descriptor.get("/FontFile")
+                    if font_file is None:
+                        continue
+                    digest = hashlib.sha256(bytes(font_file.read_bytes())).hexdigest()
+                    if digest in results:
+                        continue  # already measured this exact program (cross-document dup)
+                    program = embedded_font_bytes(descriptor)
+                    assert program is not None
+                    verdict = FontVerdict("T1-a", True, False)  # generic editable verdict
+                    _editable, substitution = glyph_presence(verdict, ".notdef", program)
+                    results[digest] = not substitution  # found in the ORIGINAL program
+        except Exception:  # noqa: BLE001
+            pass
+        finally:
+            pdf.close()
+
+    total = len(results)
+    parsed = sum(1 for ok in results.values() if ok)
+    # Guards the denominator too: a shrunken local corpus silently measuring a smaller,
+    # easier population would be exactly the vacuous-check trap this phase keeps finding.
+    assert total >= 176, f"expected at least 176 unique embedded /FontFile programs, got {total}"
+    assert parsed == total, (
+        f"Type1 /FontFile parse rate regressed: {parsed}/{total} -- ceiling is 176/176"
+    )
 
 
 def test_glyph_presence_downgrades_on_unparseable_program() -> None:

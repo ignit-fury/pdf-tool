@@ -49,7 +49,6 @@ from __future__ import annotations
 import io
 import re
 import struct
-import tempfile
 from dataclasses import dataclass
 
 import pikepdf
@@ -57,7 +56,7 @@ from fontTools.agl import UV2AGL
 from fontTools.cffLib import CFFFontSet
 from fontTools.encodings.MacRoman import MacRoman
 from fontTools.encodings.StandardEncoding import StandardEncoding
-from fontTools.t1Lib import T1Font
+from fontTools.misc import psLib
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.sfnt import SFNTReader
 
@@ -609,37 +608,53 @@ def resolve_font(font: pikepdf.Object) -> FontVerdict:
     return _resolve_type1(font, symbolic, program is not None)
 
 
-def _type1_to_pfb(data: bytes, length1: int, length2: int, length3: int | None) -> bytes:
-    """Re-segments a raw PDF /FontFile into the PFB container format fontTools.t1Lib
-    actually parses reliably.
+def _type1_glyph_names(program: FontProgram) -> list[str]:
+    """Type1 glyph names, via `psLib.suckfont` DIRECTLY on the re-segmented bytes -- not
+    via `t1Lib.T1Font.parse()`/`.getGlyphSet()`.
 
     A /FontFile is the three Type1 segments (ASCII cleartext header, BINARY eexec
     ciphertext, ASCII trailer) concatenated with no markers of their own -- only
     Length1/Length2/Length3 say where one ends and the next begins (ISO 32000-1 Table
-    111). Handing that concatenation to t1Lib's text-marker-based reader instead makes it
-    re-derive those same boundaries by scanning the blob for "eexec" and a trailer
-    pattern, which a raw binary ciphertext section can spuriously match early or late --
-    CRITICAL 1, measured over 147 unique embedded /FontFile streams (deduped by stream
-    object) across corpus/public: the naive approach parses 36; PFB's explicit
-    `\\x80`-prefixed segment headers, built from the SAME lengths the PDF itself
-    declares, raise that to 69, with zero regressions (every font that parsed the naive
-    way still parses this way -- see the report for the full before/after transcript).
+    111). Round 1 fixed *locating* those boundaries (a PFB round-trip through
+    `t1Lib.T1Font`, 36/147 -> 69/147). Round 2's re-review found that still left three
+    independent bugs on the SAME path, each measured on the same corpus:
 
-    `length3` defaults to "everything left in `data`" when the PDF omits it (ISO 32000-1
-    9.9 marks it required, but a missing key here is still recoverable from the other two
-    without guessing where segment 2 ends).
+    1. **Trailer NUL (82 of 89 round-1 failures).** The trailer segment often carries a
+       trailing NUL byte after "cleartomark". `cleartomark` is a defined systemdict
+       operator; `"cleartomark\\x00"` is an undefined NAME, because psLib's tokenizer
+       folds the NUL into the token. `.rstrip(b"\\x00")` on segment 3 before use fixes it.
+    2. **ASCII encoding (2 of 89).** `T1Font`/`psLib` default to `encoding="ascii"`; a
+       real font with a non-ASCII byte anywhere in its cleartext portions (e.g. a
+       copyright glyph, 0xA9, in a comment) raises `UnicodeDecodeError`. `"latin-1"`
+       accepts every byte value and fixes it generically.
+    3. **Mandatory /Subrs (5 of 89, and this is the one that matters most).**
+       `T1Font.parse()` does `self.font["Private"]["Subrs"]` unconditionally, AFTER
+       `psLib.suckfont` has already populated `CharStrings` -- but `/Subrs` is OPTIONAL
+       in a Type1 Private dict (it holds subroutines a charstring may reference; a font
+       with none simply has none). A presence check only needs glyph NAMES
+       (`CharStrings.keys()`), never the decrypted charstrings or subroutines
+       `T1Font.parse()` goes on to build. Calling `psLib.suckfont` directly -- the exact
+       call `T1Font.parse()` itself makes, one line before the `/Subrs` access --  gets
+       the names without ever reaching that line, and needs no tempfile: `suckfont` takes
+       bytes, not a path.
+
+    Fixing only 1 and 2 does not move the needle: it converts the 82 `cleartomark`
+    failures into `Subrs` `KeyError`s (measured). All three together reach 176/176 on the
+    corpus (see the report for the full re-measurement and the red-then-green transcript
+    for the corpus-rate test this enables).
     """
+    if program.length1 is None or program.length2 is None:
+        raise ValueError("Type1 program missing /Length1 or /Length2")
+    length3 = program.length3
     if length3 is None:
-        length3 = len(data) - length1 - length2
-    segments = (
-        (1, data[:length1]),  # ASCII cleartext header
-        (2, data[length1 : length1 + length2]),  # BINARY eexec ciphertext
-        (1, data[length1 + length2 : length1 + length2 + length3]),  # ASCII trailer
-    )
-    body = b"".join(
-        b"\x80" + bytes([kind]) + struct.pack("<I", len(chunk)) + chunk for kind, chunk in segments
-    )
-    return body + b"\x80\x03"  # PFB EOF marker
+        length3 = len(program.data) - program.length1 - program.length2
+    seg1 = program.data[: program.length1]
+    seg2 = program.data[program.length1 : program.length1 + program.length2]
+    seg3_end = program.length1 + program.length2 + length3
+    seg3 = program.data[program.length1 + program.length2 : seg3_end].rstrip(b"\x00")
+    result = psLib.suckfont(seg1 + seg2 + seg3, encoding="latin-1")
+    names: list[str] = list(result["CharStrings"].keys())
+    return names
 
 
 def _glyph_present(code: int | str, program: FontProgram) -> bool:
@@ -669,21 +684,8 @@ def _glyph_present(code: int | str, program: FontProgram) -> bool:
             return f"cid{code:05d}" in charset
         return 0 <= code < len(charset)
 
-    if data[:2] == b"%!" or data[:1] == b"\x80":  # Type1 -- see _type1_to_pfb's docstring
-        if program.length1 is None or program.length2 is None:
-            # Can't locate the eexec boundary without them; caught by glyph_presence's
-            # except and downgraded, same as any other unparseable program.
-            raise ValueError("Type1 program missing /Length1 or /Length2")
-        pfb = _type1_to_pfb(data, program.length1, program.length2, program.length3)
-        # TMPDIR must be tmpfs in the served image: these bytes are a byte-exact slice of
-        # the user's uploaded document, and for a subset font they encode exactly which
-        # glyphs the document uses. Cleanup is already correct on every path including
-        # exceptions (the `with` block), so tmpfs -- not a bespoke scratch abstraction --
-        # is what makes this ephemeral; YAGNI on building one.
-        with tempfile.NamedTemporaryFile(suffix=".pfb") as handle:
-            handle.write(pfb)
-            handle.flush()
-            names = list(T1Font(handle.name).getGlyphSet().keys())
+    if data[:2] == b"%!" or data[:1] == b"\x80":  # Type1 -- see _type1_glyph_names's docstring
+        names = _type1_glyph_names(program)  # raises on missing lengths; caught below
         if isinstance(code, str):
             return code in names
         return 0 <= code < len(names)
