@@ -11,6 +11,7 @@ import hashlib
 import io
 import json
 import struct
+from collections.abc import Iterator
 from pathlib import Path
 
 import pikepdf
@@ -28,6 +29,7 @@ from engine.encoding_table import (
     encoding_map,
     glyph_presence,
     glyph_verdict,
+    is_symbolic,
     parse_differences,
     resolve_font,
     type3_char_proc,
@@ -987,4 +989,242 @@ def test_pitfall_2_collapsed_branch_inflates_refusals() -> None:
     assert collapsed_rate > correct_rate * 5, (
         f"collapsed {collapsed_rate:.1%} vs correct {correct_rate:.1%} -- the two rules "
         f"have converged, which means resolve_font is refusing T1-b"
+    )
+
+
+# --------------------------------------------------------------------------------------
+# 02-06 Task 3 -- corpus-wide branch coverage and the two-sided D-04 refusal-rate bound.
+#
+# Entirely about anti-vacuity (task brief): a corpus-wide check is not trusted until it
+# has been demonstrated failing. Every assertion below names its reddening mutation in a
+# comment; each one was actually run once (via a standalone script, never committed) to
+# confirm it flips red -- see task-3-report.md for the full transcripts.
+# --------------------------------------------------------------------------------------
+
+
+def _walk_font_resources(
+    resources: pikepdf.Object | None, seen_xobjects: set[tuple[int, int]]
+) -> Iterator[pikepdf.Object]:
+    """Yield every font dict directly in `resources` (/Font), plus font dicts nested in
+    Form XObject /Resources, walked recursively -- matching the task brief's controller-
+    measured census, which walks "page /Resources /Font plus nested XObject resources".
+    `seen_xobjects` dedupes Form XObjects by (obj, gen) only, as cycle protection for a
+    Form that (directly or indirectly) references itself; font DICTS themselves are never
+    deduped here, since the census counts branch occurrences, not distinct font objects.
+    """
+    if resources is None:
+        return
+    fonts = resources.get("/Font")
+    if fonts is not None:
+        for _key, font in fonts.items():
+            yield font
+    xobjects = resources.get("/XObject")
+    if xobjects is not None:
+        for _key, xobject in xobjects.items():
+            if str(xobject.get("/Subtype", "")) != "/Form":
+                continue
+            try:
+                key = xobject.objgen
+            except AttributeError:
+                key = None
+            if key is not None:
+                if key in seen_xobjects:
+                    continue
+                seen_xobjects.add(key)
+            yield from _walk_font_resources(xobject.get("/Resources"), seen_xobjects)
+
+
+def _iter_corpus_fonts() -> Iterator[tuple[str, pikepdf.Object]]:
+    """Yield (filename, font_dict) for every font dictionary across the full public
+    corpus. Per controller resolution #3 (task brief), this walk belongs in the test, not
+    in engine/encoding_table.py. A document that fails to open or traverse is skipped, not
+    allowed to crash the run -- the same convention test_pitfall_2_... above already uses.
+    """
+    manifest = json.loads((REPO_ROOT / "corpus" / "manifest.json").read_text())
+    for entry in manifest:
+        path = CORPUS_DIR / entry["filename"]
+        if not path.exists():
+            continue
+        try:
+            pdf = pikepdf.open(path)
+        except Exception:  # noqa: BLE001 - encrypted/broken files are not this walk's subject
+            continue
+        try:
+            seen_xobjects: set[tuple[int, int]] = set()
+            for page in pdf.pages:
+                for font in _walk_font_resources(page.get("/Resources"), seen_xobjects):
+                    yield entry["filename"], font
+        except Exception:  # noqa: BLE001
+            pass
+        finally:
+            pdf.close()
+
+
+def _collapsed_is_refused(font: pikepdf.Object) -> bool:
+    """The Pitfall-2 bug (see the module-level `_collapsed_is_refused` above, near
+    test_pitfall_2_...): branch on `symbolic and has_encoding` BEFORE /Subtype, so Type1
+    and TrueType wrongly share TrueType's rule. Reimplemented here (rather than reusing
+    the earlier one) only so this section reads standalone -- same logic."""
+    descriptor = font.get("/FontDescriptor")
+    flags = None if descriptor is None else descriptor.get("/Flags")
+    symbolic = flags is not None and bool(int(flags) & 4)
+    return symbolic and font.get("/Encoding") is not None
+
+
+@pytest.mark.corpus
+def test_every_corpus_font_fires_exactly_one_branch() -> None:
+    """D-04 corpus-wide branch coverage. Every font dict across the full public corpus
+    (217 documents, page /Resources /Font plus nested Form XObject resources) must resolve
+    to exactly one branch_id and never raise -- "exactly one" per controller resolution #1
+    means resolve_font returns exactly one FontVerdict per font dict, not that every
+    branch fires on a unique font.
+
+    Per the explicit anti-vacuity warning (02-VALIDATION.md TEXT-04 branch-coverage-
+    vacuity, Phase 1's 0/0-pass failure mode, corroborated by Assumption A8's 10-distinct-
+    combination floor), a per-font contract alone is not enough: this also asserts
+    branches_fired_count > 0 (the walk actually resolved something, guarding against a
+    silently-empty corpus walk) and distinct_branches_fired >= 8 (per task-3-brief.md's
+    controller-measured census: 11 distinct branches fire on this corpus -- comfortably
+    above the floor, so this is a real gate, not a rubber stamp).
+
+    MUTATION: hardcoding resolve_font's dispatch to always return one fixed verdict (e.g.
+    always FontVerdict("T1-a", True, False), regardless of input) still satisfies "exactly
+    one branch_id, never raises" but collapses distinct_branches_fired from 11 to 1,
+    failing the >= 8 floor. Confirmed by running that hardcode against the same walk used
+    here (standalone script, not committed): 35,071 fonts resolved, 1 distinct branch
+    ('T1-a') -- the >= 8 assertion goes red as expected.
+    """
+    branch_counts: dict[str, int] = {}
+    fonts_seen = 0
+    for _filename, font in _iter_corpus_fonts():
+        verdict = resolve_font(font)  # must not raise
+        assert isinstance(verdict.branch_id, str) and verdict.branch_id
+        branch_counts[verdict.branch_id] = branch_counts.get(verdict.branch_id, 0) + 1
+        fonts_seen += 1
+
+    branches_fired_count = fonts_seen
+    distinct_branches_fired = len(branch_counts)
+
+    assert branches_fired_count > 0, "corpus walk found no font dictionaries -- vacuous population"
+    assert distinct_branches_fired >= 8, (
+        f"only {distinct_branches_fired} distinct branches fired: {sorted(branch_counts)} -- "
+        f"expected >= 8 per the task brief's measured 11-branch census"
+    )
+
+
+@pytest.mark.corpus
+def test_type1_symbolic_encoding_resolves_truetype_refuses() -> None:
+    """The module's one ordering rule (docstring: branch on /Subtype BEFORE Symbolic),
+    proven on REAL corpus fonts rather than the synthetic ones test_branch_t1_b_... and
+    test_branch_tt_c_... already cover: a symbolic Type1 font with /Encoding present
+    resolves editable (T1-b -- 1,016 occurrences / 48 docs per the task brief's census),
+    while a symbolic TrueType font with /Encoding present refuses (TT-c -- 27 occurrences
+    / 4 docs). Same shape (symbolic + /Encoding present), different /Subtype, opposite
+    verdict -- exactly the distinction the ordering rule exists to get right, so this test
+    fails if either population is empty on the real corpus (found = irs_1040_instructions.pdf
+    for T1-b, mutopia_vocalise_abt.pdf for TT-c, at time of writing).
+
+    MUTATION: the Pitfall-2 collapsed rule (`_collapsed_is_refused` above -- branch on
+    `symbolic and has_encoding` before /Subtype) applied to the discovered T1-b font.
+    Confirmed by running it once (standalone script, not committed): the collapsed rule
+    says refused=True for the exact real T1-b font resolve_font correctly calls editable
+    -- i.e. reversing the ordering rule flips this real font's verdict. The assertion
+    below bakes that comparison in permanently, so it goes red the same way if the
+    ordering rule regresses.
+    """
+    t1b: dict[str, object] | None = None
+    ttc: dict[str, object] | None = None
+
+    for filename, font in _iter_corpus_fonts():
+        if t1b is not None and ttc is not None:
+            break
+        subtype = str(font.get("/Subtype", ""))
+        if subtype not in ("/Type1", "/MMType1", "/TrueType"):
+            continue
+        descriptor = font.get("/FontDescriptor")
+        if not (is_symbolic(descriptor) and font.get("/Encoding") is not None):
+            continue
+
+        verdict = resolve_font(font)
+        if subtype in ("/Type1", "/MMType1") and verdict.branch_id == "T1-b" and t1b is None:
+            t1b = {"filename": filename, "verdict": verdict, "collapsed_refused": _collapsed_is_refused(font)}
+        if subtype == "/TrueType" and verdict.branch_id == "TT-c" and ttc is None:
+            ttc = {"filename": filename, "verdict": verdict, "collapsed_refused": _collapsed_is_refused(font)}
+
+    assert t1b is not None, "expected at least one real T1-b font (symbolic Type1 + /Encoding) in the corpus"
+    assert ttc is not None, "expected at least one real TT-c font (symbolic TrueType + /Encoding) in the corpus"
+
+    t1b_verdict = t1b["verdict"]
+    ttc_verdict = ttc["verdict"]
+    assert isinstance(t1b_verdict, FontVerdict) and isinstance(ttc_verdict, FontVerdict)
+
+    assert t1b_verdict.branch_id == "T1-b"
+    assert t1b_verdict.editable is True
+
+    assert ttc_verdict.branch_id == "TT-c"
+    assert ttc_verdict.editable is False
+
+    # The reddening comparison: the same real T1-b font, run through the collapsed rule,
+    # is wrongly refused -- proving the /Subtype-first ordering is what keeps it editable.
+    assert t1b["collapsed_refused"] is True, (
+        "the collapsed (Pitfall-2) rule no longer wrongly refuses this real T1-b font -- "
+        "either the discovered font changed shape or the ordering-rule regression this "
+        "guards against no longer reproduces"
+    )
+
+
+@pytest.mark.corpus
+def test_refusal_rate_within_recorded_bound() -> None:
+    """D-04: the corpus-wide refusal rate, measured and bounded two-sided.
+
+    MEASURED (2026-08-14, against corpus/manifest.json + corpus/public, the same walk as
+    test_every_corpus_font_fires_exactly_one_branch above -- page /Resources /Font plus
+    nested Form XObject resources, 0 open/traversal errors): 26 of 217 documents (12.0%)
+    have at least one font resolve_font refuses. This matches the task brief's controller-
+    measured census exactly (26/217, 12.0%), re-derived independently here rather than
+    hardcoded from the brief.
+
+    Two-sided bound per 02-VALIDATION.md's "D-04 refusal rate must be bounded two-sided"
+    warning: an upper bound alone stays green if the table stops refusing anything at all.
+    Pinned range [5%, 20%], centred on the measured 12.0%:
+      - lower 5%: wide enough to absorb the TT-d/TT-e contribution measured at 0% by
+        tools/measure_truetype_cmap_gaps.py (02-02) -- i.e. even if that contribution had
+        been nonzero, it fits -- while still excluding 0% (the table refusing nothing).
+      - upper 20%: comfortably below the ~23.1% Pitfall-2 collapse regression
+        (02-RESEARCH.md Section 1 / this file's module docstring), with margin so a small
+        additional refusal source doesn't false-positive the guard.
+
+    MUTATION 1 (upper bound, the Type1-vs-TrueType collapse -- `_collapsed_is_refused`
+    above): applying the collapsed rule to the same corpus walk used here, confirmed by
+    running it once (standalone script, not committed): 52/217 documents (24.0%) --
+    outside the pinned upper bound of 20%, reproducing Pitfall 2 at the two-sided test's
+    own scale (slightly above the 23.1%/1,012-occurrence figure quoted elsewhere in this
+    file, which was measured on a page-only walk; this walk also includes XObject-nested
+    fonts, so a marginally larger population is expected).
+
+    MUTATION 2 (LOWER bound -- the one an upper-bound-only check cannot catch): a
+    "resolve_font never refuses" stand-in (every verdict forced editable=True) applied to
+    the same corpus walk. Confirmed by running it once (standalone script, not committed):
+    0/217 documents (0.0%) -- outside the pinned lower bound of 5%. This is the exact
+    scenario the two-sided requirement exists for: an upper-bound-only assertion
+    (rate <= 0.20) would stay green at 0.0%, silently passing while the table has stopped
+    refusing anything at all.
+    """
+    docs_with_refusal: set[str] = set()
+    docs_scanned: set[str] = set()
+
+    for filename, font in _iter_corpus_fonts():
+        docs_scanned.add(filename)
+        if not resolve_font(font).editable:
+            docs_with_refusal.add(filename)
+
+    scanned = len(docs_scanned)
+    # Guards the denominator too -- a shrunken local corpus silently measuring a smaller
+    # population would itself be a vacuous-check failure mode.
+    assert scanned >= 200, f"expected close to the full 217-document corpus, scanned {scanned}"
+
+    refusal_rate = len(docs_with_refusal) / scanned
+    assert 0.05 <= refusal_rate <= 0.20, (
+        f"corpus refusal rate {refusal_rate:.1%} ({len(docs_with_refusal)}/{scanned} docs) "
+        f"fell outside the pinned two-sided bound [5%, 20%]"
     )
