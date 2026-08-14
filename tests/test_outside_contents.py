@@ -1,17 +1,36 @@
-"""TEXT-06: shared Form XObject detection reproduces the measured corpus counts, and a
-resource-name-keyed detector is proven wrong on the same document.
+"""TEXT-06, both halves.
 
-Only engine/shared_xobjects.py is under test here (Task 1 of 02-05-PLAN.md). The walker
-does not consume this module yet -- that is Task 2 -- so these tests exercise
-shared_form_xobjects() directly against pikepdf.
+Task 1: shared Form XObject detection reproduces the measured corpus counts, and a
+resource-name-keyed detector is proven wrong on the same document. Those tests exercise
+`shared_form_xobjects()` directly against pikepdf.
+
+Task 2: the walker finds text in every location outside a page's own /Contents, addressed
+to the stream it is actually in, bounded against cyclic and deeply-nested graphs. Those
+tests drive `engine.walker.walk_document` / `located_glyph_records`.
+
+Synthetic fixtures are built inline with pikepdf and parsed straight out of memory
+(`playa.parse`), never committed as files -- following the precedent set by
+`test_dedupe_and_form_filter_survive_mutation` below. Tests may import playa directly; the
+one-module rule binds `engine/` only.
 """
 
 import collections
+import io
+import logging
 from pathlib import Path
 
 import pikepdf
+import playa
+import pytest
 
+from engine.run_id import encode_run_id, resolve_run_id_offset
 from engine.shared_xobjects import shared_form_xobjects
+from engine.walker import (
+    MAX_RECURSION_DEPTH,
+    StreamPath,
+    located_glyph_records,
+    walk_document,
+)
 
 REPO_ROOT = Path(__file__).parent.parent
 CORPUS_DIR = REPO_ROOT / "corpus" / "public"
@@ -19,6 +38,17 @@ CORPUS_DIR = REPO_ROOT / "corpus" / "public"
 IRS_1040_INSTRUCTIONS = CORPUS_DIR / "irs_1040_instructions.pdf"
 IRS_PUBLICATION_17 = CORPUS_DIR / "irs_publication_17.pdf"
 GOVDOCS_013_013085 = CORPUS_DIR / "govdocs1_013_013085.pdf"
+
+# irs_1040_instructions.pdf page 0 draws its cover headline through Form XObject /I1
+# (objid 77024), one word-fragment per Tj: "Futu" then "r". Both offsets are offsets into
+# I1's OWN decoded stream, and both were re-measured here rather than taken on faith.
+I1_OBJID = 77024
+I1_FUTU_OFFSET = 673
+I1_R_OFFSET = 679
+
+# Any 64 hex chars: these tests exercise the offset half of a run ID, not the hash half,
+# which tests/test_run_id.py already covers.
+FAKE_HASH = "0" * 64
 
 
 def test_shared_form_xobject_detection_matches_measured_counts() -> None:
@@ -176,3 +206,198 @@ def test_resource_name_keyed_mutation_undercounts_irs_1040() -> None:
             f"true objgen-keyed total ({true_max_count}) -- the undercount this test "
             f"exists to prove did not happen"
         )
+
+
+# ---------------------------------------------------------------------------
+# Task 2: the walker's recursion into text outside /Contents
+# ---------------------------------------------------------------------------
+
+
+def _helvetica() -> pikepdf.Dictionary:
+    return pikepdf.Dictionary(
+        Type=pikepdf.Name.Font,
+        Subtype=pikepdf.Name.Type1,
+        BaseFont=pikepdf.Name.Helvetica,
+    )
+
+
+def _show(text: bytes, font: bytes = b"/Helv") -> bytes:
+    """One complete, minimal text-showing sequence."""
+    return b"BT " + font + b" 12 Tf 10 10 Td (" + text + b") Tj ET\n"
+
+
+def _parse(pdf: pikepdf.Pdf) -> playa.Document:
+    """Serialise an in-memory pikepdf fixture straight into playa -- no file on disk."""
+    buf = io.BytesIO()
+    pdf.save(buf)
+    return playa.parse(buf.getvalue())
+
+
+def _form(pdf: pikepdf.Pdf, body: bytes, resources: pikepdf.Object) -> pikepdf.Object:
+    form = pdf.make_stream(body)
+    form.Type = pikepdf.Name.XObject
+    form.Subtype = pikepdf.Name.Form
+    form.BBox = pikepdf.Array([0, 0, 200, 200])
+    form.Resources = resources
+    return form
+
+
+def test_form_xobject_glyphs_address_the_xobjects_own_stream() -> None:
+    """The acceptance criterion, and Pitfall 4's discrimination, in one test.
+
+    irs_1040_instructions.pdf page 0 draws its cover headline from inside Form XObject /I1
+    one fragment per `Tj`: "Futu" at 673, "r" at 679. Re-measured from the file here rather
+    than carried forward on faith -- they are offsets of the two `Tj` KEYWORDS within I1's
+    OWN decoded stream.
+
+    The second half is what makes this a Pitfall 4 test and not a count test: the run ID
+    assembled from the record resolves against I1's own bytes and does NOT resolve against
+    the page's /Contents. Had the walker delegated to `Page.flatten()`, every one of these
+    records would carry a page-stream address -- a plausible integer pointing at different
+    bytes -- and Phase 3 would rewrite the wrong operator.
+
+    MUTATION (ran it): delete the `isinstance(item, XObjectObject)` recursion branch in
+    `walker._walk_level`. Page 0 falls from 984 records to 435, none carrying an
+    `xobj_path`, and `inside_i1` is empty -- every assertion below goes red.
+    """
+    with playa.open(str(IRS_1040_INSTRUCTIONS)) as doc:
+        page = doc.pages[0]
+        located = list(located_glyph_records(page, 0, doc))
+        page_bytes = b"\n".join(bytes(s.buffer) for s in page.streams)
+
+    inside_i1 = [(p, r) for p, r in located if p.xobj_path == (I1_OBJID,)]
+    assert inside_i1, "no records addressed to Form XObject I1"
+    offsets = {r.operator_byte_offset for _p, r in inside_i1}
+    assert {I1_FUTU_OFFSET, I1_R_OFFSET} <= offsets, (
+        f"expected the measured I1 offsets in {sorted(offsets)[:8]}..."
+    )
+
+    with pikepdf.open(str(IRS_1040_INSTRUCTIONS)) as pdf:
+        i1_bytes = bytes(pdf.get_object((I1_OBJID, 0)).read_bytes())
+
+    for path, record in inside_i1:
+        if record.operator_byte_offset not in (I1_FUTU_OFFSET, I1_R_OFFSET):
+            continue
+        run_id = encode_run_id(
+            FAKE_HASH,
+            path.page,
+            record.stream_id,
+            xobj_path=path.xobj_path,
+            annot=path.annot,
+            pattern=path.pattern,
+            charproc=path.charproc,
+            byte_offset=record.operator_byte_offset,
+        )
+        assert resolve_run_id_offset(run_id, {record.stream_id: i1_bytes}), (
+            "the offset must land on an operator keyword in I1's own stream"
+        )
+        assert not resolve_run_id_offset(run_id, {record.stream_id: page_bytes}), (
+            "the offset must NOT be a page-/Contents address -- that is Pitfall 4"
+        )
+
+
+def test_self_referencing_form_xobject_walks_to_completion(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """T-02-02 (CVE-2026-48155 shape). A Form XObject that `Do`-invokes itself, on a
+    2-page document so the per-BRANCH visited set is exercised rather than a global one.
+
+    Two claims:
+    1. The walk terminates, with no RecursionError, and the text before the self-`Do` is
+       still collected -- only the cyclic branch is cut, not the page.
+    2. Exactly ONE record per page. The same XObject reappearing on page 2 is not a cycle
+       and must not be suppressed: `parents` is rebuilt per branch for exactly this reason.
+
+    MUTATION A (ran it): delete `if key in parents` from `_walk_level`. The walk still
+    terminates -- the depth cap catches it -- but emits 65 records per page instead of 1
+    (one per level down to MAX_RECURSION_DEPTH), reddening the count assertion.
+    MUTATION B (ran it): delete BOTH the visited set and the depth cap. RecursionError.
+    MUTATION C (ran it): make `parents` a single global set shared across pages instead of
+    per branch. Page 1's record disappears -- 1 record instead of 2 -- which is real text
+    silently lost, the failure the per-branch rule exists to prevent.
+    """
+    pdf = pikepdf.Pdf.new()
+    resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(Helv=_helvetica()))
+    form = _form(pdf, _show(b"X") + b"/Fself Do\n", resources)
+    # The self-reference, added after construction because it needs the object to exist.
+    form.Resources.XObject = pikepdf.Dictionary(Fself=form)
+    for _ in range(2):
+        page = pdf.add_blank_page(page_size=(200, 200))
+        page.Contents = pdf.make_stream(b"/Fx Do\n")
+        page.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fx=form))
+
+    with caplog.at_level(logging.WARNING, logger="engine.walker"):
+        records = list(walk_document(_parse(pdf)))
+
+    assert len(records) == 2, "one glyph per page: the cycle is cut, the text is not"
+    assert {p.page for p, _r in records} == {0, 1}
+    assert all(len(p.xobj_path) == 1 for p, _r in records)
+    assert any("cycle guard" in m for m in caplog.messages), "the abort must be logged"
+    assert not any("X" in m for m in caplog.messages), "T-02-04: no glyph text in logs"
+
+
+def test_mutually_referencing_form_xobjects_terminate(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The A->B->A shape, which a naive "is this stream its own parent?" check misses.
+
+    A shows "A" then invokes B; B shows "B" then invokes A. The walk must collect exactly
+    one "A" and one "B" and stop -- the second entry into A is the cycle.
+
+    MUTATION (ran it): replace the `key in parents` set membership with `key == parent_key`
+    (self-reference only). The walk emits 64 alternating records instead of 2, stopped only
+    by the depth cap, reddening the count assertion.
+    """
+    pdf = pikepdf.Pdf.new()
+    fonts = pikepdf.Dictionary(Font=pikepdf.Dictionary(Helv=_helvetica()))
+    form_a = _form(pdf, _show(b"A") + b"/Fb Do\n", pikepdf.Dictionary(fonts))
+    form_b = _form(pdf, _show(b"B") + b"/Fa Do\n", pikepdf.Dictionary(fonts))
+    form_a.Resources.XObject = pikepdf.Dictionary(Fb=form_b)
+    form_b.Resources.XObject = pikepdf.Dictionary(Fa=form_a)
+    page = pdf.add_blank_page(page_size=(200, 200))
+    page.Contents = pdf.make_stream(b"/Fa Do\n")
+    page.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fa=form_a))
+
+    with caplog.at_level(logging.WARNING, logger="engine.walker"):
+        records = list(walk_document(_parse(pdf)))
+
+    assert [r.unicode for _p, r in records] == ["A", "B"]
+    assert any("cycle guard" in m for m in caplog.messages)
+
+
+def test_deep_form_xobject_chain_stops_at_the_depth_cap(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """T-02-03. A 200-deep acyclic chain -- no visited set can stop this one, and Python's
+    own recursion limit is the thing being defended.
+
+    Each link shows one glyph and invokes the next, so the record count IS the depth
+    reached: exactly MAX_RECURSION_DEPTH levels are walked (depths 1..64), the 65th is
+    refused, and nothing propagates to the caller.
+
+    MUTATION (ran it): delete the `depth > MAX_RECURSION_DEPTH` check. All 200 levels are
+    walked -- 200 records, not 64 -- and the assertion goes red; at chain lengths past
+    roughly 300 the same mutation turns into a RecursionError instead.
+    """
+    pdf = pikepdf.Pdf.new()
+    chain_length = 200
+    # Built deepest-first: each new link is a distinct object that shows one glyph and
+    # invokes the link below it.
+    link = _form(pdf, _show(b"z"), pikepdf.Dictionary(Font=pikepdf.Dictionary(Helv=_helvetica())))
+    for _ in range(chain_length - 1):
+        parent = _form(
+            pdf,
+            _show(b"z") + b"/Fn Do\n",
+            pikepdf.Dictionary(Font=pikepdf.Dictionary(Helv=_helvetica())),
+        )
+        parent.Resources.XObject = pikepdf.Dictionary(Fn=link)
+        link = parent
+    page = pdf.add_blank_page(page_size=(200, 200))
+    page.Contents = pdf.make_stream(b"/F0 Do\n")
+    page.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(F0=link))
+
+    with caplog.at_level(logging.WARNING, logger="engine.walker"):
+        records = list(walk_document(_parse(pdf)))
+
+    assert len(records) == MAX_RECURSION_DEPTH
+    assert any("depth cap" in m for m in caplog.messages)
