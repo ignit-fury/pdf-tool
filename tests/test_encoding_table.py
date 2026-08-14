@@ -19,6 +19,7 @@ import pytest
 from engine.encoding_table import (
     STANDARD_ENCODING,
     WIN_ANSI_ENCODING,
+    FontProgram,
     FontVerdict,
     base_encoding,
     cid_width,
@@ -146,6 +147,26 @@ def _first_type3_font(pdf: pikepdf.Pdf) -> pikepdf.Object:
             if str(font.get("/Subtype")) == "/Type3":
                 return font
     raise AssertionError("no Type3 font found")
+
+
+def _first_font_with_program(
+    pdf: pikepdf.Pdf, subtypes: tuple[str, ...], program_key: str
+) -> pikepdf.Object:
+    for page in pdf.pages:
+        resources = page.get("/Resources")
+        if resources is None:
+            continue
+        fonts = resources.get("/Font")
+        if fonts is None:
+            continue
+        for _key, font in fonts.items():
+            if str(font.get("/Subtype")) not in subtypes:
+                continue
+            descriptor = font.get("/FontDescriptor")
+            if descriptor is None or descriptor.get(program_key) is None:
+                continue
+            return font
+    raise AssertionError(f"no {subtypes} font with {program_key!r} found")
 
 
 def _first_type0_descendant(pdf: pikepdf.Pdf, descendant_subtype: str) -> pikepdf.Object:
@@ -355,8 +376,13 @@ def test_type0_with_no_descendant_fonts_fails_closed(pdf: pikepdf.Pdf) -> None:
     """Was test_type0_and_type3_defer_and_fail_closed pre-02-06-Task-2: Type0/Type3 no
     longer defer -- they resolve through C-1..C-6 and T3-a below. What remains genuinely
     unresolvable is a Type0 font missing /DescendantFonts entirely, which must still fail
-    closed rather than crash."""
+    closed rather than crash.
+
+    IMPORTANT 6: this is not any of C-1..C-6 (none of those steps can even begin without
+    a descendant font), so it gets its own id ("NODESC") rather than borrowing "C-1" --
+    a borrowed id would corrupt the D-04 census, which counts branch_id occurrences."""
     verdict = resolve_font(_font(pdf, "/Type0"))
+    assert verdict.branch_id == "NODESC"
     assert not verdict.editable
 
 
@@ -437,6 +463,26 @@ def test_branch_c6_mixed_codespace_refuses(pdf: pikepdf.Pdf) -> None:
     assert not verdict.editable
 
 
+def test_branch_c6_mixed_codespace_across_multiple_blocks_refuses(pdf: pikepdf.Pdf) -> None:
+    """IMPORTANT 3: CMaps split codespace ranges across multiple begincodespacerange
+    blocks (Adobe's 100-range-per-block limit). Same mismatch as the test above, but
+    split across two separate blocks -- inspecting only the first block misses it.
+
+    MUTATION: reverting `_parse_codespace_widths` to `re.search` (first block only,
+    `_CODESPACE_RANGE_RE.search` instead of `.finditer`) flips this red -- confirmed by
+    running that reversion once.
+    """
+    body = (
+        b"1 begincodespacerange\n<00> <80>\nendcodespacerange\n"
+        b"1 begincodespacerange\n<8140> <fefc>\nendcodespacerange\n"
+    )
+    cmap = pdf.make_stream(body)
+    font = _type0_font(pdf, encoding=cmap)
+    verdict = resolve_font(font)
+    assert verdict.branch_id == "C-6"
+    assert not verdict.editable
+
+
 def test_branch_c1_uniform_codespace_from_embedded_cmap_stream_resolves(pdf: pikepdf.Pdf) -> None:
     """C-1: a uniform-width codespace read off an embedded CMap stream (not just the
     Identity-H/V shortcut) resolves normally."""
@@ -446,12 +492,24 @@ def test_branch_c1_uniform_codespace_from_embedded_cmap_stream_resolves(pdf: pik
     assert verdict.editable
 
 
-def test_branch_c2_unresolvable_named_cmap_refuses(pdf: pikepdf.Pdf) -> None:
-    """C-2: a predefined named CMap other than Identity-H/V has no resource data
-    anywhere in the PDF object graph to determine its codespace from -- refuse rather
-    than assume 2 bytes."""
+def test_branch_c1_named_cmap_without_resource_data_refuses(pdf: pikepdf.Pdf) -> None:
+    """IMPORTANT 6: a predefined named CMap other than Identity-H/V has no resource data
+    anywhere in the PDF object graph to resolve its codespace from -- refuse rather than
+    assume 2 bytes. This fails at the bytes->code step (C-1), not code->CID (C-2): C-2 is
+    a different, later question this module never reaches for an unresolvable CMap."""
     font = _type0_font(pdf, encoding=pikepdf.Name("/UniGB-UCS2-H"))
     verdict = resolve_font(font)
+    assert verdict.branch_id == "C-1"
+    assert not verdict.editable
+
+
+def test_branch_c3_unrecognised_cidfont_subtype_refuses(pdf: pikepdf.Pdf) -> None:
+    """IMPORTANT 6: an unrecognised descendant /Subtype (neither CIDFontType0 nor
+    CIDFontType2) is a C-3 (CID->GID) question -- which mechanism applies -- not a C-1
+    (codespace) question; the codespace itself (Identity-H) resolved fine here."""
+    font = _type0_font(pdf, cid_subtype="/CIDFontType9")
+    verdict = resolve_font(font)
+    assert verdict.branch_id == "C-3"
     assert not verdict.editable
 
 
@@ -476,6 +534,20 @@ def test_cid_width_defaults_to_1000_never_missingwidth(pdf: pikepdf.Pdf) -> None
     running that swap once."""
     descendant = pikepdf.Dictionary({"/MissingWidth": 42})
     assert cid_width(descendant, 5) == 1000.0
+
+
+def test_cid_width_malformed_w_does_not_raise(pdf: pikepdf.Pdf) -> None:
+    """IMPORTANT 4: /W's shape is attacker-controlled (an untrusted upload) and must
+    classify rather than crash. `/W [3 [100] 10]` has a dangling cFirst=10 with no
+    cLast/width after it; `/W [3]` has a bare code with nothing after it at all. Both
+    used to raise IndexError."""
+    descendant = pikepdf.Dictionary(
+        {"/W": pikepdf.Array([3, pikepdf.Array([100]), 10]), "/DW": 750}
+    )
+    assert cid_width(descendant, 999) == 750.0  # falls through past the malformed tail
+
+    descendant2 = pikepdf.Dictionary({"/W": pikepdf.Array([3])})
+    assert cid_width(descendant2, 999) == 1000.0  # falls through to the bare /DW default
 
 
 # --------------------------------------------------------------------------------------
@@ -599,13 +671,37 @@ def test_glyph_presence_truetype_gid_present_and_absent() -> None:
     assert missing_editable and missing_sub
 
 
+def test_glyph_presence_type1_real_pdf_fontfile_finds_known_glyph() -> None:
+    """CRITICAL 1/2: a PDF /FontFile is NOT a PFA or PFB -- it is the raw Type1 program
+    segmented by /Length1//Length2//Length3 with a BINARY eexec section (ISO 32000-1
+    Table 111). Writing raw bytes to a .pfa file and calling T1Font fails on most real
+    fonts (see the report for the full corpus-wide re-measurement).
+
+    govdocs1_012_012087.pdf's embedded Type1 font has a real '.notdef' glyph. Finding it
+    proves the fix, not just the absence of a crash -- a downgrade (found=False) would
+    pass just as silently as the bug this test exists to catch.
+    """
+    pdf = pikepdf.open(CORPUS_DIR / "govdocs1_012_012087.pdf")
+    try:
+        font = _first_font_with_program(pdf, ("/Type1", "/MMType1"), "/FontFile")
+        verdict = resolve_font(font)
+        program = embedded_font_bytes(font.get("/FontDescriptor"))
+        assert program is not None
+    finally:
+        pdf.close()
+
+    editable, substitution = glyph_presence(verdict, ".notdef", program)
+    assert editable is True
+    assert substitution is False  # found in the ORIGINAL program -- not downgraded
+
+
 def test_glyph_presence_downgrades_on_unparseable_program() -> None:
     """A-6, controller ambiguity #1: bytes fontTools cannot parse at all downgrade
     (editable=True, substitution=True) -- the same shape as "parsed but glyph missing".
     See `glyph_presence`'s docstring for the mutation proof (returning (False, False)
     from the except branch), run once and confirmed to flip this red."""
     verdict = FontVerdict("TT-b", True, False)
-    editable, substitution = glyph_presence(verdict, 5, b"not a font program at all")
+    editable, substitution = glyph_presence(verdict, 5, FontProgram(b"not a font program"))
     assert editable is True
     assert substitution is True
 
@@ -617,6 +713,22 @@ def test_glyph_presence_no_program_downgrades(pdf: pikepdf.Pdf) -> None:
     editable, substitution = glyph_presence(verdict, "A", None)
     assert editable is True
     assert substitution is True
+
+
+def test_glyph_presence_honors_font_level_refusal() -> None:
+    """IMPORTANT 5: a font resolve_font already refused (e.g. TT-c) must not have any of
+    its glyphs reported as present/editable by glyph_presence -- it must agree with
+    glyph_verdict, which already propagated font-level refusals the same way. Checked
+    even with no program bytes at all, since the font-level check must come first.
+
+    MUTATION PROOF: deleting the `if not font_verdict.editable: return False, False`
+    guard flips this red (falls through to the no-program-bytes downgrade, `(True,
+    True)`) -- confirmed by running that deletion once (see the report).
+    """
+    verdict = FontVerdict("TT-c", False, False, "TrueType symbolic with /Encoding present")
+    editable, substitution = glyph_presence(verdict, 5, None)
+    assert editable is False
+    assert substitution is False
 
 
 # --------------------------------------------------------------------------------------
@@ -649,7 +761,19 @@ def test_glyph_verdict_a8_refuses_glyph_not_font_or_run() -> None:
     verdict = glyph_verdict(font_verdict, record)
     assert verdict.editable is False
     assert verdict.reason == "NOUNI"
-    assert font_verdict.editable is True  # the font itself is untouched
+
+    # IMPORTANT 7: `assert font_verdict.editable is True` here (the old version of this
+    # assertion) is VACUOUS -- font_verdict is a frozen dataclass local variable nothing
+    # above touches, so it is trivially True under every possible mutation, including a
+    # real cascade bug. The real proof that the refusal did not cascade is re-resolving
+    # the ACTUAL font dict from the ACTUAL document, independently of the glyph_verdict
+    # call above, and confirming the font-level verdict is still editable.
+    pdf = pikepdf.open(CORPUS_DIR / "govdocs1_000_000135.pdf")
+    try:
+        font = _first_type3_font(pdf)
+        assert resolve_font(font).editable is True
+    finally:
+        pdf.close()
 
 
 def test_glyph_verdict_falsy_not_just_none() -> None:

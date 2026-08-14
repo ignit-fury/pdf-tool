@@ -162,7 +162,26 @@ def is_symbolic(font_descriptor: pikepdf.Object | None) -> bool:
     return flags is not None and bool(int(flags) & SYMBOLIC_FLAG_BIT)
 
 
-def embedded_font_bytes(font_descriptor: pikepdf.Object | None) -> bytes | None:
+@dataclass(frozen=True, slots=True)
+class FontProgram:
+    """An embedded font program's raw bytes, plus the /Length1//Length2//Length3 PDF
+    stream keys a Type1 /FontFile needs to be re-segmented correctly.
+
+    A PDF /FontFile is NOT a PFA or PFB file -- it is the raw Type1 program's three
+    segments (ASCII cleartext header, BINARY eexec-encrypted charstrings, ASCII trailer)
+    concatenated with no markers of their own; only these three lengths say where one
+    segment ends and the next begins (ISO 32000-1 Table 111 / 9.9). `/FontFile2`
+    (TrueType) and `/FontFile3` (CFF/OpenType) carry no such split, so they leave
+    length1/length2/length3 `None`.
+    """
+
+    data: bytes
+    length1: int | None = None
+    length2: int | None = None
+    length3: int | None = None
+
+
+def embedded_font_bytes(font_descriptor: pikepdf.Object | None) -> FontProgram | None:
     """The embedded font program, or None if the font is not embedded. /FontFile is
     Type1, /FontFile2 TrueType, /FontFile3 CFF or OpenType."""
     if font_descriptor is None:
@@ -171,9 +190,20 @@ def embedded_font_bytes(font_descriptor: pikepdf.Object | None) -> bytes | None:
         stream = font_descriptor.get(key)
         if stream is not None:
             try:
-                return bytes(stream.read_bytes())
+                data = bytes(stream.read_bytes())
             except Exception:  # noqa: BLE001 - an unreadable stream is "not usable", not a crash
                 return None
+            if key != "/FontFile":
+                return FontProgram(data)
+            length1 = stream.get("/Length1")
+            length2 = stream.get("/Length2")
+            length3 = stream.get("/Length3")
+            return FontProgram(
+                data,
+                int(length1) if length1 is not None else None,
+                int(length2) if length2 is not None else None,
+                int(length3) if length3 is not None else None,
+            )
     return None
 
 
@@ -312,7 +342,9 @@ def _resolve_type1(font: pikepdf.Object, symbolic: bool, embedded: bool) -> Font
     return FontVerdict("T1-a", True, False)
 
 
-def _resolve_truetype(font: pikepdf.Object, symbolic: bool, program: bytes | None) -> FontVerdict:
+def _resolve_truetype(
+    font: pikepdf.Object, symbolic: bool, program: FontProgram | None
+) -> FontVerdict:
     """TrueType. Every refusal in the table lives on the symbolic side."""
     has_encoding = font.get("/Encoding") is not None
 
@@ -330,7 +362,7 @@ def _resolve_truetype(font: pikepdf.Object, symbolic: bool, program: bytes | Non
         return FontVerdict("TT-c", False, False, "TrueType symbolic with /Encoding present")
 
     try:
-        ids = cmap_subtable_ids(program)
+        ids = cmap_subtable_ids(program.data)
     except Exception:  # noqa: BLE001 - classified, not swallowed
         return FontVerdict("TT-f", False, False, "cmap subtable directory unreadable")
 
@@ -348,16 +380,25 @@ _HEX_STRING_RE = re.compile(rb"<([0-9A-Fa-f]+)>")
 
 
 def _parse_codespace_widths(cmap_bytes: bytes) -> set[int] | None:
-    """The byte-width(s) declared in an embedded CMap stream's `begincodespacerange`
-    block. A narrow, bounded extraction of ONE structural fact (how many bytes does each
-    range's bound take) -- not a CMap interpreter; resolving code->CID is playa's job
-    everywhere except this structural determination (Architectural Responsibility Map).
-    None if no codespacerange block is found at all.
+    """The byte-width(s) declared across EVERY `begincodespacerange` block in an embedded
+    CMap stream. A narrow, bounded extraction of ONE structural fact (how many bytes does
+    each range's bound take) -- not a CMap interpreter; resolving code->CID is playa's
+    job everywhere except this structural determination (Architectural Responsibility
+    Map). None if no codespacerange block is found at all.
+
+    Adobe's CMap resources cap each `begincodespacerange`/`endcodespacerange` block at
+    100 ranges, so a CMap with more than that splits across multiple blocks -- `finditer`
+    + union, not the first match alone, or a mixed-width font whose mismatch starts in
+    block 2 silently resolves as uniform (IMPORTANT 3, measured: a synthetic 1-byte-then-
+    2-byte CMap split across two blocks returned `{1}` under `re.search`, hiding the C-6
+    refusal it should have triggered).
     """
-    match = _CODESPACE_RANGE_RE.search(cmap_bytes)
-    if match is None:
+    matches = list(_CODESPACE_RANGE_RE.finditer(cmap_bytes))
+    if not matches:
         return None
-    widths = {len(hex_str) // 2 for hex_str in _HEX_STRING_RE.findall(match.group(1))}
+    widths: set[int] = set()
+    for match in matches:
+        widths.update(len(hex_str) // 2 for hex_str in _HEX_STRING_RE.findall(match.group(1)))
     return widths or None
 
 
@@ -407,16 +448,37 @@ def _cid_to_gid_map_ok(value: pikepdf.Object | None) -> tuple[bool, str | None]:
 
 
 def _resolve_type0(font: pikepdf.Object) -> FontVerdict:
-    """C-1..C-6: Type0/CID composite fonts."""
+    """C-1..C-6: Type0/CID composite fonts.
+
+    IMPORTANT 6 (branch-id audit): branch_id feeds the D-04 census, so a wrong label
+    corrupts a measurement, not just a log line. Each id below now means exactly what
+    02-RESEARCH.md Section 1's C-table says it means:
+    - "NODESC" (not a C-step at all -- no /DescendantFonts means none of C-1..C-6 can
+      even begin) replaces a borrowed "C-1".
+    - "C-1" (bytes->code, codespace ranges) is what actually fails when the codespace
+      can't be resolved -- it replaces a borrowed "C-2" (code->CID is a DIFFERENT
+      question this module never reaches for an unresolvable CMap, since it can't even
+      get past bytes->code first).
+    - "C-3" (an unrecognised descendant /Subtype -- neither CIDFontType0 nor
+      CIDFontType2, so neither C-3a nor C-3b answers) replaces a borrowed "C-1"; CID->GID
+      is what's undetermined, not the codespace.
+    C-2 itself (Identity vs a named-CMap table lookup) has no failure path of its own in
+    this module: an embedded CMap stream's codespace is validated at C-1 but its cidrange
+    table is never parsed here (out of scope -- resolving individual CID values is the
+    walker's job, not this structural verdict's), so C-2 cannot fail independently of C-1
+    given this module's actual scope. Left unused rather than forced onto an unrelated
+    path, the same way C-5 is documented out of scope rather than stubbed.
+    """
     descendants = font.get("/DescendantFonts")
     if not descendants:
-        return FontVerdict("C-1", False, False, "Type0 with no /DescendantFonts")
+        return FontVerdict("NODESC", False, False, "Type0 with no /DescendantFonts")
     descendant = descendants[0]
 
     widths = _codespace_widths(font.get("/Encoding"))
     if widths is None:
+        # C-1: bytes->code itself is unresolvable (no CMap data to consult).
         return FontVerdict(
-            "C-2", False, False, "CMap codespace not resolvable from the font dictionary"
+            "C-1", False, False, "CMap codespace not resolvable from the font dictionary"
         )
     if len(widths) > 1:
         # C-6. Writing into a mixed-byte-width codespace is out of scope; refuse rather
@@ -437,7 +499,9 @@ def _resolve_type0(font: pikepdf.Object) -> FontVerdict:
         if not ok:
             return FontVerdict("C-3a", False, False, reason)
         return FontVerdict("C-3a", True, False)
-    return FontVerdict("C-1", False, False, f"unrecognised CIDFont /Subtype {subtype!r}")
+    # C-3's dispatch (CIDFontType0 vs CIDFontType2) found neither -- still a C-3 (CID->GID)
+    # question, just one neither C-3a nor C-3b answers.
+    return FontVerdict("C-3", False, False, f"unrecognised CIDFont /Subtype {subtype!r}")
 
 
 def _resolve_type3(font: pikepdf.Object) -> FontVerdict:
@@ -488,12 +552,19 @@ def type3_width(font: pikepdf.Object, code: int) -> float | None:
 def cid_width(descendant_font: pikepdf.Object, cid: int) -> float:
     """C-4: /W's nested run-length format -- `[c [w w w] cFirst cLast w ...]` -- with /DW
     default 1000. Never /Widths, never /MissingWidth: those are the SIMPLE-font width keys
-    and do not apply to CIDFonts at all."""
+    and do not apply to CIDFonts at all.
+
+    IMPORTANT 4: /W's shape is attacker-controlled (an untrusted upload), so a truncated
+    array -- `[3 [100] 10]` (a dangling `cFirst` with no `cLast`/width after it) or `[3]`
+    (a bare code with nothing after it at all) -- must classify (fall through to /DW)
+    rather than raise IndexError. Every other helper in this module wraps untrusted-shape
+    access the same way; this one previously didn't.
+    """
     w = descendant_font.get("/W")
     if w is not None:
         items = list(w)
         i = 0
-        while i < len(items):
+        while i + 1 < len(items):
             first = int(items[i])
             nxt = items[i + 1]
             if isinstance(nxt, pikepdf.Array):
@@ -502,6 +573,8 @@ def cid_width(descendant_font: pikepdf.Object, cid: int) -> float:
                     return float(run[cid - first])
                 i += 2
             else:
+                if i + 2 >= len(items):
+                    break  # malformed: cFirst cLast with no width value after it
                 last = int(nxt)
                 width = float(items[i + 2])
                 if first <= cid <= last:
@@ -536,13 +609,47 @@ def resolve_font(font: pikepdf.Object) -> FontVerdict:
     return _resolve_type1(font, symbolic, program is not None)
 
 
-def _glyph_present(code: int | str, data: bytes) -> bool:
+def _type1_to_pfb(data: bytes, length1: int, length2: int, length3: int | None) -> bytes:
+    """Re-segments a raw PDF /FontFile into the PFB container format fontTools.t1Lib
+    actually parses reliably.
+
+    A /FontFile is the three Type1 segments (ASCII cleartext header, BINARY eexec
+    ciphertext, ASCII trailer) concatenated with no markers of their own -- only
+    Length1/Length2/Length3 say where one ends and the next begins (ISO 32000-1 Table
+    111). Handing that concatenation to t1Lib's text-marker-based reader instead makes it
+    re-derive those same boundaries by scanning the blob for "eexec" and a trailer
+    pattern, which a raw binary ciphertext section can spuriously match early or late --
+    CRITICAL 1, measured over 147 unique embedded /FontFile streams (deduped by stream
+    object) across corpus/public: the naive approach parses 36; PFB's explicit
+    `\\x80`-prefixed segment headers, built from the SAME lengths the PDF itself
+    declares, raise that to 69, with zero regressions (every font that parsed the naive
+    way still parses this way -- see the report for the full before/after transcript).
+
+    `length3` defaults to "everything left in `data`" when the PDF omits it (ISO 32000-1
+    9.9 marks it required, but a missing key here is still recoverable from the other two
+    without guessing where segment 2 ends).
+    """
+    if length3 is None:
+        length3 = len(data) - length1 - length2
+    segments = (
+        (1, data[:length1]),  # ASCII cleartext header
+        (2, data[length1 : length1 + length2]),  # BINARY eexec ciphertext
+        (1, data[length1 + length2 : length1 + length2 + length3]),  # ASCII trailer
+    )
+    body = b"".join(
+        b"\x80" + bytes([kind]) + struct.pack("<I", len(chunk)) + chunk for kind, chunk in segments
+    )
+    return body + b"\x80\x03"  # PFB EOF marker
+
+
+def _glyph_present(code: int | str, program: FontProgram) -> bool:
     """Sniffs the embedded program's format from its own bytes, not from a branch_id --
     resolve_font's branches span more than one underlying format each (T1-a covers both
     raw Type1 /FontFile and CFF-flavoured /FontFile3 Type1C), so trusting the branch name
     here would be wrong more often than right. `code` is a glyph NAME for name-keyed
     programs (Type1, CFF) or a numeric GID/CID for TrueType and CID-keyed CFF.
     """
+    data = program.data
     if data[:4] == b"OTTO" or data[:4] == b"\x00\x01\x00\x00" or data[:4] in (b"true", b"typ1"):
         font = TTFont(io.BytesIO(data), fontNumber=0, lazy=True)
         order = font.getGlyphOrder()
@@ -562,9 +669,19 @@ def _glyph_present(code: int | str, data: bytes) -> bool:
             return f"cid{code:05d}" in charset
         return 0 <= code < len(charset)
 
-    if data[:2] == b"%!" or data[:1] == b"\x80":  # Type1 PFA / PFB
-        with tempfile.NamedTemporaryFile(suffix=".pfa") as handle:
-            handle.write(data)
+    if data[:2] == b"%!" or data[:1] == b"\x80":  # Type1 -- see _type1_to_pfb's docstring
+        if program.length1 is None or program.length2 is None:
+            # Can't locate the eexec boundary without them; caught by glyph_presence's
+            # except and downgraded, same as any other unparseable program.
+            raise ValueError("Type1 program missing /Length1 or /Length2")
+        pfb = _type1_to_pfb(data, program.length1, program.length2, program.length3)
+        # TMPDIR must be tmpfs in the served image: these bytes are a byte-exact slice of
+        # the user's uploaded document, and for a subset font they encode exactly which
+        # glyphs the document uses. Cleanup is already correct on every path including
+        # exceptions (the `with` block), so tmpfs -- not a bespoke scratch abstraction --
+        # is what makes this ephemeral; YAGNI on building one.
+        with tempfile.NamedTemporaryFile(suffix=".pfb") as handle:
+            handle.write(pfb)
             handle.flush()
             names = list(T1Font(handle.name).getGlyphSet().keys())
         if isinstance(code, str):
@@ -575,10 +692,11 @@ def _glyph_present(code: int | str, data: bytes) -> bool:
 
 
 def glyph_presence(
-    font_verdict: FontVerdict, code: int | str, font_program_bytes: bytes | None
+    font_verdict: FontVerdict, code: int | str, font_program_bytes: FontProgram | None
 ) -> tuple[bool, bool]:
     """A-6: does the resolved glyph `code` exist in the embedded program `font_verdict`
-    already classified as usable? Returns (editable, substitution) -- and NEVER a refusal.
+    already classified as usable? Returns (editable, substitution) -- and NEVER a
+    refusal, UNLESS `font_verdict` itself is already a refusal (see IMPORTANT 5 below).
 
     Both "the glyph is genuinely absent" and "the program could not be parsed at all"
     reach the same (True, True) downgrade. This is deliberate (controller-resolved
@@ -587,10 +705,18 @@ def glyph_presence(
     missing-glyph case already gets. A-6's whole point is that the missing-glyph case is
     resolvable by substitution, not a refusal.
 
+    IMPORTANT 5: a font `resolve_font` already refused must not have any of its glyphs
+    reported as present/editable -- this now agrees with `glyph_verdict`, which already
+    propagated font-level refusals the same way. Checked FIRST, before even looking at
+    `font_program_bytes`: an already-refused font's bytes are not this function's
+    business to interpret at all.
+
     MUTATION PROOF: returning (False, False) from the except branch below (refusing
     instead of downgrading) flips `test_glyph_presence_downgrades_on_unparseable_program`
-    red -- confirmed by running that mutation once (see 02-06 Task 2 report).
+    red -- confirmed by running that mutation once (see the report).
     """
+    if not font_verdict.editable:
+        return False, False
     if not font_program_bytes:
         return True, True
     try:
@@ -632,6 +758,7 @@ def actualtext_verdict() -> FontVerdict:
 
 
 __all__ = [
+    "FontProgram",
     "FontVerdict",
     "GlyphVerdict",
     "actualtext_verdict",
