@@ -73,6 +73,24 @@ fully computable from what `operands` already carries. So `operands` is just
 `list[object]` (each element is the operand's *value* -- `bytes`, `int`, `float`, or for
 `TJ` a `list` of those -- never its position).
 
+## Text outside /Contents (02-05): one interpreter per level, constructed here
+
+`walk_stream` generalises `walk_page` to any single content-stream level -- a page's
+coalesced /Contents, a Form XObject, an annotation appearance stream, a tiling pattern, a
+Type3 CharProc -- because `_curpos` and the two-pass zip are only correct for the buffer
+the interpreter was constructed over. `Page.flatten()` recurses for you but hands back
+objects whose inner interpreter is unreachable, so every glyph below the top level would
+be addressed as an offset into the *page's* stream (02-RESEARCH.md Pitfall 4). Hence: a
+fresh `LazyInterpreter` per level, and `walk_stream` yields the `Do`-invoked
+`XObjectObject`s rather than following them, leaving the recursion (and its cycle guard,
+depth cap and run-ID path) to `engine.walker`.
+
+The other three locations have no playa object at all -- `Annotation.props` is a raw dict
+and playa never interprets /AP, and there is no PatternObject -- so
+`annotation_appearances`, `tiling_patterns` and `type3_charprocs` resolve them from the
+raw object graph here, where the playa resolvers live. Each returns plain
+`(stream, resources, ctm)` triples that go straight back into `walk_stream`.
+
 ## Alignment tripwire has two ends
 
 The per-yield `assert interp._curpos == kw_off` only fires while there is a Pass-B value
@@ -97,29 +115,64 @@ above. See task-1-report.md for the corpus evidence behind each.
 from __future__ import annotations
 
 import bisect
+import logging
 from typing import Iterator
 
-from playa.content import GlyphObject, TextObject
+from playa.content import GlyphObject, GraphicState, TextObject, XObjectObject
 from playa.document import Document
 from playa.font import Font
-from playa.interp import LazyInterpreter
+from playa.interp import LazyInterpreter, Type3Interpreter
 from playa.page import Page
 from playa.parser import ObjectParser
-from playa.pdftypes import ContentStream, PSKeyword
+from playa.pdftypes import (
+    MATRIX_IDENTITY,
+    ContentStream,
+    Matrix,
+    PDFObject,
+    PSKeyword,
+    Rect,
+    dict_value,
+    int_value,
+    literal_name,
+    matrix_value,
+    rect_value,
+    resolve1,
+    stream_value,
+)
+from playa.utils import mult_matrix, transform_bbox
 
 # Re-exported so consumers get real types without a second `import playa` anywhere in the
 # repo (there is a test asserting exactly one file imports playa). The file boundary is
 # the swap mechanism, so the types cross it too -- an alias layer would defeat the point.
 __all__ = [
+    "ContentStream",
     "Document",
     "Font",
     "GlyphObject",
+    "Matrix",
     "Page",
+    "Resources",
+    "TextOp",
     "TextObject",
+    "XObjectObject",
+    "annotation_appearances",
     "glyph_byte_offsets",
     "operator_table",
+    "stream_key",
+    "tiling_patterns",
+    "type3_charprocs",
     "walk_page",
+    "walk_stream",
 ]
+
+log = logging.getLogger(__name__)
+
+# A resolved /Resources dictionary. playa types it as Dict[str, PDFObject] on Page and as
+# the same shape (or None, meaning "inherit the page's") on XObjectObject.
+Resources = dict[str, PDFObject]
+
+# What `walk_stream` yields for one text-showing operator: exactly `walk_page`'s tuple.
+TextOp = tuple[int, int, list[object], TextObject]
 
 TEXT_OPS = {b"Tj", b"TJ", b"'", b'"'}
 
@@ -226,41 +279,68 @@ def _locate_part(offset: int, part_ranges: list[tuple[int, int]]) -> tuple[int, 
     return i, offset - start
 
 
-def walk_page(
-    page: Page, doc: Document
-) -> Iterator[tuple[int, int, list[object], TextObject]]:
-    """Zip Pass A (`operator_table`) against Pass B (`LazyInterpreter`) over a page's whole
-    /Contents, coalesced per the module docstring's ruling.
+def walk_stream(
+    page: Page,
+    doc: Document,
+    parts: list[ContentStream],
+    *,
+    resources: Resources | None = None,
+    ctm: Matrix | None = None,
+    gstate: GraphicState | None = None,
+    type3: bool = False,
+) -> Iterator[TextOp | XObjectObject]:
+    """Zip Pass A (`operator_table`) against Pass B (a FRESH `LazyInterpreter`) over ONE
+    content stream level -- a page's coalesced /Contents, a Form XObject, an annotation
+    appearance stream, a tiling pattern, or a Type3 CharProc.
 
-    Yields (byte_offset_within_part, part_index, operands, text_obj) per text-showing
-    operator that produces a TextObject. Asserts interp._curpos equals the operator's
-    offset in the joined buffer on every yield, and that Pass A and Pass B produced the
-    same total count once the loop ends -- the free, always-on drift tripwire (module
-    docstring: "Alignment tripwire has two ends"). Part-relative addressing of the
-    keyword is a pure post-processing step over that already-verified offset, via
-    `_locate_part`.
+    Yields, in content-stream order, either:
+    - a `TextOp` -- `(byte_offset_within_part, part_index, operands, text_obj)`, the same
+      tuple `walk_page` has always yielded, with `_curpos` asserted against Pass A; or
+    - an `XObjectObject` -- a Form XObject invoked by `Do` at this level, carrying its own
+      stream, resources, composed CTM (/Matrix x this level's CTM) and inherited graphics
+      state. The CALLER decides whether to recurse into it, which is the whole point:
+      `Page.flatten()` would recurse for us but hand back objects whose provenance points
+      into this stream rather than the XObject's own (02-RESEARCH.md Pitfall 4). Every
+      level therefore gets a fresh interpreter, constructed here.
+
+    Only TextOps advance the Pass A ordinal `k`, so the alignment tripwire is unchanged by
+    the added XObjectObject yields -- an `XObjectObject` is not in Pass A's table and does
+    not consume an entry.
+
+    `resources`/`ctm`/`gstate` are None only for a page's own /Contents, where
+    LazyInterpreter's own defaults (page.resources, page.ctm, a fresh state) are exactly
+    right. `type3=True` swaps in playa's `Type3Interpreter`, which is `LazyInterpreter`
+    plus the `d0`/`d1` glyph-metric operators a CharProc is required to open with.
     """
-    parts = list(page.streams)
     joined, part_ranges = _coalesce_parts(parts)
     table = operator_table(joined, doc)
     # A single fake ContentStream wrapping the joined buffer: attrs={} means get_filters()
     # finds no /Filter, so .buffer (== .decode()) returns rawdata unchanged. This is what
     # makes Pass B parse the SAME joined buffer as Pass A, as one continuous stream.
     coalesced_stream = ContentStream(attrs={}, rawdata=joined)
-    interp = LazyInterpreter(page, [coalesced_stream], filter_classes=[TextObject])
+    interp_class: type[LazyInterpreter] = Type3Interpreter if type3 else LazyInterpreter
+    # Positional, because playa 1.1.0's Type3Interpreter.__init__ accepts neither
+    # `filter_classes` nor `restrict_ops` -- the attribute assignment below is the one
+    # construction path that works for both classes.
+    interp = interp_class(page, [coalesced_stream], resources, ctm, gstate)
+    interp.filter_classes = [TextObject, XObjectObject]
     k = -1
-    for k, text_obj in enumerate(interp):
-        kw_off, kw, operands = table[k]
-        # filter_classes=[TextObject] guarantees this at runtime; LazyInterpreter's
-        # __next__ is typed generically as ContentObject, so narrow explicitly for mypy.
-        assert isinstance(text_obj, TextObject)
+    for obj in interp:
+        if isinstance(obj, XObjectObject):
+            yield obj
+            continue
+        # filter_classes guarantees this at runtime; LazyInterpreter's __next__ is typed
+        # generically as ContentObject, so narrow explicitly for mypy.
+        assert isinstance(obj, TextObject)
+        k += 1
+        kw_off, _kw, operands = table[k]
         # Free, always-on drift tripwire. Costs one integer compare.
         assert interp._curpos == kw_off, (
             f"playa iteration desync at op {k}: _curpos={interp._curpos} != {kw_off}. "
             f"playa-pdf version changed iteration semantics -- do not proceed."
         )
         part_index, part_offset = _locate_part(kw_off, part_ranges)
-        yield part_offset, part_index, operands, text_obj
+        yield part_offset, part_index, operands, obj
     # The other end of the tripwire: if Pass A has an unconsumed tail (its LAST entries
     # never matched by a Pass-B yield), the loop above ends silently with no IndexError
     # and no per-yield assertion ever sees it. Catch that here.
@@ -269,3 +349,207 @@ def walk_page(
         f"{len(table)} -- Pass A has an unconsumed tail Pass B never produced. "
         f"playa-pdf version changed iteration semantics -- do not proceed."
     )
+
+
+def walk_page(page: Page, doc: Document) -> Iterator[TextOp]:
+    """A page's own coalesced /Contents, text-showing operators only.
+
+    `walk_stream` over `page.streams` with the Form XObject invocations dropped: this is
+    the page-local view `glyph_records` has always had, unchanged. Recursion into what the
+    dropped `Do`s reference is `walker.walk_document`'s job, because only the walker can
+    carry the run-ID path that addresses the deeper level.
+    """
+    for item in walk_stream(page, doc, list(page.streams)):
+        if not isinstance(item, XObjectObject):
+            yield item
+
+
+def _child_ctm(stream: ContentStream, base: Matrix) -> Matrix:
+    """Compose a child stream's own /Matrix onto the CTM in force where it is invoked --
+    the same composition playa does in `XObjectObject.from_stream` (`mult_matrix(/Matrix,
+    ctm)`), applied here to the two child stream kinds playa has no object for."""
+    matrix = matrix_value(stream["Matrix"]) if "Matrix" in stream else MATRIX_IDENTITY
+    return mult_matrix(matrix, base)
+
+
+def annotation_appearances(
+    page: Page,
+) -> list[tuple[int, str, ContentStream, Resources | None, Matrix]]:
+    """Every annotation's normal appearance stream: (annot_index, ap_state, stream,
+    resources, ctm).
+
+    playa yields `Annotation.props` -- the raw dictionary -- and stops there; it does not
+    interpret /AP at all (02-RESEARCH.md Section 5). So both halves are done here:
+
+    - **/AP /N may be a stream OR a dictionary of streams keyed by appearance state**,
+      selected by the annotation's /AS (ISO 32000-1 12.5.5). A stream directly under /N
+      has no state name, and reports "N" -- the run-ID grammar's `a{idx}:{state}` segment
+      has no empty-state form. When /N is a dict, /AS is required; a single-entry dict with
+      /AS missing is unambiguous anyway and is accepted, anything else is skipped.
+    - **Positioning is the /Rect fit, not the page CTM.** Transform /BBox by /Matrix, take
+      the bounding box of the result, and compute the matrix A that maps that box onto
+      /Rect; the appearance runs under `/Matrix x A x page.ctm`. Handing the interpreter a
+      bare `page.ctm` instead would put every annotation glyph at coordinates in form
+      space -- plausible numbers, wrong page positions, and the run clusterer downstream
+      cannot tell the difference.
+
+    Malformed entries are logged (index and reason only, never annotation content) and
+    skipped: this walks untrusted uploads, and one broken /AP must not lose the other
+    annotations on the page.
+    """
+    out: list[tuple[int, str, ContentStream, Resources | None, Matrix]] = []
+    for index, annot in enumerate(page.annotations):
+        try:
+            ap = resolve1(annot.props.get("AP"))
+            if not isinstance(ap, dict):
+                continue
+            normal = resolve1(ap.get("N"))
+            state = "N"
+            # ContentStream is a Mapping, not a dict, so this branch is the state-dict
+            # case only -- a stream directly under /N falls straight through.
+            if isinstance(normal, dict):
+                as_name = resolve1(annot.props.get("AS"))
+                if as_name is not None:
+                    state = literal_name(as_name)
+                elif len(normal) == 1:
+                    state = next(iter(normal))
+                else:
+                    log.debug(
+                        "annotation %d: /AP /N is a %d-state dict with no /AS; skipped",
+                        index,
+                        len(normal),
+                    )
+                    continue
+                if state not in normal:
+                    log.debug("annotation %d: /AS names an absent state; skipped", index)
+                    continue
+                normal = resolve1(normal[state])
+            if not isinstance(normal, ContentStream):
+                continue
+            resources = normal.get("Resources")
+            out.append(
+                (
+                    index,
+                    state,
+                    normal,
+                    None if resources is None else dict_value(resources),
+                    _appearance_ctm(normal, annot.rect, page.ctm),
+                )
+            )
+        except (TypeError, ValueError) as exc:
+            log.debug("annotation %d: unusable /AP (%s); skipped", index, type(exc).__name__)
+    return out
+
+
+def _appearance_ctm(stream: ContentStream, rect: Rect, page_ctm: Matrix) -> Matrix:
+    """ISO 32000-1 12.5.5's appearance-to-/Rect fit, composed onto the page CTM."""
+    matrix = matrix_value(stream["Matrix"]) if "Matrix" in stream else MATRIX_IDENTITY
+    if "BBox" not in stream:
+        # No /BBox means no box to fit; the appearance is degenerate. Page CTM is the
+        # only defensible fallback and keeps the glyphs on the page.
+        return mult_matrix(matrix, page_ctm)
+    tx0, ty0, tx1, ty1 = transform_bbox(matrix, rect_value(stream["BBox"]))
+    rx0, ry0, rx1, ry1 = rect
+    rx0, rx1 = min(rx0, rx1), max(rx0, rx1)
+    ry0, ry1 = min(ry0, ry1), max(ry0, ry1)
+    # A degenerate (zero-width or zero-height) transformed BBox has no scale factor; 1.0
+    # keeps the appearance at its natural size rather than collapsing it to a point.
+    sx = (rx1 - rx0) / (tx1 - tx0) if tx1 != tx0 else 1.0
+    sy = (ry1 - ry0) / (ty1 - ty0) if ty1 != ty0 else 1.0
+    fit: Matrix = (sx, 0.0, 0.0, sy, rx0 - sx * tx0, ry0 - sy * ty0)
+    return mult_matrix(matrix, mult_matrix(fit, page_ctm))
+
+
+def tiling_patterns(
+    resources: Resources, ctm: Matrix
+) -> list[tuple[ContentStream, Resources | None, Matrix]]:
+    """Every /PatternType 1 (tiling) pattern declared in one level's /Resources /Pattern:
+    (stream, resources, ctm). A tiling pattern object *is* a content stream and can show
+    text; playa has no PatternObject and its `do_scn` only sets colour, so this is read off
+    the resource dictionary directly.
+
+    ponytail: declared, not invocation-tracked. A pattern named in /Resources but never
+    selected by an `scn`/`SCN` with a pattern colour space is still walked, so its text
+    becomes addressable even though nothing painted it. Over-inclusion is the safe
+    direction for a walker that never decides editability, and the alternative -- tracking
+    the pattern colour space through `cs`/`CS` and matching name operands on `scn`/`SCN` --
+    is a graphics-state machine this module exists to *not* reimplement. Upgrade path if
+    the false-positive rate ever matters: record `scn`/`SCN` name operands in Pass A
+    (`operator_table` already sees every token) and intersect with this list.
+    """
+    out: list[tuple[ContentStream, Resources | None, Matrix]] = []
+    patterns = resolve1(resources.get("Pattern"))
+    if not isinstance(patterns, dict):
+        return out
+    for name, ref in patterns.items():
+        try:
+            pattern = stream_value(resolve1(ref))
+            if int_value(pattern.get("PatternType")) != 1:
+                continue
+            sub = pattern.get("Resources")
+            out.append(
+                (
+                    pattern,
+                    None if sub is None else dict_value(sub),
+                    _child_ctm(pattern, ctm),
+                )
+            )
+        except (TypeError, ValueError) as exc:
+            log.debug("pattern %r: unusable (%s); skipped", name, type(exc).__name__)
+    return out
+
+
+def type3_charprocs(
+    resources: Resources, ctm: Matrix
+) -> list[tuple[str, ContentStream, Resources | None, Matrix]]:
+    """Every Type3 /CharProcs content stream declared in one level's /Resources /Font:
+    (charproc_name, stream, resources, ctm).
+
+    ponytail: enumerated per stream level, once, rather than once per invoking glyph. A
+    CharProc is really invoked once per glyph drawn, under `/FontMatrix x Tm x Tfs x CTM`
+    -- so the CTM here (`/FontMatrix x` this level's CTM) is the right *shape* but is
+    missing the invoking text object's own matrix, and glyph coordinates inside a CharProc
+    are therefore glyph-local, not page positions. The addressing -- which is what a run ID
+    needs, and what Phase 3 rewrites -- is exact either way: the `y{charProcName}` segment
+    plus a byte offset into the CharProc's own stream. Upgrade path if a consumer ever
+    needs page positions for Type3 glyph internals: recurse from each GlyphObject instead
+    of from the resource dictionary, composing its text rendering matrix.
+    """
+    out: list[tuple[str, ContentStream, Resources | None, Matrix]] = []
+    fonts = resolve1(resources.get("Font"))
+    if not isinstance(fonts, dict):
+        return out
+    for name, ref in fonts.items():
+        try:
+            font = resolve1(ref)
+            if not isinstance(font, dict) or font.get("Subtype") is None:
+                continue
+            if literal_name(font["Subtype"]) != "Type3":
+                continue
+            charprocs = resolve1(font.get("CharProcs"))
+            if not isinstance(charprocs, dict):
+                continue
+            sub = font.get("Resources")
+            sub_resources = None if sub is None else dict_value(sub)
+            font_matrix = (
+                matrix_value(font["FontMatrix"])
+                if "FontMatrix" in font
+                else (0.001, 0.0, 0.0, 0.001, 0.0, 0.0)
+            )
+            child = mult_matrix(font_matrix, ctm)
+            for proc_name, proc_ref in charprocs.items():
+                out.append((proc_name, stream_value(resolve1(proc_ref)), sub_resources, child))
+        except (TypeError, ValueError) as exc:
+            log.debug("font %r: unusable /CharProcs (%s); skipped", name, type(exc).__name__)
+    return out
+
+
+def stream_key(stream: ContentStream) -> tuple[int, int]:
+    """Cycle-guard identity for a content stream: its full (objid, genno).
+
+    Matches `shared_xobjects._walk`'s `objgen` convention rather than playa's own
+    `flatten()` (which uses `objid` alone and folds every direct stream onto 0). A direct
+    (non-indirect) stream cannot be the target of a `Do`, so the None branch is a
+    defensive floor, not a live path.
+    """
+    return (-1 if stream.objid is None else stream.objid, stream.genno or 0)
