@@ -119,7 +119,7 @@ import logging
 from typing import Iterator
 
 from playa import open as open_document
-from playa.content import GlyphObject, GraphicState, TextObject, XObjectObject
+from playa.content import GlyphObject, GraphicState, ImageObject, TextObject, XObjectObject
 from playa.document import Document
 from playa.font import Font
 from playa.interp import LazyInterpreter, Type3Interpreter
@@ -162,6 +162,7 @@ __all__ = [
     "XObjectObject",
     "annotation_appearances",
     "glyph_byte_offsets",
+    "image_bboxes",
     "open_document",
     "operator_table",
     "stream_key",
@@ -557,6 +558,33 @@ def type3_charprocs(
                 "font #%d: unusable /CharProcs (%s); skipped", index, type(exc).__name__
             )
     return out
+
+
+def image_bboxes(page: Page, doc: Document) -> list[tuple[float, float, float, float]]:
+    """Every image on a page's own /Contents -- both `Do`-invoked Image XObjects and
+    inline `BI/ID/EI` images -- as `(x0, y0, x1, y1)` device-space bounding boxes.
+
+    02-08's image-coverage signal (CLAS-01) needs this and nothing else in the walker
+    pipeline provides it: `walk_stream`'s interpreter is filtered to
+    `[TextObject, XObjectObject]` only (Form XObjects, for the glyph walk's own
+    recursion), so images -- which playa represents as a distinct `ImageObject`, whether
+    Do-invoked or inline -- are invisible to every existing consumer. A fresh, narrowly
+    filtered interpreter is simpler than extending `walk_stream`'s filter and threading
+    image records through the text-object machinery that has no use for them.
+
+    Page-`/Contents`-level only, matching 02-RESEARCH.md Section 7's own framing ("a
+    scanner emits several overlapping or tiled image XObjects per page") -- an image
+    nested inside a Form XObject is not walked. `ImageObject.bbox` is the unit square
+    `(0,0,1,1)` transformed by the image's own CTM (playa/content.py), already in device
+    space, so no further coordinate work is needed here.
+    """
+    joined, _part_ranges = _coalesce_parts(list(page.streams))
+    coalesced_stream = ContentStream(attrs={}, rawdata=joined)
+    interp = LazyInterpreter(page, [coalesced_stream])
+    interp.filter_classes = [ImageObject]
+    return [
+        obj.bbox for obj in interp if isinstance(obj, ImageObject) and obj.bbox is not None
+    ]
 
 
 def stream_key(stream: ContentStream) -> tuple[int, int]:
