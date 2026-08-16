@@ -422,7 +422,7 @@ def _walk_level(
     budget: _Budget,
     depth: int,
     fonts: _FontIds,
-) -> Iterator[tuple[StreamPath, GlyphRecord]]:
+) -> Iterator[tuple[StreamPath, GlyphRecord, ClusterAttrs]]:
     """One content-stream level: its own text, the Form XObjects it invokes, and the
     declared streams it contributes to `pending` for the page walk to drain.
 
@@ -493,8 +493,8 @@ def _walk_level(
                 fonts=fonts,
             )
         else:
-            for record, _attrs in _op_records(item, fonts):
-                yield path, record
+            for record, attrs in _op_records(item, fonts):
+                yield path, record, attrs
 
     # Streams reached through this level's /Resources rather than through an operator are
     # QUEUED, not descended into -- see the module docstring's "declared streams are
@@ -540,10 +540,14 @@ def _walk_level(
         )
 
 
-def located_glyph_records(
+def _located_walk(
     page: Page, page_index: int, doc: Document
-) -> Iterator[tuple[StreamPath, GlyphRecord]]:
-    """Every glyph on one page, wherever it lives, paired with the path that addresses it.
+) -> Iterator[tuple[StreamPath, GlyphRecord, ClusterAttrs]]:
+    """Every glyph on one page, wherever it lives, paired with the path that addresses it
+    and the attributes 02-07's clusterer needs. `located_glyph_records` and
+    `located_cluster_records` are both thin views over this single walk -- one throwing
+    ClusterAttrs away to keep the pre-02-07 two-tuple contract every existing caller
+    relies on, the other keeping it -- so there is exactly one traversal to get right.
 
     The page's own /Contents first, then -- per 02-RESEARCH.md Section 5's four locations
     -- Form XObjects invoked by `Do` (recursively), tiling patterns and Type3 CharProcs
@@ -615,6 +619,24 @@ def located_glyph_records(
         )
 
 
+def located_glyph_records(
+    page: Page, page_index: int, doc: Document
+) -> Iterator[tuple[StreamPath, GlyphRecord]]:
+    """Every glyph on one page, wherever it lives, paired with the path that addresses it.
+    See `_located_walk` -- this is that walk with `ClusterAttrs` discarded, the contract
+    every pre-02-07 caller was written against."""
+    for path, record, _attrs in _located_walk(page, page_index, doc):
+        yield path, record
+
+
+def located_cluster_records(
+    page: Page, page_index: int, doc: Document
+) -> Iterator[tuple[StreamPath, GlyphRecord, ClusterAttrs]]:
+    """`located_glyph_records`, with `ClusterAttrs` kept -- 02-07's entry point for text
+    outside a page's own /Contents (the glyph-at-a-time Form XObject case included)."""
+    yield from _located_walk(page, page_index, doc)
+
+
 def walk_document(doc: Document) -> Iterator[tuple[StreamPath, GlyphRecord]]:
     """Every glyph in the document, wherever it lives, paired with its `StreamPath`.
 
@@ -629,12 +651,22 @@ def walk_document(doc: Document) -> Iterator[tuple[StreamPath, GlyphRecord]]:
         yield from located_glyph_records(page, page_index, doc)
 
 
+def cluster_document_records(
+    doc: Document,
+) -> Iterator[tuple[StreamPath, GlyphRecord, ClusterAttrs]]:
+    """`walk_document`, with `ClusterAttrs` kept."""
+    for page_index, page in enumerate(doc.pages):
+        yield from located_cluster_records(page, page_index, doc)
+
+
 __all__ = [
     "MAX_RECURSION_DEPTH",
     "MAX_STREAMS_PER_PAGE",
     "StreamPath",
+    "cluster_document_records",
     "cluster_records",
     "glyph_records",
+    "located_cluster_records",
     "located_glyph_records",
     "walk_document",
 ]
