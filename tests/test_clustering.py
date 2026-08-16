@@ -14,11 +14,14 @@ Two families of fixtures:
 
 import hashlib
 import io
+import json
+import unicodedata
 from pathlib import Path
 
 import pikepdf
 import playa
 import pytest
+from playa.exceptions import PDFEncryptionError
 
 from engine.clusterer import _gaps_em, cluster_page
 from engine.encoding_table import FontVerdict, GlyphVerdict, glyph_verdict
@@ -421,3 +424,131 @@ def test_pitfall_3_skipping_the_sort_interleaves_two_columns() -> None:
     runs = cluster_page(0, located, FAKE_HASH, _accept_all)
     texts = sorted(r.display_text for r in runs)
     assert texts == ["AAAA", "BBBB"], "the real (sorting) clusterer must still recover two clean columns"
+
+
+# ---------------------------------------------------------------------------
+# Corpus-wide sweep (02-07 Task 3): zero exceptions, not editability correctness -- that
+# is already unit-tested above and in test_bad_glyph_splits_run_into_locked_and_editable_
+# subruns. Same two-exclusion convention as tests/test_glyph_record.py and
+# tests/test_walker.py: exclusions are DUPLICATED, not imported, so a newly-diagnosed
+# failure in one file can't silently widen another file's allowance.
+# ---------------------------------------------------------------------------
+
+# playa-pdf 1.1.0 cannot open this file without the optional `cryptography` extra
+# (`pip install playa-pdf[crypto]`), not installed as a runtime dependency here.
+KNOWN_UNOPENABLE_FILES = frozenset({"irs_form_w9_encrypted.pdf"})
+
+# Raises a PDFSyntaxError from ObjectParser's inline-image (BI...ID...EI) handling,
+# unrelated to text operators or clustering -- see tests/test_walker.py's module docstring.
+KNOWN_OTHER_ERROR_FILES = frozenset({"govdocs1_011_011089.pdf"})
+
+
+@pytest.mark.corpus
+def test_cluster_page_walks_full_corpus_without_exception() -> None:
+    """TEXT-08: cluster_page runs across every page of every public-corpus document without
+    raising -- proving the four-stage pipeline (band, sort, break, address) survives real
+    documents' superscript, rotated-text and glyph-at-a-time shapes, not just the
+    hand-constructed unit fixtures above. `_accept_all` (defined earlier in this file) is
+    used deliberately: whether a glyph SHOULD be editable is 02-06/D-05's concern and is
+    already covered by test_bad_glyph_splits_run_into_locked_and_editable_subruns; this
+    sweep only proves clustering itself never throws.
+
+    `source_hash` is one fixed literal (FAKE_HASH) for the whole sweep -- this test never
+    decodes a run ID back to bytes, so a real per-document hash buys nothing.
+
+    Goes red if: cluster_page raises on any corpus document not already in one of the two
+    known-failure sets below, or if either set changes size (grows -- a new failure; or
+    shrinks -- a fix that should also shrink the allowlist).
+    """
+    manifest = json.loads((REPO_ROOT / "corpus" / "manifest.json").read_text())
+
+    unopenable: set[str] = set()
+    other_errors: dict[str, str] = {}
+
+    for entry in manifest:
+        filename = entry["filename"]
+        try:
+            doc = playa.open(str(CORPUS_DIR / filename))
+        except PDFEncryptionError:
+            unopenable.add(filename)
+            continue
+
+        try:
+            for page_index, page in enumerate(doc.pages):
+                located = list(located_cluster_records(page, page_index, doc))
+                cluster_page(page_index, located, FAKE_HASH, _accept_all)
+        except Exception as exc:  # noqa: BLE001 - classified below, not swallowed
+            other_errors[filename] = f"{type(exc).__name__}: {exc}"
+
+    assert unopenable == KNOWN_UNOPENABLE_FILES, (
+        f"unopenable-file set changed: new={unopenable - KNOWN_UNOPENABLE_FILES} "
+        f"missing={KNOWN_UNOPENABLE_FILES - unopenable}"
+    )
+    assert set(other_errors) == KNOWN_OTHER_ERROR_FILES, (
+        f"other-error set changed: new={set(other_errors) - KNOWN_OTHER_ERROR_FILES} "
+        f"missing={KNOWN_OTHER_ERROR_FILES - set(other_errors)}; details={other_errors}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# RTL detectability (02-07 Task 3; 02-RESEARCH.md Section 3 "RTL and vertical writing",
+# Assumption A6). No real corpus RTL example exists -- this is a constructed-fixture-only
+# guarantee, not a corpus-proven one. cluster_page does nothing RTL-specific (there is no
+# bidi/RTL logic anywhere in this module); the point of this test is that a run's
+# display_text reaches downstream classification intact enough for 02-08's classify_run to
+# make its own RTL determination -- classify_run, not cluster_page, is what will assign
+# editable=False/reason="right-to-left text". That verdict is explicitly OUT of scope here.
+# ---------------------------------------------------------------------------
+
+
+def test_rtl_run_display_text_is_detectable_as_rtl() -> None:
+    """Constructs a run out of Arabic glyphs ("مرحبا", "hello") the same way every D-01/D-03
+    unit test above does -- one GlyphRecord per glyph via `_record`, advancing along x like
+    any other run -- and checks the resulting RunRecord.display_text's leading
+    strong-directionality character is unicodedata.bidirectional() AL or R. cluster_page
+    has no RTL-specific code path; this proves the glyphs' own Unicode text (already decoded
+    by playa/02-06 before reaching this module) survives banding/sorting/breaking/addressing
+    unmangled, which is all this module's architectural job covers.
+
+    Sanity check (02-VALIDATION.md: a check is not trusted until demonstrated failing): the
+    same assertion is run against an ordinary LTR run built the identical way, and must NOT
+    hold for it -- proving the assertion actually discriminates RTL from LTR text rather than
+    being trivially true for any display_text. No production RTL-handling code exists in
+    cluster_page to mutate (that is exactly the point being proven -- it does nothing
+    RTL-specific), so this inline LTR counter-fixture stands in for a mutation test.
+    """
+    rtl_text = "مرحبا"
+    rtl_located = [
+        (PATH0, _record(x=i * 10.0, y=100.0, unicode=ch, byte_offset=10 + i * 6), _attrs())
+        for i, ch in enumerate(rtl_text)
+    ]
+    rtl_runs = cluster_page(0, rtl_located, FAKE_HASH, _accept_all)
+    assert len(rtl_runs) == 1
+    rtl_display_text = rtl_runs[0].display_text
+    assert rtl_display_text == rtl_text
+
+    rtl_leading = next(
+        ch for ch in rtl_display_text if unicodedata.bidirectional(ch) in ("AL", "R", "L")
+    )
+    assert unicodedata.bidirectional(rtl_leading) in ("AL", "R"), (
+        "expected the RTL fixture's leading strong-directionality character to be AL/R, "
+        f"got bidirectional class {unicodedata.bidirectional(rtl_leading)!r}"
+    )
+
+    # Sanity check: the identical assertion, against an ordinary LTR run, must fail --
+    # not trivially satisfied by any text cluster_page happens to pass through unmangled.
+    ltr_text = "hello"
+    ltr_located = [
+        (PATH0, _record(x=i * 10.0, y=100.0, unicode=ch, byte_offset=10 + i * 6), _attrs())
+        for i, ch in enumerate(ltr_text)
+    ]
+    ltr_runs = cluster_page(0, ltr_located, FAKE_HASH, _accept_all)
+    assert len(ltr_runs) == 1
+    ltr_display_text = ltr_runs[0].display_text
+    ltr_leading = next(
+        ch for ch in ltr_display_text if unicodedata.bidirectional(ch) in ("AL", "R", "L")
+    )
+    assert unicodedata.bidirectional(ltr_leading) not in ("AL", "R"), (
+        "the RTL-detectability assertion must NOT hold for an ordinary LTR fixture -- "
+        "otherwise it proves nothing"
+    )
