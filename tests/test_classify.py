@@ -25,6 +25,7 @@ from engine.classify_page import (
     classify_page,
     image_coverage,
 )
+import engine.walker as walker_module
 from engine.playa_boundary import Document, Page, image_bboxes
 from engine.walker import glyph_records
 
@@ -34,6 +35,7 @@ CORPUS_DIR = REPO_ROOT / "corpus" / "public"
 NASA_MANUAL = CORPUS_DIR / "nasa_graphics_standards_manual.pdf"
 INVOICE_BOOK = CORPUS_DIR / "invoice_book_1842.pdf"
 VECTOR_OUTLINED_SAMPLE = CORPUS_DIR / "vector_outlined_text_sample.pdf"
+RENDER_MODE_7_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "render_mode_7.pdf"
 
 # The specific page 02-08's brief verified: naive-sum coverage on this document is 2.749
 # only here, not on an arbitrary page -- most pages of this document give a different
@@ -183,3 +185,46 @@ def test_low_path_count_classifies_empty() -> None:
             assert _path_object_count(playa_page) < P_PATH_OBJECT_THRESHOLD
             records = glyph_records(playa_page, doc)
             assert classify_page(records, playa_page) == "empty"
+
+
+def test_tr7_glyphs_are_invisible_and_a_render_mode_3_only_rule_misses_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CLAS-02's stated Validation Architecture gap: "no mutation can make this check
+    meaningful until a fixture exists" -- 02-02 built tests/fixtures/render_mode_7.pdf
+    specifically to close it. Zero real Tr=7 glyphs exist anywhere in the 217-document
+    corpus, so this fixture is the only place this rule can ever be proven to matter.
+
+    CORRECTED (controller, pre-dispatch): the plan's action text said "its single glyph"
+    -- the fixture actually has 26, all render_mode 7. Asserted against the real count.
+
+    Tr=7 (add-to-clip-only) is invisible for a DIFFERENT reason than Tr=3 (neither fill
+    nor stroke): a `render_mode != 3` check -- plausible if someone "simplified" the
+    invisibility rule to the one case the OCR corpus actually exercises -- would
+    misclassify every glyph on this fixture as visible. The mutation genuinely patches
+    `engine.walker.INVISIBLE_RENDER_MODES` (module-level lookup, read at call time inside
+    `glyph_records`, so `monkeypatch.setattr` on the module attribute takes effect on the
+    next call) rather than reimplementing the old wrong predicate inline, which could
+    silently drift from the real code path and prove nothing about it.
+    """
+    with playa.open(str(RENDER_MODE_7_FIXTURE)) as doc:
+        page = doc.pages[0]
+        records = glyph_records(page, doc)
+
+    assert records, "expected glyphs on render_mode_7.pdf"
+    assert len(records) == 26
+    assert all(r.render_mode == 7 for r in records)
+    assert all(r.visible is False for r in records)  # the correct rule
+
+    # THE MUTATION: the old wrong rule, applied to the real code path.
+    monkeypatch.setattr(walker_module, "INVISIBLE_RENDER_MODES", frozenset({3}))
+    with playa.open(str(RENDER_MODE_7_FIXTURE)) as doc:
+        page = doc.pages[0]
+        mutated_records = glyph_records(page, doc)
+
+    assert mutated_records
+    assert all(r.visible is True for r in mutated_records), (
+        "the render_mode != 3 mutation should have misclassified every Tr=7 glyph as "
+        "visible -- if it did not, this test is no longer exercising the mutation it "
+        "names, and is vacuous"
+    )
