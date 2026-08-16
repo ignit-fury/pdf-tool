@@ -47,24 +47,41 @@ Hitting either aborts that ONE branch, logs objids/depths/counts only (never gly
 T-02-04), and returns normally. Nothing propagates to the caller: a malicious XObject
 graph must not be able to fail a document that is otherwise fine.
 
-## Declared streams are walked once per page -- the bound the plan did not anticipate
+## Declared streams are siblings, walked once per page -- the bound the plan did not
+## anticipate
 
 Tiling patterns and Type3 CharProcs are not reached by an operator; they are *declared* in
 a /Resources dictionary. A CharProc that has no /Resources of its own inherits the level's
--- routinely the page's -- and re-declares every sibling CharProc. The per-branch visited
-set stops a CharProc re-entering ITSELF and stops nothing else, so 512 siblings enumerate
-512 x 511 x 510 ... paths, and the depth cap only decides how many years that takes.
+-- routinely the page's -- and so re-declares every sibling CharProc. That one fact broke
+two separate assumptions, and both fixes are load-bearing.
 
+**1. `declared_seen`, a per-PAGE-WALK visited set.** The per-branch `parents` set stops a
+CharProc re-entering ITSELF and stops nothing else, so 512 siblings enumerate
+512 x 511 x 510 ... paths and the depth cap only decides how many years that takes.
 `[MEASURED: corpus/public/govdocs1_004_004050.pdf page 0 -- 512 CharProcs, no cycle, no
 adversary; the walk did not finish in 5 minutes with only the per-branch guard.]`
+Per-page is the right shape and not merely the cheap one: the run-ID grammar addresses a
+CharProc as `y{name}` and a pattern as `t{objid}`, neither of which records which level
+declared it, so walking one twice on a page yields two IDs for one span of bytes -- a
+double-edit hazard for Phase 3, not just wasted work. Form XObjects keep the per-branch set
+instead, because they genuinely recur: the same header XObject drawn at two positions is
+two addressable placements under two distinct `x{objid}` paths.
 
-So resource-DECLARED streams carry a third bound, `declared_seen`, which is per PAGE WALK
-and deliberately not per branch. That is the right shape and not merely the cheap one: the
-run-ID grammar addresses a CharProc as `y{name}` and a pattern as `t{objid}`, neither of
-which records which level declared it, so walking one twice on a page yields two IDs for
-one span of bytes -- a double-edit hazard for Phase 3, not just wasted work. Form XObjects
-keep the per-branch set instead, because they genuinely recur: the same header XObject
-drawn at two positions is two addressable placements under two distinct `x{objid}` paths.
+**2. They are QUEUED, not recursed into.** `declared_seen` alone converts the
+combinatorial explosion into a 512-long CHAIN: CharProc 1 re-enumerates the page's fonts,
+finds CharProc 2 unseen, descends into it; 2 finds 3; and so on. Charging each of those a
+level of depth made `MAX_RECURSION_DEPTH` fire on that same ordinary document and silently
+drop 88 of its 512 declared streams `[MEASURED: 512 declared, 424 entered, depths 1->65]`,
+falsifying TEXT-06's claim to find text in every location outside /Contents. Raising the cap
+is the wrong fix twice over: it treats the symptom, and a 5,000-CharProc font truncates
+anyway.
+
+A CharProc is a SIBLING of the 511 declared beside it, not a descendant. So `_walk_level`
+appends declared streams to a `pending` queue which `located_glyph_records` drains at its
+own top level, each keeping the depth of the level that declared it. Depth then measures
+only real nesting (`Do` inside `Do`), and 512 CharProcs cost one Python frame instead of
+512 -- which relabelling the depth counter alone would NOT have fixed, since nested
+generators consume the interpreter stack whatever number they are labelled with.
 
 ## Where the two "local, not buffer" provenance fields come from
 
@@ -85,8 +102,9 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+from collections import deque
 from dataclasses import dataclass
-from typing import Iterator
+from typing import Iterator, NamedTuple
 
 from engine.playa_boundary import (
     ContentStream,
@@ -179,6 +197,24 @@ def _assert_glyph_alignment(n_glyphs: int, n_positions: int, part_index: int) ->
         f"but the operand walk produced {n_positions} position(s). A font's decoder and "
         f"its CMap disagree on byte consumption -- do not trust byte_offset_within_string."
     )
+
+
+class _Declared(NamedTuple):
+    """A tiling pattern or Type3 CharProc found in some level's /Resources, queued to be
+    walked as a SIBLING of that level rather than descended into as its child.
+
+    It carries the declaring level's `depth` and `parents` unchanged: a CharProc is not
+    nested inside the one declared before it, and charging it a level of depth is what
+    truncated 88 of govdocs1_004_004050.pdf's 512 CharProcs (see the module docstring).
+    """
+
+    stream: ContentStream
+    path: StreamPath
+    resources: Resources
+    ctm: Matrix
+    type3: bool
+    parents: frozenset[tuple[int, int]]
+    depth: int
 
 
 class _FontIds:
@@ -277,10 +313,12 @@ def _walk_level(
     type3: bool = False,
     parents: frozenset[tuple[int, int]],
     declared_seen: set[tuple[int, int]],
+    pending: deque[_Declared],
     depth: int,
     fonts: _FontIds,
 ) -> Iterator[tuple[StreamPath, GlyphRecord]]:
-    """One content-stream level: its own text, then everything it reaches.
+    """One content-stream level: its own text, the Form XObjects it invokes, and the
+    declared streams it contributes to `pending` for the page walk to drain.
 
     `key` is the level's (objid, genno) cycle-guard identity, or None for a page's own
     /Contents (which is entered exactly once and has no objid of its own). Both bounds are
@@ -332,6 +370,7 @@ def _walk_level(
                 gstate=item.gstate,
                 parents=parents,
                 declared_seen=declared_seen,
+                pending=pending,
                 depth=depth + 1,
                 fonts=fonts,
             )
@@ -339,45 +378,41 @@ def _walk_level(
             for record in _op_records(item, fonts):
                 yield path, record
 
-    # Streams reached through this level's /Resources rather than through an operator.
-    # `declared_seen` is per PAGE WALK, not per branch -- see the module docstring's
-    # "declared streams are walked once per page".
+    # Streams reached through this level's /Resources rather than through an operator are
+    # QUEUED, not descended into -- see the module docstring's "declared streams are
+    # siblings". They keep this level's `depth` and this branch's `parents`, and the page
+    # walk drains them at its own top level, so 512 CharProcs cost one frame, not 512.
     for pattern, sub_resources, pattern_ctm in tiling_patterns(resources, ctm):
         pattern_key = stream_key(pattern)
         if pattern_key in declared_seen:
             continue
         declared_seen.add(pattern_key)
-        yield from _walk_level(
-            page,
-            doc,
-            [pattern],
-            dataclasses.replace(path, pattern=pattern_key[0]),
-            key=pattern_key,
-            resources=resources if sub_resources is None else sub_resources,
-            ctm=pattern_ctm,
-            parents=parents,
-            declared_seen=declared_seen,
-            depth=depth + 1,
-            fonts=fonts,
+        pending.append(
+            _Declared(
+                stream=pattern,
+                path=dataclasses.replace(path, pattern=pattern_key[0]),
+                resources=resources if sub_resources is None else sub_resources,
+                ctm=pattern_ctm,
+                type3=False,
+                parents=parents,
+                depth=depth,
+            )
         )
     for name, proc, sub_resources, proc_ctm in type3_charprocs(resources, ctm):
         proc_key = stream_key(proc)
         if proc_key in declared_seen:
             continue
         declared_seen.add(proc_key)
-        yield from _walk_level(
-            page,
-            doc,
-            [proc],
-            dataclasses.replace(path, charproc=name),
-            key=proc_key,
-            resources=resources if sub_resources is None else sub_resources,
-            ctm=proc_ctm,
-            type3=True,
-            parents=parents,
-            declared_seen=declared_seen,
-            depth=depth + 1,
-            fonts=fonts,
+        pending.append(
+            _Declared(
+                stream=proc,
+                path=dataclasses.replace(path, charproc=name),
+                resources=resources if sub_resources is None else sub_resources,
+                ctm=proc_ctm,
+                type3=True,
+                parents=parents,
+                depth=depth,
+            )
         )
 
 
@@ -399,6 +434,7 @@ def located_glyph_records(
     """
     fonts = _FontIds()
     declared_seen: set[tuple[int, int]] = set()
+    pending: deque[_Declared] = deque()
     path = StreamPath(page=page_index)
     yield from _walk_level(
         page,
@@ -410,6 +446,7 @@ def located_glyph_records(
         ctm=page.ctm,
         parents=frozenset(),
         declared_seen=declared_seen,
+        pending=pending,
         depth=0,
         fonts=fonts,
     )
@@ -424,7 +461,28 @@ def located_glyph_records(
             ctm=ctm,
             parents=frozenset(),
             declared_seen=declared_seen,
+            pending=pending,
             depth=1,
+            fonts=fonts,
+        )
+    # Drain flat, in declaration order. Walking a queued stream can queue more (a pattern
+    # whose own /Resources declare another), which is why this is a while over a deque and
+    # not a for over a snapshot; `declared_seen` is what makes it finite.
+    while pending:
+        item = pending.popleft()
+        yield from _walk_level(
+            page,
+            doc,
+            [item.stream],
+            item.path,
+            key=stream_key(item.stream),
+            resources=item.resources,
+            ctm=item.ctm,
+            type3=item.type3,
+            parents=item.parents,
+            declared_seen=declared_seen,
+            pending=pending,
+            depth=item.depth,
             fonts=fonts,
         )
 
