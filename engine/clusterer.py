@@ -154,28 +154,45 @@ def _gaps_em(ordered: list[_GlyphItem]) -> list[float]:
     return gaps
 
 
-def _is_line_break_not_superscript(
-    attrs: ClusterAttrs, prev_attrs: ClusterAttrs, gap_em: float
-) -> bool:
+def _is_line_break_not_superscript(attrs: ClusterAttrs, prev_attrs: ClusterAttrs) -> bool:
     """Research Section 3, "Superscript vs. line break": a rise (`Ts`) change alone is not
     a break. `gstate.rise` is checked FIRST per Assumption A2's Ts-first heuristic -- no
     rise change at all means no superscript question to ask.
 
-    A superscript is `Ts` becoming nonzero (or changing) WITH forward advance intact
-    (`gap_em > 0`, no horizontal reset) AND a small delta (`< 0.5 x em`). Anything else
-    that changes `rise` -- a horizontal reset, or a delta at or past the 0.5em threshold
-    -- is a genuine line break, matching the plan's own Task 2 wording exactly: "a line
-    break is a horizontal reset or a rise of over 0.5 times font size".
+    CORRECTED 2026-08-14 after independent review of the original fix (f1f968c) found the
+    "horizontal reset" clause both unreachable and wrong, and untested -- deleted rather
+    than re-tuned:
+    - Unreachable as intended: `cluster_page` SORTS each band by projected position before
+      this function ever runs (Pitfall 3). A genuine carriage return (Section 3's `Delta x
+      < 0`) cannot survive that sort -- origins are monotonically non-decreasing by the
+      time `gap_em` is computed, so the clause never fires for what it was named for.
+      A real carriage return still breaks the run, just via the ordinary `gap_em >
+      BREAK_EM` clause below, not this one.
+      - What the clause DID fire on instead: `gap_em < 0` after the sort means glyph
+      OVERLAP (kerning pulls the current glyph's origin behind the previous glyph's own
+      advance), which is common on a tucked superscript with negative kerning -- so the
+      clause reintroduced a false break on exactly the case it was written to protect.
+      - Untested: mutating it to `False` left every existing test green; nothing pinned
+      its boundary.
+    Left after the correction: `Ts` changing AT OR PAST the 0.5em threshold is a genuine
+    line break; a smaller `Ts` change is a superscript and does not break, full stop --
+    matching the plan's own Task 2 wording's remaining, measurable half: "a rise of over
+    0.5 times font size" breaks a run.
+
+    KNOWN LIMITATION, root-caused to two research constants disagreeing rather than to this
+    function: `GlyphRecord.y` already carries `Ts`'s contribution (playa folds rise into
+    the text rendering matrix's translation), so a typical superscript's rise (commonly
+    ~0.33em) EXCEEDS `BAND_TOLERANCE_EM` (0.2) and is already split into a different band
+    at Step 1, before this function is ever reached. This function only sees rise changes
+    small enough to stay in-band -- under ~0.2em -- which is a narrower guarantee than
+    "superscripts stay in one run" for the typical case. Recorded for 02-08 rather than
+    fixed here: reconciling the two thresholds is a research-level decision, not a
+    clusterer bug.
     """
     if attrs.rise == prev_attrs.rise:
         return False
-    # Strictly negative: a gap of exactly 0.0 is two glyphs touching with normal forward
-    # advance (prev glyph's own advance lands exactly on the next glyph's origin), not a
-    # reset. Section 3's "Delta x < 0 (carriage return)" is a genuine backward jump.
-    horizontal_reset = gap_em < 0.0
     em = attrs.effective_em
-    large_shift = em > 0 and abs(attrs.rise - prev_attrs.rise) >= SUPERSCRIPT_RISE_TOLERANCE_EM * em
-    return horizontal_reset or large_shift
+    return em > 0 and abs(attrs.rise - prev_attrs.rise) >= SUPERSCRIPT_RISE_TOLERANCE_EM * em
 
 
 def _split_logical_runs(ordered: list[_GlyphItem], gaps: list[float]) -> list[tuple[int, int]]:
@@ -205,7 +222,7 @@ def _split_logical_runs(ordered: list[_GlyphItem], gaps: list[float]) -> list[tu
             record.font_id != prev_record.font_id
             or abs(attrs.effective_em - prev_attrs.effective_em)
             > SIZE_CHANGE_TOLERANCE * prev_attrs.effective_em
-            or _is_line_break_not_superscript(attrs, prev_attrs, gap_em)
+            or _is_line_break_not_superscript(attrs, prev_attrs)
             # D-01: the derived `visible` boolean, NEVER raw render_mode -- Tr 0/1/2 are
             # all visible and must cluster together; only crossing Tr 3/Tr 7 breaks.
             or record.visible != prev_record.visible

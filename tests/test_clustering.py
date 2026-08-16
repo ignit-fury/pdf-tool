@@ -458,12 +458,23 @@ def test_cluster_page_walks_full_corpus_without_exception() -> None:
 
     Goes red if: cluster_page raises on any corpus document not already in one of the two
     known-failure sets below, or if either set changes size (grows -- a new failure; or
-    shrinks -- a fix that should also shrink the allowlist).
+    shrinks -- a fix that should also shrink the allowlist), OR if the total run count
+    collapses -- REVIEW FINDING (pre-merge, .superpowers/sdd/02-07-PLAN/): the original
+    version of this test discarded cluster_page's return value entirely, so a `return []`
+    stub would have passed every assertion here. Pinned as a lower bound, mirroring
+    tests/test_glyph_record.py's `total_glyphs > 21_000_000` guard against exactly that
+    failure shape.
+
+    Exception messages store the TYPE only, never the exception's own string -- some
+    corpus parse errors embed raw content-stream bytes (confirmed on
+    govdocs1_011_011089.pdf's PDFSyntaxError), which would violate the no-document-content
+    rule if interpolated into this test's own failure message.
     """
     manifest = json.loads((REPO_ROOT / "corpus" / "manifest.json").read_text())
 
     unopenable: set[str] = set()
     other_errors: dict[str, str] = {}
+    total_runs = 0
 
     for entry in manifest:
         filename = entry["filename"]
@@ -476,9 +487,9 @@ def test_cluster_page_walks_full_corpus_without_exception() -> None:
         try:
             for page_index, page in enumerate(doc.pages):
                 located = list(located_cluster_records(page, page_index, doc))
-                cluster_page(page_index, located, FAKE_HASH, _accept_all)
+                total_runs += len(cluster_page(page_index, located, FAKE_HASH, _accept_all))
         except Exception as exc:  # noqa: BLE001 - classified below, not swallowed
-            other_errors[filename] = f"{type(exc).__name__}: {exc}"
+            other_errors[filename] = type(exc).__name__
 
     assert unopenable == KNOWN_UNOPENABLE_FILES, (
         f"unopenable-file set changed: new={unopenable - KNOWN_UNOPENABLE_FILES} "
@@ -488,6 +499,10 @@ def test_cluster_page_walks_full_corpus_without_exception() -> None:
         f"other-error set changed: new={set(other_errors) - KNOWN_OTHER_ERROR_FILES} "
         f"missing={KNOWN_OTHER_ERROR_FILES - set(other_errors)}; details={other_errors}"
     )
+    # [VERIFIED: measured 2026-08-14] 215 documents, 914,022 total runs. Pinned well under
+    # that as a lower bound, not an exact match -- a walker/clusterer that silently emitted
+    # nothing would otherwise pass every assertion above.
+    assert total_runs > 100_000, f"corpus run count collapsed to {total_runs}"
 
 
 # ---------------------------------------------------------------------------
