@@ -68,13 +68,17 @@ instead, because they genuinely recur: the same header XObject drawn at two posi
 two addressable placements under two distinct `x{objid}` paths.
 
 **2. They are QUEUED, not recursed into.** `declared_seen` alone converts the
-combinatorial explosion into a 512-long CHAIN: CharProc 1 re-enumerates the page's fonts,
-finds CharProc 2 unseen, descends into it; 2 finds 3; and so on. Charging each of those a
-level of depth made `MAX_RECURSION_DEPTH` fire on that same ordinary document and silently
-drop 88 of its 512 declared streams `[MEASURED: 512 declared, 424 entered, depths 1->65]`,
-falsifying TEXT-06's claim to find text in every location outside /Contents. Raising the cap
-is the wrong fix twice over: it treats the symptom, and a 5,000-CharProc font truncates
-anyway.
+combinatorial explosion into a CHAIN: CharProc 1 re-enumerates the page's fonts, finds
+CharProc 2 unseen, descends into it; 2 finds 3; and so on. Charging each of those a level
+of depth made `MAX_RECURSION_DEPTH` fire on that same ordinary document and silently drop
+most of its CharProcs, falsifying TEXT-06's claim to find text in every location outside
+/Contents. Raising the cap is the wrong fix twice over: it treats the symptom, and a
+5,000-CharProc font truncates anyway.
+
+`[MEASURED on the same page, recursive vs queued: 512 declared CharProc NAMES over 424
+distinct streams (88 streams carry two names each -- that collapse is `declared_seen`
+working, not a loss). Recursive: 424 reached, 64 actually walked, 360 aborted at the depth
+cap, max depth 65. Queued: 424 walked, 0 aborted, max depth 0.]`
 
 A CharProc is a SIBLING of the 511 declared beside it, not a descendant. So `_walk_level`
 appends declared streams to a `pending` queue which `located_glyph_records` drains at its
@@ -204,8 +208,8 @@ class _Declared(NamedTuple):
     walked as a SIBLING of that level rather than descended into as its child.
 
     It carries the declaring level's `depth` and `parents` unchanged: a CharProc is not
-    nested inside the one declared before it, and charging it a level of depth is what
-    truncated 88 of govdocs1_004_004050.pdf's 512 CharProcs (see the module docstring).
+    nested inside the one declared before it, and descending per sibling is what walked
+    only 64 of govdocs1_004_004050.pdf's 424 CharProcs (see the module docstring).
     """
 
     stream: ContentStream

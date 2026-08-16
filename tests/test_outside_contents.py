@@ -16,6 +16,7 @@ one-module rule binds `engine/` only.
 
 import collections
 import io
+import json
 import logging
 from pathlib import Path
 
@@ -401,3 +402,199 @@ def test_deep_form_xobject_chain_stops_at_the_depth_cap(
 
     assert len(records) == MAX_RECURSION_DEPTH
     assert any("depth cap" in m for m in caplog.messages)
+
+
+def _type3_font(pdf: pikepdf.Pdf, charprocs: dict[str, bytes]) -> pikepdf.Object:
+    """A Type3 font whose CharProcs each show text, with NO /Resources of its own -- so
+    each CharProc inherits the page's and re-declares all of its siblings. That is the real
+    corpus shape (govdocs1_004_004050.pdf) that `declared_seen` and the pending queue exist
+    to bound."""
+    procs = pikepdf.Dictionary(
+        {
+            f"/{name}": pdf.make_stream(b"10 0 0 0 10 10 d1\n" + body)
+            for name, body in charprocs.items()
+        }
+    )
+    names = sorted(charprocs)
+    return pikepdf.Dictionary(
+        Type=pikepdf.Name.Font,
+        Subtype=pikepdf.Name.Type3,
+        FontBBox=pikepdf.Array([0, 0, 10, 10]),
+        FontMatrix=pikepdf.Array([0.001, 0, 0, 0.001, 0, 0]),
+        CharProcs=procs,
+        Encoding=pikepdf.Dictionary(
+            Type=pikepdf.Name.Encoding,
+            Differences=pikepdf.Array([97, *[pikepdf.Name(f"/{n}") for n in names]]),
+        ),
+        FirstChar=97,
+        LastChar=97 + len(names) - 1,
+        Widths=pikepdf.Array([1000] * len(names)),
+    )
+
+
+def test_declared_charprocs_are_siblings_not_a_chain() -> None:
+    """The controller's finding, pinned. 100 CharProcs, each showing one glyph, none with
+    /Resources of its own -- so each inherits the page's and re-declares all 100.
+
+    All 100 must be entered. Asserting on the COUNT ENTERED, not on elapsed time: the
+    defective version finishes in 0.04s precisely *because* it stops early, so a timing
+    assertion would not have caught this at all.
+
+    MUTATION (ran it): drain `pending` at the end of `_walk_level` at `depth + 1` instead
+    of flat in `located_glyph_records` -- i.e. descend into each declared sibling, which is
+    what the code did before this test existed. The 100 siblings become a 100-deep chain,
+    `MAX_RECURSION_DEPTH` truncates it, and only 64 records appear.
+    MEASURED with the same mutation on corpus/public/govdocs1_004_004050.pdf page 0: 424
+    distinct CharProc streams reached, 64 walked, 360 aborted at the depth cap, max depth
+    65. Queued: 424 walked, 0 aborted, max depth 0.
+    """
+    count = 100
+    pdf = pikepdf.Pdf.new()
+    font = _type3_font(
+        pdf, {f"c{i}": _show(b"x") for i in range(count)}
+    )
+    page = pdf.add_blank_page(page_size=(200, 200))
+    page.Contents = pdf.make_stream(b"BT /T3 12 Tf 10 10 Td (a) Tj ET\n")
+    page.Resources = pikepdf.Dictionary(
+        Font=pikepdf.Dictionary(T3=font, Helv=_helvetica())
+    )
+
+    records = list(walk_document(_parse(pdf)))
+    from_charprocs = [p for p, _r in records if p.charproc is not None]
+
+    assert len(from_charprocs) == count, (
+        f"every declared CharProc must be entered exactly once; got {len(from_charprocs)}"
+    )
+    assert len({p.charproc for p in from_charprocs}) == count, "and each exactly once"
+
+
+def test_tiling_pattern_and_type3_charproc_text_is_found() -> None:
+    """The two locations the corpus cannot exercise at all: across all 217 documents,
+    `walk_document` produces zero records from a tiling pattern and zero from a Type3
+    CharProc (measured -- CharProcs in this corpus are bitmap and vector glyphs). Without a
+    synthetic fixture both branches would ship never having run.
+
+    MUTATION (ran it): delete the `tiling_patterns(...)` loop from `_walk_level`; the
+    pattern assertion goes red. Delete the `type3_charprocs(...)` loop; the CharProc
+    assertion goes red.
+    """
+    pdf = pikepdf.Pdf.new()
+    pattern = pdf.make_stream(_show(b"P"))
+    pattern.Type = pikepdf.Name.Pattern
+    pattern.PatternType = 1
+    pattern.PaintType = 1
+    pattern.TilingType = 1
+    pattern.BBox = pikepdf.Array([0, 0, 10, 10])
+    pattern.XStep = 10
+    pattern.YStep = 10
+    pattern.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(Helv=_helvetica()))
+
+    font = _type3_font(pdf, {"a": _show(b"C")})
+    page = pdf.add_blank_page(page_size=(200, 200))
+    page.Contents = pdf.make_stream(
+        b"/Pattern cs /P0 scn 0 0 50 50 re f\nBT /T3 12 Tf 10 10 Td (a) Tj ET\n"
+    )
+    page.Resources = pikepdf.Dictionary(
+        Font=pikepdf.Dictionary(T3=font, Helv=_helvetica()),
+        Pattern=pikepdf.Dictionary(P0=pattern),
+    )
+
+    records = list(walk_document(_parse(pdf)))
+    by_where = {
+        ("pattern" if p.pattern is not None else "charproc" if p.charproc else "page"): r
+        for p, r in records
+    }
+    assert by_where["pattern"].unicode == "P", "text inside a tiling pattern must be found"
+    assert by_where["charproc"].unicode == "C", "text inside a Type3 CharProc must be found"
+    # The pattern segment is an objid, and it is the objid in the SAVED file -- pikepdf
+    # renumbers on save, so this deliberately does not compare against the pre-save
+    # `pattern.objgen`. That the objid is the right one is pinned exactly, against a real
+    # file, by test_form_xobject_glyphs_address_the_xobjects_own_stream (I1 = 77024).
+    pattern_segments = [p.pattern for p, _r in records if p.pattern is not None]
+    assert len(set(pattern_segments)) == 1 and pattern_segments[0] > 0, (
+        "the pattern path segment is t{objid}"
+    )
+    assert [p.charproc for p, _r in records if p.charproc] == ["a"], (
+        "the CharProc path segment is y{name}"
+    )
+
+
+def test_annotation_appearance_is_selected_by_as() -> None:
+    """/AP /N may be a stream OR a dict of states keyed by /AS (ISO 32000-1 12.5.5).
+
+    The corpus cannot pin the selection: measured across all 13
+    annotation_appearance_streams documents, every state dict is a checkbox whose /AS is
+    /Off while /AP /N defines only the "on" state, so the correct answer is always "render
+    nothing" and a detector that ignored /AS entirely would look identical.
+
+    MUTATION (ran it): ignore /AS in `annotation_appearances` and take the dict's first
+    entry. The second case below goes red -- text appears for an annotation whose current
+    appearance state is Off, i.e. text no viewer is displaying.
+    """
+    for state, expected in (("On", ["A"]), ("Off", [])):
+        pdf = pikepdf.Pdf.new()
+        resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(Helv=_helvetica()))
+        on = _form(pdf, _show(b"A"), resources)
+        page = pdf.add_blank_page(page_size=(200, 200))
+        page.Contents = pdf.make_stream(b"")
+        page.Resources = pikepdf.Dictionary()
+        page.Annots = pikepdf.Array(
+            [
+                pdf.make_indirect(
+                    pikepdf.Dictionary(
+                        Type=pikepdf.Name.Annot,
+                        Subtype=pikepdf.Name.Widget,
+                        Rect=pikepdf.Array([0, 0, 100, 100]),
+                        AS=pikepdf.Name(f"/{state}"),
+                        AP=pikepdf.Dictionary(N=pikepdf.Dictionary({"/On": on})),
+                    )
+                )
+            ]
+        )
+
+        records = list(walk_document(_parse(pdf)))
+        assert [r.unicode for _p, r in records] == expected, f"/AS /{state}"
+        if expected:
+            assert records[0][0].annot == (0, "On"), "path segment is a{index}:{state}"
+
+
+@pytest.mark.corpus
+def test_walk_document_completes_across_the_corpus_categories() -> None:
+    """The acceptance criterion: `walk_document` completes without exception across all 19
+    `form_xobjects` and all 13 `annotation_appearance_streams` corpus documents.
+
+    Two documents in the wider corpus fail to OPEN, both pre-existing and both documented
+    in tests/test_walker.py's module docstring (`irs_form_w9_encrypted.pdf` needs
+    playa-pdf[crypto]; `govdocs1_011_011089.pdf` raises PDFSyntaxError from playa's
+    inline-image handling). Neither is in these two categories, so no allowlist is needed
+    here -- if one appears, that is a new finding and this test should fail.
+
+    MUTATION (ran it): none needed as a red-check -- this went red for real during
+    development, on govdocs1_004_004050.pdf, when the declared-stream walk was unbounded
+    (it did not terminate). That is what `declared_seen` and the pending queue fixed.
+    """
+    manifest = json.loads((REPO_ROOT / "corpus" / "manifest.json").read_text())
+    wanted = {"form_xobjects", "annotation_appearance_streams"}
+    documents = [d for d in manifest if wanted & set(d.get("categories", []))]
+    by_category = collections.Counter(
+        c for d in documents for c in d["categories"] if c in wanted
+    )
+    # 19 + 13 = 32 category memberships over 30 distinct files: govdocs1_007_007081.pdf and
+    # govdocs1_011_011098.pdf each carry both categories.
+    assert by_category["form_xobjects"] == 19
+    assert by_category["annotation_appearance_streams"] == 13
+    assert len(documents) == 30
+
+    outside = collections.Counter()
+    for entry in documents:
+        path = REPO_ROOT / "corpus" / entry["tier"] / entry["filename"]
+        with playa.open(str(path)) as doc:
+            for stream_path, _record in walk_document(doc):
+                if stream_path.xobj_path:
+                    outside["xobj"] += 1
+                if stream_path.annot:
+                    outside["annot"] += 1
+
+    # Completing is the criterion; these confirm the walk actually reached outside
+    # /Contents on this set rather than completing by finding nothing.
+    assert outside["xobj"] > 0 and outside["annot"] > 0
