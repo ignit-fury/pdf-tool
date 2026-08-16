@@ -118,6 +118,7 @@ import bisect
 import logging
 from typing import Iterator
 
+from playa import open as open_document
 from playa.content import GlyphObject, GraphicState, TextObject, XObjectObject
 from playa.document import Document
 from playa.font import Font
@@ -144,6 +145,9 @@ from playa.utils import mult_matrix, transform_bbox
 # Re-exported so consumers get real types without a second `import playa` anywhere in the
 # repo (there is a test asserting exactly one file imports playa). The file boundary is
 # the swap mechanism, so the types cross it too -- an alias layer would defeat the point.
+# `open_document` is `playa.open` under the same rule: opening a file is a playa entry
+# point, and a module under engine/ that opens a corpus document (02-07's threshold tuner)
+# would otherwise need its own `import playa` and put a second swap site in the repo.
 __all__ = [
     "ContentStream",
     "Document",
@@ -158,6 +162,7 @@ __all__ = [
     "XObjectObject",
     "annotation_appearances",
     "glyph_byte_offsets",
+    "open_document",
     "operator_table",
     "stream_key",
     "tiling_patterns",
