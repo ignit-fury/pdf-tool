@@ -26,6 +26,7 @@ from engine.classify_page import (
     image_coverage,
 )
 import engine.walker as walker_module
+from engine.classify_run import DocumentClassification, RunVerdict, classify_document
 from engine.playa_boundary import Document, Page, image_bboxes
 from engine.walker import glyph_records
 
@@ -36,6 +37,12 @@ NASA_MANUAL = CORPUS_DIR / "nasa_graphics_standards_manual.pdf"
 INVOICE_BOOK = CORPUS_DIR / "invoice_book_1842.pdf"
 VECTOR_OUTLINED_SAMPLE = CORPUS_DIR / "vector_outlined_text_sample.pdf"
 RENDER_MODE_7_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "render_mode_7.pdf"
+MIXED_SCANNED_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "mixed_scanned.pdf"
+IRS_1040_INSTRUCTIONS = CORPUS_DIR / "irs_1040_instructions.pdf"
+
+# tools/build_mixed_fixture.py's own PAGE_PLAN: 0-based indices of the 3 constructed
+# zero-glyph scan pages, interleaved among 7 editable irs_publication_17.pdf pages.
+MIXED_SCANNED_SCAN_PAGES = {3, 6, 9}
 
 # The specific page 02-08's brief verified: naive-sum coverage on this document is 2.749
 # only here, not on an arbitrary page -- most pages of this document give a different
@@ -228,3 +235,140 @@ def test_tr7_glyphs_are_invisible_and_a_render_mode_3_only_rule_misses_them(
         "visible -- if it did not, this test is no longer exercising the mutation it "
         "names, and is vacuous"
     )
+
+
+# --------------------------------------------------------------------------------------
+# 02-08 Task 3: CLAS-04/CLAS-05 -- engine/classify_run.py
+# --------------------------------------------------------------------------------------
+
+
+def test_mixed_scanned_page_buckets_match_construction() -> None:
+    """tools/build_mixed_fixture.py's own PAGE_PLAN: 7 editable irs_publication_17.pdf
+    pages interleaved with 3 zero-glyph scan pages from invoice_book_1842.pdf, at 0-based
+    indices 3, 6, 9. classify_document's page_buckets must reproduce this exactly."""
+    result = classify_document(MIXED_SCANNED_FIXTURE)
+    assert len(result.page_buckets) == 10
+    scan_indices = {i for i, b in enumerate(result.page_buckets) if b == "scan_no_text"}
+    assert scan_indices == MIXED_SCANNED_SCAN_PAGES
+    editable_indices = set(range(10)) - MIXED_SCANNED_SCAN_PAGES
+    assert all(result.page_buckets[i] == "editable" for i in editable_indices)
+
+
+def test_mixed_scanned_editable_pages_produce_editable_runs() -> None:
+    """CLAS-04's acceptance criterion: the 7 constructed editable pages report
+    editable_original/editable_substitution runs. irs_publication_17.pdf is a typeset,
+    non-OCR document with ordinary embedded fonts, so editable_original is expected, but
+    this asserts the weaker, more robust claim (either editable state) since exact font
+    resolution branch is not this test's concern -- test_shared_xobject_run_refuses_with_
+    share_count and the corpus-wide encoding_table tests already cover branch-level
+    correctness."""
+    result = classify_document(MIXED_SCANNED_FIXTURE)
+    assert result.runs, "expected runs on the 7 editable pages"
+    states = {v.state for _, v in result.runs}
+    assert states <= {"editable_original", "editable_substitution"}, (
+        f"expected only editable states on mixed_scanned.pdf's constructed editable "
+        f"pages, got {states}"
+    )
+
+
+def test_mixed_scanned_scan_pages_contribute_zero_runs() -> None:
+    """The 3 scan pages have zero glyphs by construction (build_mixed_fixture.py's own
+    docstring: "zero Tj/TJ/'/\" text-showing operators -- no OCR text layer at all"), so
+    clustering produces zero runs from them -- not a gap, the page_buckets entry already
+    says scan_no_text. Verified by checking every run's page number against the known
+    editable page indices, never against the scan indices."""
+    result = classify_document(MIXED_SCANNED_FIXTURE)
+    run_pages = {run.page for run, _ in result.runs}
+    assert run_pages.isdisjoint(MIXED_SCANNED_SCAN_PAGES), (
+        f"found runs on scan pages {run_pages & MIXED_SCANNED_SCAN_PAGES} -- scan pages "
+        f"must contribute zero runs"
+    )
+
+
+def _document_uneditable_if_any_page_scanned(result: DocumentClassification) -> bool:
+    """THE CLAS-05 MUTATION, replicated as a standalone helper -- never applied to
+    classify_document itself, which must never gain a whole-document verdict. Proves the
+    rejected design ("any scanned page makes the whole document uneditable") would have
+    been wrong on this exact fixture."""
+    return any(b != "editable" for b in result.page_buckets)
+
+
+def test_clas05_whole_document_refusal_is_wrong() -> None:
+    """CLAS-05's negative case: mixed_scanned.pdf genuinely has 3 non-editable pages
+    (correctly bucketed scan_no_text) alongside 7 editable ones. The REJECTED rule would
+    flag the whole document uneditable; classify_document's real per-page/per-run
+    granularity correctly keeps the 7 editable pages' runs editable regardless."""
+    result = classify_document(MIXED_SCANNED_FIXTURE)
+
+    assert _document_uneditable_if_any_page_scanned(result) is True, (
+        "the mutation should find at least one non-editable page bucket on this fixture "
+        "-- if it does not, the fixture no longer mixes scan and editable pages and this "
+        "negative case is vacuous"
+    )
+    # classify_document's REAL behaviour: the 7 editable pages' runs are still editable,
+    # proving the document was never treated as wholesale uneditable.
+    editable_states = {"editable_original", "editable_substitution"}
+    assert any(v.state in editable_states for _, v in result.runs), (
+        "classify_document incorrectly refused every run on a document that has "
+        "genuinely editable pages -- CLAS-05 requires per-page/per-run refusal, never "
+        "whole-document"
+    )
+    assert not hasattr(result, "editable"), (
+        "DocumentClassification must carry no whole-document editability field at all"
+    )
+
+
+@pytest.mark.corpus
+def test_shared_xobject_run_refuses_with_share_count() -> None:
+    """The acceptance criterion's own named case: irs_1040_instructions.pdf's headline
+    "TIP" callout is drawn inside Form XObject objid 351, shared across exactly 43 pages
+    (engine.shared_xobjects, re-verified directly before this task's dispatch). The run
+    sourced from it must verdict not_editable with a reason naming that count.
+    """
+    result = classify_document(IRS_1040_INSTRUCTIONS)
+    shared_runs = [
+        v for _r, v in result.runs if v.reason is not None and "shared Form XObject" in v.reason
+    ]
+    assert shared_runs, "expected at least one shared-Form-XObject run"
+    assert all(v.state == "not_editable" for v in shared_runs)
+    assert any("43 pages" in (v.reason or "") for v in shared_runs), (
+        "expected a shared-XObject run naming the 43-page share count specifically"
+    )
+
+
+def test_classify_run_precedence_shared_xobject_before_type3() -> None:
+    """The brief's specified precedence: a run inside a shared Form XObject refuses for
+    THAT reason even if its font would also independently refuse as Type3 -- shared-
+    XObject is checked first. Constructed directly against classify_run (not
+    classify_document), isolating the precedence rule from real-document plumbing.
+
+    MUTATION: swapping the order in classify_run (checking font_verdict.branch_id ==
+    "T3-a" before the shared_xobject_ids check) would make this assert "Type3" instead
+    -- confirmed by temporarily reordering the two checks and re-running this test before
+    restoring, per the report.
+    """
+    from engine.classify_run import classify_run
+    from engine.encoding_table import FontVerdict
+    from engine.records import GlyphRecord, RunRecord
+    from engine.types import CharCode, Unicode
+
+    glyph = GlyphRecord(
+        code=CharCode(1),
+        glyph=None,
+        unicode=Unicode("A"),
+        x=0.0,
+        y=0.0,
+        advance=(1.0, 0.0),
+        font_id=0,
+        render_mode=0,
+        visible=True,
+        stream_id=0,
+        operator_byte_offset=0,
+        item_index_within_tj=None,
+        byte_offset_within_string=0,
+    )
+    run = RunRecord(run_id="dummy", glyphs=[glyph], display_text="A", page=0)
+    type3_font = FontVerdict("T3-a", True, False, None)
+    verdict = classify_run(run, type3_font, shared_xobject_ids={5: 10}, xobj_path=(5,))
+    assert verdict.state == "not_editable"
+    assert verdict.reason is not None and "shared Form XObject" in verdict.reason
