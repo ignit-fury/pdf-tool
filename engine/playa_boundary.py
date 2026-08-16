@@ -482,7 +482,10 @@ def tiling_patterns(
     patterns = resolve1(resources.get("Pattern"))
     if not isinstance(patterns, dict):
         return out
-    for name, ref in patterns.items():
+    # Enumerated positionally: a PDF name can encode arbitrary bytes via #xx, so the
+    # resource name is attacker-controlled content and never reaches a log line. The
+    # index identifies the entry for debugging without carrying any of the document.
+    for index, ref in enumerate(patterns.values()):
         try:
             pattern = stream_value(resolve1(ref))
             if int_value(pattern.get("PatternType")) != 1:
@@ -496,7 +499,9 @@ def tiling_patterns(
                 )
             )
         except (TypeError, ValueError) as exc:
-            log.debug("pattern %r: unusable (%s); skipped", name, type(exc).__name__)
+            log.debug(
+                "pattern #%d: unusable (%s); skipped", index, type(exc).__name__
+            )
     return out
 
 
@@ -520,7 +525,9 @@ def type3_charprocs(
     fonts = resolve1(resources.get("Font"))
     if not isinstance(fonts, dict):
         return out
-    for name, ref in fonts.items():
+    # Positional for the same reason as tiling_patterns above -- the resource name is
+    # document-controlled bytes and stays out of the logs.
+    for index, ref in enumerate(fonts.values()):
         try:
             font = resolve1(ref)
             if not isinstance(font, dict) or font.get("Subtype") is None:
@@ -541,7 +548,9 @@ def type3_charprocs(
             for proc_name, proc_ref in charprocs.items():
                 out.append((proc_name, stream_value(resolve1(proc_ref)), sub_resources, child))
         except (TypeError, ValueError) as exc:
-            log.debug("font %r: unusable /CharProcs (%s); skipped", name, type(exc).__name__)
+            log.debug(
+                "font #%d: unusable /CharProcs (%s); skipped", index, type(exc).__name__
+            )
     return out
 
 

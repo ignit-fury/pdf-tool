@@ -33,7 +33,9 @@ is not reachable"). So the recursion is ours: `playa_boundary.walk_stream` yield
 `Do`-invoked Form XObjects and constructs a fresh interpreter for whichever ones we hand
 back to it.
 
-This runs on untrusted uploads, so descent is bounded twice over (T-02-02, T-02-03):
+This runs on untrusted uploads, so descent is bounded three ways -- T-02-02 and T-02-03
+from the plan's threat register, plus a third shape that register does not name and review
+found:
 
 - a **visited set built per branch** -- `parents | {stream_key}`, never a global set. The
   same Form XObject legitimately appears on many pages and often several times within one
@@ -42,10 +44,27 @@ This runs on untrusted uploads, so descent is bounded twice over (T-02-02, T-02-
 - an **explicit depth cap**, `MAX_RECURSION_DEPTH`, for the chain that is deep but not
   cyclic -- a 500-deep XObject chain is a Python recursion blow-up and no visited set
   stops it.
+- a **per-page stream budget**, `MAX_STREAMS_PER_PAGE`, for total work. See below.
 
-Hitting either aborts that ONE branch, logs objids/depths/counts only (never glyph text --
-T-02-04), and returns normally. Nothing propagates to the caller: a malicious XObject
-graph must not be able to fail a document that is otherwise fine.
+Hitting any of them aborts that ONE branch, logs objids/depths/counts only (never glyph
+text -- T-02-04), and returns normally. Nothing propagates to the caller: a malicious
+XObject graph must not be able to fail a document that is otherwise fine.
+
+## The third shape: exponential fan-out, which neither of the plan's two bounds catches
+
+`[MEASURED by review, on fixtures it built: each level `Do`-invoking the next TWICE.
+16 levels -> 65,535 records in 4.7s; 20 -> 1,048,575 in 85s; 22 -> 4,194,303 in 383s. A
+~7 KB file with 30 such objects is ~10^9 walks.]`
+
+Every branch of that graph is **acyclic**, so the per-branch visited set never fires -- no
+stream is ever its own ancestor. Every branch is **shallow**, so the depth cap never fires
+either. The work is nonetheless 2^levels, and `list(walk_document(doc))` -- which any run-map
+builder does -- OOMs. Two correct bounds, both looking at the shape of one path, and neither
+can see the size of the tree.
+
+So the third bound counts what the other two do not: `MAX_STREAMS_PER_PAGE`, spent by every
+level from one allowance shared across the whole page walk. This is a hosted service taking
+arbitrary uploads; a known DoS deferred is a known DoS shipped.
 
 ## Declared streams are siblings, walked once per page -- the bound the plan did not
 ## anticipate
@@ -83,9 +102,14 @@ cap, max depth 65. Queued: 424 walked, 0 aborted, max depth 0.]`
 A CharProc is a SIBLING of the 511 declared beside it, not a descendant. So `_walk_level`
 appends declared streams to a `pending` queue which `located_glyph_records` drains at its
 own top level, each keeping the depth of the level that declared it. Depth then measures
-only real nesting (`Do` inside `Do`), and 512 CharProcs cost one Python frame instead of
-512 -- which relabelling the depth counter alone would NOT have fixed, since nested
-generators consume the interpreter stack whatever number they are labelled with.
+only real nesting (`Do` inside `Do`), and N CharProcs cost one Python frame instead of N.
+
+Relabelling the depth counter alone would NOT have been enough, because nested generators
+consume the interpreter stack whatever number they are labelled with -- it only moves the
+cliff. `[MEASURED by review, relabel-only variant vs the shipped queue: 300 / 424 (the real
+document) / 500 / 700 CharProcs all complete either way; at 1,000 the relabel-only variant
+raises RecursionError while the queue completes, and the queue still completes at 3,000.]`
+A large CJK Type3 font is squarely in that range.
 
 ## Where the two "local, not buffer" provenance fields come from
 
@@ -144,6 +168,17 @@ INVISIBLE_RENDER_MODES = frozenset({3, 7})
 # three per level.
 MAX_RECURSION_DEPTH = 64
 
+# Bounds TOTAL WORK on one page, which neither of the other two bounds can (see the module
+# docstring's "The third shape: exponential fan-out").
+#
+# `[MEASURED: the worst page in the whole 217-document corpus walks 523 streams
+# (govdocs1_004_004050.pdf page 2, a 512-CharProc Type3 font); the runner-up is
+# govdocs1_009_009097.pdf page 13 at 478. Sampled over all 8,247 corpus pages.]`
+#
+# 8192 is ~15x the measured worst case -- comfortably above any real document while still
+# turning a 2^n fan-out from "OOM" into "returns immediately".
+MAX_STREAMS_PER_PAGE = 8192
+
 
 @dataclass(frozen=True, slots=True)
 class StreamPath:
@@ -201,6 +236,27 @@ def _assert_glyph_alignment(n_glyphs: int, n_positions: int, part_index: int) ->
         f"but the operand walk produced {n_positions} position(s). A font's decoder and "
         f"its CMap disagree on byte consumption -- do not trust byte_offset_within_string."
     )
+
+
+class _Budget:
+    """One page walk's remaining stream allowance, and whether exhaustion was logged yet.
+
+    Mutable and shared down the whole page walk, exactly like `declared_seen`: the bound is
+    on the page's TOTAL work, so every level spends from the same allowance regardless of
+    which branch it sits on.
+
+    Exhaustion is logged ONCE. Every abandoned branch logging its own line would be
+    thousands of records on precisely the hostile document the budget exists to survive --
+    a log-flood built out of the DoS mitigation.
+    """
+
+    def __init__(self, limit: int) -> None:
+        self.left = limit
+        self.reported = False
+
+    def spend(self) -> bool:
+        self.left -= 1
+        return self.left >= 0
 
 
 class _Declared(NamedTuple):
@@ -304,6 +360,23 @@ def glyph_records(page: Page, doc: Document) -> list[GlyphRecord]:
     return [rec for op in walk_page(page, doc) for rec in _op_records(op, fonts)]
 
 
+def _skip_direct_declared(kind: str, page_index: int) -> None:
+    """A declared stream with no objid cannot be walked, and must not be given one.
+
+    `stream_key`'s (-1, 0) floor is inert for `Do` targets -- those are indirect by
+    construction -- but declared streams are resolved out of a /Resources dictionary, so a
+    malformed document can present two direct streams there. Folding both onto (-1, 0)
+    would have `declared_seen` silently eat the second, and the resulting `/t-1` path
+    segment does not match `_RUN_ID_RE`'s `\\d+` anyway: the record would be unaddressable
+    even if it were produced. Skipping loudly beats minting a broken address.
+    """
+    log.warning(
+        "declared %s stream has no objid (page %d); unaddressable, skipped",
+        kind,
+        page_index,
+    )
+
+
 def _walk_level(
     page: Page,
     doc: Document,
@@ -318,6 +391,7 @@ def _walk_level(
     parents: frozenset[tuple[int, int]],
     declared_seen: set[tuple[int, int]],
     pending: deque[_Declared],
+    budget: _Budget,
     depth: int,
     fonts: _FontIds,
 ) -> Iterator[tuple[StreamPath, GlyphRecord]]:
@@ -328,6 +402,17 @@ def _walk_level(
     /Contents (which is entered exactly once and has no objid of its own). Both bounds are
     enforced here, in one place, so no caller can descend without them.
     """
+    if not budget.spend():
+        # The fan-out bound. Counts and a page index only -- never glyph text (T-02-04).
+        if not budget.reported:
+            budget.reported = True
+            log.warning(
+                "stream budget: page %d exceeded MAX_STREAMS_PER_PAGE=%d; every branch "
+                "still outstanding is abandoned (logged once)",
+                path.page,
+                MAX_STREAMS_PER_PAGE,
+            )
+        return
     if key is not None:
         if key in parents:
             # T-02-02. objid, depth and the branch kind only -- never glyph text (T-02-04).
@@ -375,6 +460,7 @@ def _walk_level(
                 parents=parents,
                 declared_seen=declared_seen,
                 pending=pending,
+                budget=budget,
                 depth=depth + 1,
                 fonts=fonts,
             )
@@ -387,6 +473,9 @@ def _walk_level(
     # siblings". They keep this level's `depth` and this branch's `parents`, and the page
     # walk drains them at its own top level, so 512 CharProcs cost one frame, not 512.
     for pattern, sub_resources, pattern_ctm in tiling_patterns(resources, ctm):
+        if pattern.objid is None:
+            _skip_direct_declared("pattern", path.page)
+            continue
         pattern_key = stream_key(pattern)
         if pattern_key in declared_seen:
             continue
@@ -403,6 +492,9 @@ def _walk_level(
             )
         )
     for name, proc, sub_resources, proc_ctm in type3_charprocs(resources, ctm):
+        if proc.objid is None:
+            _skip_direct_declared("charproc", path.page)
+            continue
         proc_key = stream_key(proc)
         if proc_key in declared_seen:
             continue
@@ -439,6 +531,7 @@ def located_glyph_records(
     fonts = _FontIds()
     declared_seen: set[tuple[int, int]] = set()
     pending: deque[_Declared] = deque()
+    budget = _Budget(MAX_STREAMS_PER_PAGE)
     path = StreamPath(page=page_index)
     yield from _walk_level(
         page,
@@ -451,6 +544,7 @@ def located_glyph_records(
         parents=frozenset(),
         declared_seen=declared_seen,
         pending=pending,
+        budget=budget,
         depth=0,
         fonts=fonts,
     )
@@ -466,6 +560,7 @@ def located_glyph_records(
             parents=frozenset(),
             declared_seen=declared_seen,
             pending=pending,
+            budget=budget,
             depth=1,
             fonts=fonts,
         )
@@ -486,6 +581,7 @@ def located_glyph_records(
             parents=item.parents,
             declared_seen=declared_seen,
             pending=pending,
+            budget=budget,
             depth=item.depth,
             fonts=fonts,
         )
@@ -507,6 +603,7 @@ def walk_document(doc: Document) -> Iterator[tuple[StreamPath, GlyphRecord]]:
 
 __all__ = [
     "MAX_RECURSION_DEPTH",
+    "MAX_STREAMS_PER_PAGE",
     "StreamPath",
     "glyph_records",
     "located_glyph_records",

@@ -28,6 +28,7 @@ from engine.run_id import encode_run_id, resolve_run_id_offset
 from engine.shared_xobjects import shared_form_xobjects
 from engine.walker import (
     MAX_RECURSION_DEPTH,
+    MAX_STREAMS_PER_PAGE,
     StreamPath,
     located_glyph_records,
     walk_document,
@@ -598,3 +599,55 @@ def test_walk_document_completes_across_the_corpus_categories() -> None:
     # Completing is the criterion; these confirm the walk actually reached outside
     # /Contents on this set rather than completing by finding nothing.
     assert outside["xobj"] > 0 and outside["annot"] > 0
+
+
+def test_doubling_fan_out_is_bounded_by_the_stream_budget(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The XObject bomb: every level `Do`-invokes the next TWICE.
+
+    Every branch is acyclic, so the per-branch visited set never fires; every branch is
+    shallow (16 <= 64), so the depth cap never fires. The work is still 2^levels. Review
+    measured the unbounded shape at 65,535 records / 4.7s for 16 levels, 4,194,303 / 383s
+    for 22, and ~10^9 walks for a ~7 KB file with 30 such objects -- `list(walk_document())`
+    OOMs. Two correct bounds, both reading the shape of one path, neither able to see the
+    size of the tree.
+
+    `MAX_STREAMS_PER_PAGE` counts what they cannot. Every level spends one unit from a
+    single per-page allowance, so the walk stops at 8,192 levels: 8,191 records here,
+    because the page's own /Contents shows no text and every Form XObject shows one glyph.
+
+    MUTATION (ran it): delete the `budget.spend()` check at the top of `_walk_level`. This
+    test yields 65,535 records instead of 8,191 and takes ~8x as long; at 22 levels the same
+    mutation takes 383s, and at 30 it does not finish.
+    """
+    levels = 16
+    pdf = pikepdf.Pdf.new()
+    link = _form(
+        pdf, _show(b"z"), pikepdf.Dictionary(Font=pikepdf.Dictionary(Helv=_helvetica()))
+    )
+    for _ in range(levels - 1):
+        parent = _form(
+            pdf,
+            _show(b"z") + b"/Fn Do\n/Fn Do\n",
+            pikepdf.Dictionary(Font=pikepdf.Dictionary(Helv=_helvetica())),
+        )
+        parent.Resources.XObject = pikepdf.Dictionary(Fn=link)
+        link = parent
+    page = pdf.add_blank_page(page_size=(200, 200))
+    page.Contents = pdf.make_stream(b"/F0 Do\n")
+    page.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(F0=link))
+
+    with caplog.at_level(logging.WARNING, logger="engine.walker"):
+        records = list(walk_document(_parse(pdf)))
+
+    assert len(records) == MAX_STREAMS_PER_PAGE - 1, (
+        f"the budget bounds the walk at {MAX_STREAMS_PER_PAGE} levels; "
+        f"unbounded this fixture yields {2**levels - 1}"
+    )
+    budget_lines = [m for m in caplog.messages if "stream budget" in m]
+    assert len(budget_lines) == 1, (
+        "exhaustion is logged exactly once -- a line per abandoned branch would be a "
+        "log flood built out of the DoS mitigation itself"
+    )
+    assert "z" not in budget_lines[0], "T-02-04: no glyph text in logs"
