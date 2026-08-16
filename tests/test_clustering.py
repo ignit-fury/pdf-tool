@@ -116,17 +116,46 @@ def test_size_change_under_one_percent_does_not_break_run() -> None:
     assert runs[0].display_text == "AB"
 
 
-def test_rise_change_breaks_run() -> None:
-    """A superscript is a rise (Ts) change with no horizontal reset -- D-01's "baseline/rise
-    shift" break condition. `y` differs only slightly (well inside the 0.2em band tolerance,
-    so the two glyphs land in the SAME baseline band) so this isolates the explicit rise
-    check as the mechanism, rather than incidental band separation."""
+def test_large_rise_change_breaks_run() -> None:
+    """CONTROLLER CORRECTION 2026-08-14 (pre-Task-3, .superpowers/sdd/02-01-PLAN/progress.md):
+    this test originally asserted that a 3.0 rise delta on a 12.0 em (a fraction of 0.25 em,
+    well UNDER the 0.5em line-break threshold, with forward advance intact) broke the run --
+    that is a textbook SUPERSCRIPT per Section 3, and should NOT break. The docstring even
+    named "no horizontal reset" as the condition while asserting a break, which is the
+    superscript rule's own negation. Renamed and re-fixtured to an unambiguous line-break
+    case: a rise delta of 7.0 on a 12.0 em is 0.583 em, past the 0.5em threshold -- a real
+    baseline shift, not a superscript, and must break regardless of forward advance.
+    `y` differs only slightly (well inside the 0.2em band tolerance, so the two glyphs land
+    in the SAME baseline band) so this isolates the explicit rise/superscript check as the
+    mechanism, rather than incidental band separation. See
+    test_small_rise_change_with_forward_advance_does_not_break_run for the superscript
+    positive case this correction made possible.
+    """
     located = [
         (PATH0, _record(x=0.0, y=100.0, unicode="A", byte_offset=10), _attrs(rise=0.0)),
-        (PATH0, _record(x=10.0, y=101.0, unicode="2", byte_offset=16), _attrs(rise=3.0)),
+        (PATH0, _record(x=10.0, y=101.0, unicode="2", byte_offset=16), _attrs(rise=7.0)),
     ]
     runs = cluster_page(0, located, FAKE_HASH, _accept_all)
     assert [r.display_text for r in runs] == ["A", "2"]
+
+
+def test_small_rise_change_with_forward_advance_does_not_break_run() -> None:
+    """The superscript case Section 3 names explicitly: `Ts` becomes nonzero (rise 0.0 ->
+    3.0, a fraction of 0.25 em on a 12.0 em -- under the 0.5em threshold) WITH forward
+    advance intact (x continues 0.0 -> 10.0, no horizontal reset). D-01/D-02: this must
+    stay ONE run, not split into a base run and a superscript run.
+
+    MUTATION: reverting `_is_line_break_not_superscript` to `attrs.rise !=
+    prev_attrs.rise` (unconditional) turns this red -- confirmed by running it against the
+    pre-correction predicate before restoring the fix.
+    """
+    located = [
+        (PATH0, _record(x=0.0, y=100.0, unicode="x", byte_offset=10), _attrs(rise=0.0)),
+        (PATH0, _record(x=10.0, y=100.0, unicode="2", byte_offset=16), _attrs(rise=3.0)),
+    ]
+    runs = cluster_page(0, located, FAKE_HASH, _accept_all)
+    assert len(runs) == 1
+    assert runs[0].display_text == "x2"
 
 
 def test_visibility_transition_breaks_run() -> None:

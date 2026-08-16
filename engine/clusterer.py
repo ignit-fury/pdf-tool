@@ -66,6 +66,12 @@ SIZE_CHANGE_TOLERANCE = 0.01
 # Research Section 3 / the pdf.js negativeSpaceMax rule: "backwards by more than 0.2 x fs".
 REVERSAL_TOLERANCE_EM = 0.2
 
+# Research Section 3, "Superscript vs. line break": "a line break has |Delta y| >= 0.5 x fs".
+# A rise change alone is NOT a break -- only a horizontal reset (no forward advance) or a
+# rise delta at or past this fraction of the em is. Below it, with forward advance intact,
+# is exactly a superscript: state changed (Ts), position did not reset.
+SUPERSCRIPT_RISE_TOLERANCE_EM = 0.5
+
 _GlyphItem = tuple[GlyphRecord, ClusterAttrs]
 
 
@@ -148,6 +154,30 @@ def _gaps_em(ordered: list[_GlyphItem]) -> list[float]:
     return gaps
 
 
+def _is_line_break_not_superscript(
+    attrs: ClusterAttrs, prev_attrs: ClusterAttrs, gap_em: float
+) -> bool:
+    """Research Section 3, "Superscript vs. line break": a rise (`Ts`) change alone is not
+    a break. `gstate.rise` is checked FIRST per Assumption A2's Ts-first heuristic -- no
+    rise change at all means no superscript question to ask.
+
+    A superscript is `Ts` becoming nonzero (or changing) WITH forward advance intact
+    (`gap_em > 0`, no horizontal reset) AND a small delta (`< 0.5 x em`). Anything else
+    that changes `rise` -- a horizontal reset, or a delta at or past the 0.5em threshold
+    -- is a genuine line break, matching the plan's own Task 2 wording exactly: "a line
+    break is a horizontal reset or a rise of over 0.5 times font size".
+    """
+    if attrs.rise == prev_attrs.rise:
+        return False
+    # Strictly negative: a gap of exactly 0.0 is two glyphs touching with normal forward
+    # advance (prev glyph's own advance lands exactly on the next glyph's origin), not a
+    # reset. Section 3's "Delta x < 0 (carriage return)" is a genuine backward jump.
+    horizontal_reset = gap_em < 0.0
+    em = attrs.effective_em
+    large_shift = em > 0 and abs(attrs.rise - prev_attrs.rise) >= SUPERSCRIPT_RISE_TOLERANCE_EM * em
+    return horizontal_reset or large_shift
+
+
 def _split_logical_runs(ordered: list[_GlyphItem], gaps: list[float]) -> list[tuple[int, int]]:
     """Step 2 (D-01): the break-cause table, walked once over the band's own reading-order
     sequence (already sorted by `cluster_page` -- Pitfall 3). Returns half-open `[start,
@@ -175,7 +205,7 @@ def _split_logical_runs(ordered: list[_GlyphItem], gaps: list[float]) -> list[tu
             record.font_id != prev_record.font_id
             or abs(attrs.effective_em - prev_attrs.effective_em)
             > SIZE_CHANGE_TOLERANCE * prev_attrs.effective_em
-            or attrs.rise != prev_attrs.rise
+            or _is_line_break_not_superscript(attrs, prev_attrs, gap_em)
             # D-01: the derived `visible` boolean, NEVER raw render_mode -- Tr 0/1/2 are
             # all visible and must cluster together; only crossing Tr 3/Tr 7 breaks.
             or record.visible != prev_record.visible
