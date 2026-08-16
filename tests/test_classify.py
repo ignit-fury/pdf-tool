@@ -115,30 +115,29 @@ def test_editable_fixture() -> None:
         assert classify_page(records, page) == "editable"
 
 
-def test_vector_outlined_fixture_path_count_below_assumed_threshold() -> None:
-    """FINDING, not a fixed assertion: 02-02's vector_outlined_text_sample.pdf renders
-    one short line ("OUTLINED VECTOR TEXT", 18 letters), and each letter closes exactly
-    one filled path (confirmed: `_path_object_count` returns 18, matching the fixture's
-    own disclosed 18 `f` operators). 02-RESEARCH.md Section 7's `[ASSUMED: P ~= 200]`
-    reasons from "a page of outlined body text" (hundreds of glyphs) -- this fixture is a
-    single demonstration line, not a full page, so it does not and should not cross that
-    threshold. The discriminator's counting mechanism is proven correct here (one path
-    object per glyph, exactly); P's calibration against a realistic full page of
-    vector-outlined text remains unvalidated, because no such fixture exists in the
-    corpus (02-RESEARCH.md Section 7: "No vector-outlined-text page exists in the
-    corpus", 0 candidates across all 216 documents).
+def test_vector_outlined_fixture_path_count_crosses_threshold() -> None:
+    """RESOLVED FINDING (2026-08-16, controller, pre-02-08-Task-2): the original
+    vector_outlined_text_sample.pdf rendered one short line ("OUTLINED VECTOR TEXT", 18
+    letters, 18 filled paths) -- a demonstration case, not the page-scale sample
+    02-RESEARCH.md Section 7's `[ASSUMED: P ~= 200]` reasons from ("a page of outlined
+    body text produces one path object per glyph, so hundreds"). It classified `empty`,
+    not `vector_outlined`, which would have blocked 02-08 Task 2's own acceptance
+    criterion.
 
-    Do not raise this to a positive vector_outlined assertion by lowering
-    P_PATH_OBJECT_THRESHOLD to fit this one fixture -- that would be exactly the
-    test-fitting this project's validation strategy forbids.
+    Fixed by EXTENDING the fixture, never by lowering `P_PATH_OBJECT_THRESHOLD` to fit
+    one small file -- that would be exactly the test-fitting this project's validation
+    strategy forbids. The corpus fixture now repeats the same glyph-outline construction
+    12 times (216 glyphs, 216 `f` operators, same method, same licence, same disclosure
+    -- see corpus/manifest.json's updated notes), a genuinely page-scale sample that
+    crosses P on its own terms.
     """
     with playa.open(str(VECTOR_OUTLINED_SAMPLE)) as doc:
         page = doc.pages[0]
         count = _path_object_count(page)
-        assert count == 18
-        assert count < P_PATH_OBJECT_THRESHOLD
+        assert count == 216
+        assert count >= P_PATH_OBJECT_THRESHOLD
         records = glyph_records(page, doc)
         # Zero glyphs (it's outlined, not drawn text) and zero image coverage, so the
-        # only discriminator in play is path_object_count -- below P, so "empty", not
-        # "vector_outlined".
-        assert classify_page(records, page) == "empty"
+        # only discriminator in play is path_object_count -- at/above P, so
+        # "vector_outlined", not "empty".
+        assert classify_page(records, page) == "vector_outlined"
