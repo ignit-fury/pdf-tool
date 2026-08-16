@@ -12,8 +12,10 @@ No document content (page text, counts derived from it) appears in assertion mes
 per this project's standing convention.
 """
 
+import tempfile
 from pathlib import Path
 
+import pikepdf
 import playa
 import pytest
 
@@ -116,28 +118,68 @@ def test_editable_fixture() -> None:
 
 
 def test_vector_outlined_fixture_path_count_crosses_threshold() -> None:
-    """RESOLVED FINDING (2026-08-16, controller, pre-02-08-Task-2): the original
-    vector_outlined_text_sample.pdf rendered one short line ("OUTLINED VECTOR TEXT", 18
-    letters, 18 filled paths) -- a demonstration case, not the page-scale sample
-    02-RESEARCH.md Section 7's `[ASSUMED: P ~= 200]` reasons from ("a page of outlined
-    body text produces one path object per glyph, so hundreds"). It classified `empty`,
-    not `vector_outlined`, which would have blocked 02-08 Task 2's own acceptance
-    criterion.
+    """RESOLVED FINDING (2026-08-16, controller, pre-02-08-Task-2, revised after task
+    review): the original vector_outlined_text_sample.pdf rendered one short line
+    ("OUTLINED VECTOR TEXT", 18 letters, 18 filled paths) -- a demonstration case, not
+    the page-scale sample 02-RESEARCH.md Section 7's `[ASSUMED: P ~= 200]` reasons from
+    ("a page of outlined body text produces one path object per glyph, so hundreds"). It
+    classified `empty`, not `vector_outlined`, which would have blocked 02-08 Task 2's
+    own acceptance criterion.
 
     Fixed by EXTENDING the fixture, never by lowering `P_PATH_OBJECT_THRESHOLD` to fit
     one small file -- that would be exactly the test-fitting this project's validation
-    strategy forbids. The corpus fixture now repeats the same glyph-outline construction
-    12 times (216 glyphs, 216 `f` operators, same method, same licence, same disclosure
-    -- see corpus/manifest.json's updated notes), a genuinely page-scale sample that
-    crosses P on its own terms.
+    strategy forbids. A first regeneration (12 lines, 216 fills) crossed P but only by an
+    8% margin and was fairly flagged on review as itself still threshold-adjacent; the
+    fixture now repeats the same glyph-outline construction 60 times (1080 glyphs, 1080
+    `f` operators, same method, same licence, same disclosure -- see
+    corpus/manifest.json's updated notes), 5.4x the threshold on the only count
+    `_path_object_count` actually computes (fill operators only, never the construction
+    operators `m`/`l`/`c`).
     """
     with playa.open(str(VECTOR_OUTLINED_SAMPLE)) as doc:
         page = doc.pages[0]
         count = _path_object_count(page)
-        assert count == 216
+        assert count == 1080
         assert count >= P_PATH_OBJECT_THRESHOLD
         records = glyph_records(page, doc)
         # Zero glyphs (it's outlined, not drawn text) and zero image coverage, so the
         # only discriminator in play is path_object_count -- at/above P, so
         # "vector_outlined", not "empty".
         assert classify_page(records, page) == "vector_outlined"
+
+
+def test_low_path_count_classifies_empty() -> None:
+    """The lower-side P guard (review finding, both on the task and on 88bece7 --
+    deleted without replacement when the original below-threshold test was resolved).
+    A synthetic page with zero glyphs, zero image coverage, and a path count well under
+    P_PATH_OBJECT_THRESHOLD -- built inline, not `tests/fixtures/render_mode_7.pdf`,
+    which carries glyphs and is the wrong shape for isolating this branch -- must
+    classify `empty`, not `vector_outlined`.
+
+    MUTATION: lowering P_PATH_OBJECT_THRESHOLD to 3 (below this fixture's 5 fills) turns
+    this red -- confirmed by running it against the mutated threshold before restoring
+    (10 was tried first and did NOT redden it, since 5 < 10 still holds; the mutation
+    must cross below the fixture's own count, not merely below the real threshold).
+    """
+    pdf = pikepdf.Pdf.new()
+    page = pdf.add_blank_page(page_size=(200, 200))
+    # Five trivial triangle fills, drawn via m/l/h/f rather than the `re` shorthand --
+    # _path_object_count groups `re` in with the painting operators (controller ruling
+    # 5), so this isolates a plain count of 5 `f`s, one per shape, unambiguously.
+    def _triangle(i: int) -> str:
+        x = i * 10
+        return f"{x} {x} m {x+5} {x} l {x+2} {x+5} l h f"
+
+    content = "0 0 0 rg\n" + "\n".join(_triangle(i) for i in range(5)) + "\n"
+    page.Contents = pdf.make_stream(content.encode("latin-1"))
+    page.Resources = pikepdf.Dictionary({})
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf") as tmp:
+        pdf.save(tmp.name)
+        pdf.close()
+        with playa.open(tmp.name) as doc:
+            playa_page = doc.pages[0]
+            assert _path_object_count(playa_page) == 5
+            assert _path_object_count(playa_page) < P_PATH_OBJECT_THRESHOLD
+            records = glyph_records(playa_page, doc)
+            assert classify_page(records, playa_page) == "empty"

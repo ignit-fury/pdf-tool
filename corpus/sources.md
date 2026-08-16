@@ -105,11 +105,21 @@ outlines for the string "OUTLINED VECTOR TEXT" were extracted from the already-b
 `fontTools.pens.qu2cuPen.Qu2CuPen` to convert the font's quadratic (`glyf`-table) curves to the
 cubic Béziers PDF content streams require, then written directly as a page content stream of
 `m`/`l`/`c`/`f` path-fill operators via pikepdf — no text-showing operator, no font resource, no
-image XObject. Structurally verified: `/Resources` is an empty dict (zero `/Font`, zero
-`/XObject`), the content stream has 227 total `m`/`l`/`c`/`f` operators (well over the 200
-threshold) and no `BT`, `qpdf --check` passes clean, and the page renders as the legible line
-"OUTLINED VECTOR TEXT" with no other content. This is a from-scratch content stream built for the
-corpus fixture, not the product's own text-rewrite path, and not an annotation/overlay technique.
+image XObject. `/Resources` is an empty dict (zero `/Font`, zero `/XObject`) and there is no `BT`.
+
+**Revised 2026-08-16** after two rounds of task review on `engine/classify_page.py`: the first
+construction (one line, 18 glyphs) classified `empty`, not `vector_outlined` — 18 path-fill
+operators does not cross `classify_page.py`'s `P_PATH_OBJECT_THRESHOLD ~= 200`. A first
+regeneration (12 lines, 216 fills) technically crossed it but only by an 8% margin, and its own
+disclosure overstated the safety margin by citing a total-operator count (`m`+`l`+`c`+`f`) that
+`classify_page.py` never computes — `_path_object_count` counts only path-**painting** operators
+(`f`, ISO 32000-1 Table 60), never path-**construction** operators (`m`/`l`/`c`, Table 59's
+segment-drawing commands). The number that matters is the fill count alone. Regenerated once more
+at genuine page scale: 60 repeated lines, 1080 glyphs, **1080 `f` operators — 5.4x the threshold on
+the only count the classifier actually uses.** `qpdf --check` passes clean and the page renders as
+60 legible lines reading "OUTLINED VECTOR TEXT" with no other content. This is a from-scratch
+content stream built for the corpus fixture, not the product's own text-rewrite path, and not an
+annotation/overlay technique.
 
 ## Category labels
 

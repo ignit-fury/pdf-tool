@@ -147,11 +147,15 @@ def classify_page(glyph_records: list[GlyphRecord], page: Page) -> Bucket:
     """
     x0, y0, x1, y1 = page.cropbox
 
-    def _visible(rec: GlyphRecord) -> bool:
-        return rec.visible and x0 <= rec.x <= x1 and y0 <= rec.y <= y1
+    def _in_cropbox(rec: GlyphRecord) -> bool:
+        return x0 <= rec.x <= x1 and y0 <= rec.y <= y1
 
-    visible = sum(1 for r in glyph_records if _visible(r))
-    invisible = sum(1 for r in glyph_records if not r.visible)
+    # CORRECTED (review of 88bece7): both counts apply signal 1's CropBox approximation
+    # symmetrically, matching this module's own docstring ("both counts as defined by
+    # signal 1 above") -- the original only applied it to `visible`, so a glyph entirely
+    # outside the CropBox was silently counted toward `invisible` regardless.
+    visible = sum(1 for r in glyph_records if r.visible and _in_cropbox(r))
+    invisible = sum(1 for r in glyph_records if not r.visible and _in_cropbox(r))
     coverage = image_coverage(page)
 
     if visible > 0:
