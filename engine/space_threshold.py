@@ -66,9 +66,40 @@ MANIFEST = REPO_ROOT / "corpus" / "manifest.json"
 # silent try/except: a third document joining them must be a visible change.
 KNOWN_UNWALKABLE = frozenset({"irs_form_w9_encrypted.pdf", "govdocs1_011_011089.pdf"})
 
-# PLACEHOLDER -- replaced by the measured argmax in the next commit.
+# [VERIFIED: measured 2026-08-14] Full public corpus, not the 25-document prototype.
+#
+#   corpus            215 documents walked (217 minus KNOWN_UNWALKABLE), 408 pages
+#   ground truth      91,481 real-space gaps (positive), 552,295 intra-word gaps (negative)
+#   sweep             0.005 .. 1.000 em, step 0.005 (200 points)
+#   argmax F1         K_EM = 0.100
+#     F1              0.9795
+#     precision       0.9820
+#     recall          0.9770
+#     false positives 0.00296 (0.30% of intra-word gaps)
+#   gap distribution  negative p99 0.0169 em, negative p999 0.3260 em
+#                     positive p10 0.2260, p50 0.2736, p90 0.4100 em
+#
+# BREAK_EM sits at the negative p999 (0.3260, rounded up to 0.33): a gap wider than
+# 99.9% of measured intra-word gaps is a run break, not a space. The two constants are
+# deliberately NOT the same number -- K_EM separates "space" from "no space" inside a run,
+# BREAK_EM separates "still the same run" from "new run".
+#
+# THREE DISAGREEMENTS with 02-RESEARCH.md Section 4's 25-document prototype, recorded
+# rather than silently replacing it:
+#   1. Optimum: prototype said 0.10-0.15 em. CONFIRMED -- argmax is 0.100, and the curve is
+#      genuinely flat across that band (F1 0.9795 at 0.100 vs 0.9757 at 0.150).
+#   2. False-positive floor: prototype said FPR floors at 1.6%. MEASURED 0.30%, five times
+#      better. The prototype's floor was a small-sample artifact.
+#   3. No-space-glyph documents: prototype said 12%. MEASURED 21.4% (46 of 215). The honest
+#      limitation is nearly twice as large as recorded -- see LEXICON below.
+#
+# LEXICON (secondary metric, the no-space-glyph subset only; /usr/share/dict/words present):
+#   46 documents, 27,734 alphabetic tokens of length >= 2, 21,084 in the word list
+#   hit rate 0.7602, singleton rate 0.3458
+# This subset contributes NO ground truth to the sweep above, so K_EM's F1 says nothing
+# about it. 0.76 is the only evidence that the tuned constant generalises there.
 K_EM = 0.10
-BREAK_EM = 0.62
+BREAK_EM = 0.33
 
 # Swept range and step. 0.005 resolves the optimum an order of magnitude finer than the
 # 0.05-step prototype curve in 02-RESEARCH.md Section 4; 1.0 is well past the point where
