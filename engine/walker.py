@@ -152,7 +152,8 @@ from engine.playa_boundary import (
     walk_page,
     walk_stream,
 )
-from engine.records import GlyphRecord
+from engine.records import ClusterAttrs, GlyphRecord
+from engine.space_threshold import effective_em
 from engine.types import CharCode, Unicode
 
 log = logging.getLogger(__name__)
@@ -302,8 +303,13 @@ class _FontIds:
         return self._ids[key]
 
 
-def _op_records(op: TextOp, fonts: _FontIds) -> Iterator[GlyphRecord]:
-    """One fully-populated GlyphRecord per glyph of one text-showing operator."""
+def _op_records(
+    op: TextOp, fonts: _FontIds
+) -> Iterator[tuple[GlyphRecord, ClusterAttrs]]:
+    """One fully-populated (GlyphRecord, ClusterAttrs) pair per glyph of one
+    text-showing operator, built in a single pass so the two can never drift out of
+    alignment with each other -- unlike a second parallel walk, there is no ordinal to
+    keep in sync."""
     part_offset, part_index, operands, text_obj = op
     # A TextObject iterates GlyphObjects at runtime; playa types __iter__ generically
     # as ContentObject, so narrow explicitly rather than reaching through Any.
@@ -326,10 +332,15 @@ def _op_records(op: TextOp, fonts: _FontIds) -> Iterator[GlyphRecord]:
 
     _assert_glyph_alignment(len(glyphs), len(positions), part_index)
 
+    # Constant across every glyph of one text-showing operator (Tf/Tm/Tz are their own
+    # operators), so computed once rather than per glyph. This IS the em D-03 tuned
+    # K_EM/BREAK_EM against -- never gstate.fontsize (Pitfall 1).
+    em = effective_em(text_obj)
+
     for glyph, (item_index, byte_off) in zip(glyphs, positions):
         gs = glyph.gstate
         matrix = glyph.matrix
-        yield GlyphRecord(
+        record = GlyphRecord(
             code=CharCode(glyph.cid),
             # playa exposes no glyph index; the code->glyph forward map is
             # 02-06's encoding table. None here is the documented legitimate
@@ -347,6 +358,15 @@ def _op_records(op: TextOp, fonts: _FontIds) -> Iterator[GlyphRecord]:
             item_index_within_tj=item_index,
             byte_offset_within_string=byte_off,
         )
+        attrs = ClusterAttrs(
+            # Non-stroking colour is fill colour (D-01). A plain tuple, never playa's
+            # Color type, so no playa import is needed outside playa_boundary.py.
+            fill_color=(tuple(gs.ncolor.values), gs.ncolor.pattern),
+            rise=gs.rise,
+            effective_em=em,
+            direction=(matrix[0], matrix[1]),
+        )
+        yield record, attrs
 
 
 def glyph_records(page: Page, doc: Document) -> list[GlyphRecord]:
@@ -357,7 +377,15 @@ def glyph_records(page: Page, doc: Document) -> list[GlyphRecord]:
     addressable at all. See `located_glyph_records`.
     """
     fonts = _FontIds()
-    return [rec for op in walk_page(page, doc) for rec in _op_records(op, fonts)]
+    return [rec for op in walk_page(page, doc) for rec, _attrs in _op_records(op, fonts)]
+
+
+def cluster_records(page: Page, doc: Document) -> list[tuple[GlyphRecord, ClusterAttrs]]:
+    """`glyph_records`, paired with the clustering attributes (02-07) GlyphRecord's fixed
+    13 fields do not carry -- fill colour, rise, effective em, line direction. Page's own
+    /Contents only, matching `glyph_records`' scope exactly."""
+    fonts = _FontIds()
+    return [pair for op in walk_page(page, doc) for pair in _op_records(op, fonts)]
 
 
 def _skip_direct_declared(kind: str, page_index: int) -> None:
@@ -465,7 +493,7 @@ def _walk_level(
                 fonts=fonts,
             )
         else:
-            for record in _op_records(item, fonts):
+            for record, _attrs in _op_records(item, fonts):
                 yield path, record
 
     # Streams reached through this level's /Resources rather than through an operator are
@@ -605,6 +633,7 @@ __all__ = [
     "MAX_RECURSION_DEPTH",
     "MAX_STREAMS_PER_PAGE",
     "StreamPath",
+    "cluster_records",
     "glyph_records",
     "located_glyph_records",
     "walk_document",
