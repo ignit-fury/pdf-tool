@@ -54,7 +54,7 @@ import pikepdf
 from engine.classify_page import Bucket, classify_page
 from engine.clusterer import cluster_page
 from engine.encoding_table import FontVerdict, GlyphVerdict, glyph_verdict, resolve_font
-from engine.playa_boundary import open_document
+from engine.playa_boundary import Document, Page, open_document
 from engine.records import GlyphRecord, RunRecord
 from engine.shared_xobjects import shared_form_xobjects
 from engine.walker import StreamPath, located_cluster_records
@@ -226,10 +226,78 @@ def classify_run(
     return RunVerdict(state)
 
 
+def _classify_one_page(
+    pdf: pikepdf.Pdf,
+    doc: Document,
+    page: Page,
+    page_index: int,
+    shared_xobject_ids: dict[int, int],
+    font_cache: dict[tuple[tuple[int, int], bytes], FontVerdict],
+) -> tuple[Bucket, list[tuple[RunRecord, RunVerdict]], int]:
+    """The per-page pipeline body: walk -> resolve fonts -> cluster -> classify, for ONE
+    page. Extracted from `classify_document`'s own loop (02-09-PLAN.md Task 1 brief,
+    ruling 1) so `engine.index.RunIndex.page(n)` can run the identical logic lazily,
+    one page at a time and cached, instead of duplicating it. `classify_document` below
+    is now a thin loop calling this once per page -- a mechanical extraction, not a
+    behaviour change, which is why every pre-existing `tests/test_classify.py` assertion
+    still holds unmodified.
+
+    Returns `(bucket, runs, glyph_count)`. `glyph_count` is the page's own total located-
+    glyph count (every location, visible and invisible) -- `classify_document` has no use
+    for it and discards it; `RunIndex` uses it as the unit its LRU-by-glyph-count cache
+    budget (D-06) is denominated in.
+    """
+    located = list(located_cluster_records(page, page_index, doc))
+    glyph_only = [record for _path, record, _attrs in located]
+    bucket = classify_page(glyph_only, page)
+
+    # Resolved once per glyph, before clustering -- see module docstring. A closure-local
+    # dict keyed by id(glyph) is safe here: it is built and fully consumed within this
+    # one page's call, never stored or compared beyond it, unlike a persisted
+    # GlyphRecord-keyed structure.
+    glyph_font: dict[int, FontVerdict] = {}
+    glyph_path: dict[int, tuple[int, ...]] = {}
+    for stream_path, record, _attrs in located:
+        glyph_font[id(record)] = _resolve_font_for_glyph(
+            pdf, page_index, stream_path, record, font_cache
+        )
+        glyph_path[id(record)] = stream_path.xobj_path
+
+    def _verdict_fn(record: GlyphRecord) -> GlyphVerdict:
+        return glyph_verdict(glyph_font[id(record)], record)
+
+    source_hash = "0" * 64  # neither caller ever decodes an ID to bytes
+    page_runs = cluster_page(page_index, located, source_hash, _verdict_fn)
+
+    runs: list[tuple[RunRecord, RunVerdict]] = []
+    for run in page_runs:
+        first_glyph_id = id(run.glyphs[0])
+        run_font_verdict = glyph_font.get(first_glyph_id)
+        run_xobj_path = glyph_path.get(first_glyph_id, ())
+        if run_font_verdict is None:
+            # The clustered glyph is not object-identical to any glyph in `located` --
+            # would only happen if clustering copied records, which it does not
+            # (verified: cluster_page slices the same GlyphRecord instances it was
+            # given). Refuse loudly rather than silently treat as editable.
+            runs.append(
+                (run, RunVerdict("not_editable", "font resolution lost across clustering"))
+            )
+            continue
+        runs.append((run, classify_run(run, run_font_verdict, shared_xobject_ids, run_xobj_path)))
+
+    return bucket, runs, len(glyph_only)
+
+
 def classify_document(path: str | Path) -> DocumentClassification:
     """CLAS-05: walk every page, cluster every run, classify every run. Refusal is
     always per-page (`page_buckets`) or per-run (`runs`) -- never a whole-document
     verdict; there is no field on `DocumentClassification` that could express one.
+
+    Eager by construction (every page, up front) -- this is intentionally the SLOW path
+    02-RESEARCH.md Section 10 measured at 21.0s/166MB on a 126-page document. It exists
+    for whole-document operations that need every run anyway (Gate G1's provenance
+    round-trip). `engine.index.RunIndex` is the lazy, cached, page-at-a-time alternative
+    (D-06) built for interactive latency; both call the same `_classify_one_page` above.
     """
     pdf = pikepdf.open(path)
     shared = shared_form_xobjects(pdf)
@@ -241,49 +309,11 @@ def classify_document(path: str | Path) -> DocumentClassification:
     try:
         with open_document(path) as doc:
             for page_index, page in enumerate(doc.pages):
-                located = list(located_cluster_records(page, page_index, doc))
-                glyph_only = [record for _path, record, _attrs in located]
-                page_buckets.append(classify_page(glyph_only, page))
-
-                # Resolved once per glyph, before clustering -- see module docstring.
-                # A closure-local dict keyed by id(glyph) is safe here: it is built and
-                # fully consumed within this one page's iteration, never stored or
-                # compared beyond it, unlike a persisted GlyphRecord-keyed structure.
-                glyph_font: dict[int, FontVerdict] = {}
-                glyph_path: dict[int, tuple[int, ...]] = {}
-                for stream_path, record, _attrs in located:
-                    glyph_font[id(record)] = _resolve_font_for_glyph(
-                        pdf, page_index, stream_path, record, font_cache
-                    )
-                    glyph_path[id(record)] = stream_path.xobj_path
-
-                def _verdict_fn(record: GlyphRecord) -> GlyphVerdict:
-                    return glyph_verdict(glyph_font[id(record)], record)
-
-                source_hash = "0" * 64  # classify_document never decodes an ID to bytes
-                page_runs = cluster_page(page_index, located, source_hash, _verdict_fn)
-                for run in page_runs:
-                    first_glyph_id = id(run.glyphs[0])
-                    run_font_verdict = glyph_font.get(first_glyph_id)
-                    run_xobj_path = glyph_path.get(first_glyph_id, ())
-                    if run_font_verdict is None:
-                        # The clustered glyph is not object-identical to any glyph in
-                        # `located` -- would only happen if clustering copied records,
-                        # which it does not (verified: cluster_page slices the same
-                        # GlyphRecord instances it was given). Refuse loudly rather than
-                        # silently treat as editable.
-                        runs.append(
-                            (
-                                run,
-                                RunVerdict(
-                                    "not_editable", "font resolution lost across clustering"
-                                ),
-                            )
-                        )
-                        continue
-                    runs.append(
-                        (run, classify_run(run, run_font_verdict, shared, run_xobj_path))
-                    )
+                bucket, page_runs, _glyph_count = _classify_one_page(
+                    pdf, doc, page, page_index, shared, font_cache
+                )
+                page_buckets.append(bucket)
+                runs.extend(page_runs)
     finally:
         pdf.close()
 
