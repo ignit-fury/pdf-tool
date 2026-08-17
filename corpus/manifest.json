@@ -2955,5 +2955,17 @@
     "license": "Public domain - US government documents, digitalcorpora.org govdocs1 research corpus",
     "weight_class": "other",
     "notes": "govdocs1 thread 014, member 014/014233.pdf. Producer: realpage data converter. Categories assigned by tools/probe_corpus.probe_file(), not by source description."
+  },
+  {
+    "filename": "vector_outlined_text_sample.pdf",
+    "sha256": "3af7b52a6d5f10bda66aa77180ab95aff1a9c9d8f878592e9bbc07d874d31980",
+    "tier": "public",
+    "categories": [
+      "vector_outlined_text"
+    ],
+    "source_url": "spike/fixtures/LiberationSans-Regular.ttf (glyph-outline source; https://github.com/liberationfonts/liberation-fonts is the upstream project)",
+    "license": "SIL Open Font License 1.1 (glyph outlines traced from the bundled Liberation Sans font; see spike/fixtures/LiberationSans-OFL-LICENSE.txt) - the page itself is a from-scratch content stream with no other copyrightable content",
+    "weight_class": "other",
+    "notes": "GAP DISCLOSURE: constructed, not wild-harvested. 02-RESEARCH.md Section 7 documents an exhaustive scan of all 216 corpus documents for a zero-glyph, image-coverage<0.2, >200-path-object page that found 0 candidates. Plan 02-02 Task 1 re-ran an equivalent scan (zero /Resources/Font entries, no BT operator, >200 m/l/c/f path-fill operators) and found one candidate, govdocs1_007_007087.pdf page 57 (index 57), which visual rendering showed to be a marketing cover graphic (photo + dot-pattern gradient inside nested Form XObjects with an embedded image), not outlined text - disqualified. Built the fixture instead: extracted glyph outlines for 'OUTLINED VECTOR TEXT' from spike/fixtures/LiberationSans-Regular.ttf with fontTools (Qu2CuPen converts the glyf table's quadratic curves to cubic, since PDF content streams have no quadratic-curve operator), and wrote the page's content stream directly as pikepdf path-fill operators (m/l/c per contour, f to close each glyph). EXTENDED 2026-08-16 (02-08 Task 1 pre-dispatch, then again after task review): the original single-line construction (18 glyphs, 18 f operators) classified as 'empty' under classify_page's P~=200 path-object discriminator, not 'vector_outlined' -- an 18-glyph demonstration line does not meet the page-scale volume 02-RESEARCH's P~=200 reasoning assumes ('a page of outlined body text produces one path object per glyph, so hundreds'). A first regeneration (12 lines, 216 fills) technically crossed the threshold but only by 8% margin and was fairly criticised on task review as itself still threshold-fitting, not genuinely page-scale, plus its own disclosure overstated the margin by citing a total-operator count (2724) the classifier never actually uses -- classify_page.py's _path_object_count counts ONLY path-PAINTING operators (f, per ISO 32000-1 Table 60), never path-construction operators (m/l/c, Table 59's curve/line segments), so only the fill count is the number that matters. Regenerated again at genuine page scale: 60 repeated lines, 1080 glyphs, 1080 f operators -- 5.4x the P~=200 threshold on the ONLY count classify_page.py computes. Structurally re-verified: /Resources is an empty dict (zero /Font, zero /XObject entries), no BT/Tj, qpdf --check passes clean, and pypdfium2 renders 60 legible lines reading 'OUTLINED VECTOR TEXT'. classify_page() run directly against the file returns 'vector_outlined'."
   }
 ]

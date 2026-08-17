@@ -82,6 +82,44 @@ whose coverage claims are wrong is worse than one that makes none.
 |---|---|---|
 | `inline_images` | `verapdf_inline_image_fixture.pdf` | Inline images (`BI…ID…EI`) are rare in modern real-world output; no wild candidate found in an extensive search. |
 | `type3` | `verapdf_type3_font_fixture.pdf` | Type3 fonts are effectively obsolete outside TeX-era documents and specialised generators. |
+| `vector_outlined_text` | `vector_outlined_text_sample.pdf` | See "Disclosed Substitutions" below — no wild candidate found; constructed from a bundled OFL font. |
+
+## Disclosed Substitutions
+
+`vector_outlined_text` had **zero** genuine documents after `nasa_graphics_standards_manual.pdf`
+was correctly relabelled `ocr_scan` (it is an OCR'd scan drawn in render mode 3 over page images,
+not vector-outlined text — see its manifest `notes`). 02-RESEARCH.md Section 7 documents an
+exhaustive scan of all 216 corpus documents for a page with zero glyphs, image coverage < 0.2, and
+more than 200 path objects, which returned **0 candidates**.
+
+Plan 02-02 Task 1 re-ran an equivalent scan directly against the harvesting policy's criteria (zero
+`/Resources/Font` entries, a content stream with over 200 fill-path operators — `re`, `f`/`f*`,
+`m`/`l`/`c` — and no `BT` text-showing operator). It found exactly one candidate,
+`govdocs1_007_007087.pdf` page index 57. Rendering that page showed it to be a marketing cover
+graphic — a stock photo plus a dot-pattern gradient, drawn via nested Form XObjects that embed a
+raster image — not outlined text at all. It was disqualified rather than mislabelled.
+
+With no genuine candidate available, `vector_outlined_text_sample.pdf` was **constructed**: glyph
+outlines for the string "OUTLINED VECTOR TEXT" were extracted from the already-bundled
+`spike/fixtures/LiberationSans-Regular.ttf` (SIL OFL 1.1, licence file alongside) using
+`fontTools.pens.qu2cuPen.Qu2CuPen` to convert the font's quadratic (`glyf`-table) curves to the
+cubic Béziers PDF content streams require, then written directly as a page content stream of
+`m`/`l`/`c`/`f` path-fill operators via pikepdf — no text-showing operator, no font resource, no
+image XObject. `/Resources` is an empty dict (zero `/Font`, zero `/XObject`) and there is no `BT`.
+
+**Revised 2026-08-16** after two rounds of task review on `engine/classify_page.py`: the first
+construction (one line, 18 glyphs) classified `empty`, not `vector_outlined` — 18 path-fill
+operators does not cross `classify_page.py`'s `P_PATH_OBJECT_THRESHOLD ~= 200`. A first
+regeneration (12 lines, 216 fills) technically crossed it but only by an 8% margin, and its own
+disclosure overstated the safety margin by citing a total-operator count (`m`+`l`+`c`+`f`) that
+`classify_page.py` never computes — `_path_object_count` counts only path-**painting** operators
+(`f`, ISO 32000-1 Table 60), never path-**construction** operators (`m`/`l`/`c`, Table 59's
+segment-drawing commands). The number that matters is the fill count alone. Regenerated once more
+at genuine page scale: 60 repeated lines, 1080 glyphs, **1080 `f` operators — 5.4x the threshold on
+the only count the classifier actually uses.** `qpdf --check` passes clean and the page renders as
+60 legible lines reading "OUTLINED VECTOR TEXT" with no other content. This is a from-scratch
+content stream built for the corpus fixture, not the product's own text-rewrite path, and not an
+annotation/overlay technique.
 
 ## Category labels
 

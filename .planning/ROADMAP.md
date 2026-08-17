@@ -27,7 +27,7 @@ survives the renumber.
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Conformance Harness + Engine Spike** - Real-world corpus, three-engine masked-diff CI, and the two bets that gate everything downstream — no product code (completed 2026-08-12)
-- [ ] **Phase 2: Text Model** - The keystone: content-stream interpreter with per-glyph provenance, plus per-page and per-run editability classification
+- [x] **Phase 2: Text Model** - The keystone: content-stream interpreter with per-glyph provenance, plus per-page and per-run editability classification (completed 2026-08-17)
 - [ ] **Phase 3: Rewrite Engine + Font Pipeline** - Replace text with correct widths AND subset/embed a bundled font in one phase — the project gate
 - [ ] **Phase 4: Web Tier Walking Skeleton + Hardening** - First untrusted input: isolation, structural ephemerality, viewer, and the first in-browser edit with undo
 - [ ] **Phase 5: Find and Replace Across All Pages** - The core value in its user-facing form: match list and preview first, apply second
@@ -101,37 +101,37 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — pytest config, mypy install/wiring, engine/ package skeleton (TEXT-05 tooling)
-- [ ] 02-02-PLAN.md — Wave 0 corpus fixture remediation: vector-outlined-text fixture, CLAS-05 mixed fixture, Tr=7 fixture, TT-d/TT-e measurement (CLAS-02, CLAS-03, CLAS-05)
+- [x] 02-01-PLAN.md — pytest config, mypy install/wiring, engine/ package skeleton (TEXT-05 tooling)
+- [x] 02-02-PLAN.md — Wave 0 corpus fixture remediation: vector-outlined-text fixture, CLAS-05 mixed fixture, Tr=7 fixture, TT-d/TT-e measurement (CLAS-02, CLAS-03, CLAS-05)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 02-03-PLAN.md — Types, records, run ID codec (TEXT-02, TEXT-03, TEXT-05)
+- [x] 02-03-PLAN.md — Types, records, run ID codec (TEXT-02, TEXT-03, TEXT-05)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 02-04-PLAN.md — playa boundary + core walker, TEXT-07 fusion proof (TEXT-01, TEXT-02, TEXT-07)
-- [ ] 02-06-PLAN.md — Forward encoding decision table (TEXT-04)
+- [x] 02-04-PLAN.md — playa boundary + core walker, TEXT-07 fusion proof (TEXT-01, TEXT-02, TEXT-07)
+- [x] 02-06-PLAN.md — Forward encoding decision table (TEXT-04)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 02-05-PLAN.md — Walker recursion into XObjects/annotations/patterns/Type3, shared-XObject detection (TEXT-06)
+- [x] 02-05-PLAN.md — Walker recursion into XObjects/annotations/patterns/Type3, shared-XObject detection (TEXT-06)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 02-07-PLAN.md — Run clustering: D-03 threshold tuning, D-01/D-02/D-05 clusterer (TEXT-08)
+- [x] 02-07-PLAN.md — Run clustering: D-03 threshold tuning, D-01/D-02/D-05 clusterer (TEXT-08)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 02-08-PLAN.md — Page and run classification (CLAS-01, CLAS-02, CLAS-03, CLAS-04, CLAS-05)
+- [x] 02-08-PLAN.md — Page and run classification (CLAS-01, CLAS-02, CLAS-03, CLAS-04, CLAS-05)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 02-09-PLAN.md — D-06 page-at-a-time cache, RunIndex API, pdftool CLI (TEXT-01)
+- [x] 02-09-PLAN.md — D-06 page-at-a-time cache, RunIndex API, pdftool CLI (TEXT-01)
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 02-10-PLAN.md — Gate G1 criterion 1: identity-rewrite round trip (TEXT-03)
+- [x] 02-10-PLAN.md — Gate G1 criterion 1: identity-rewrite round trip (TEXT-03)
 
 **Research**: yes — completed, see `02-RESEARCH.md`. The simple-font encoding chain resolution was corrected during research: Type1/CFF's Symbolic+`/Encoding` case resolves per spec (§9.6.6.2), only TrueType's is genuinely ambiguous. The synthetic-space threshold is tuned in Wave 5 (Plan 02-07) against the full 216-document public corpus using a self-supervised held-out-real-space-glyph method, converging near pdf.js's 0.102 em constant.
 **Parallel**: no — five downstream features sit on this

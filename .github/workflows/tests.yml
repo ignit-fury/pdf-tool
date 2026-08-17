@@ -30,3 +30,6 @@ jobs:
 
       - name: Run test suite
         run: uv run --frozen pytest -q
+
+      - name: Type check engine package
+        run: uv run --frozen mypy engine/
