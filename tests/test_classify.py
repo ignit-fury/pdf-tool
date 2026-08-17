@@ -43,8 +43,9 @@ MIXED_SCANNED_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "mixed_scanned.pdf"
 IRS_1040_INSTRUCTIONS = CORPUS_DIR / "irs_1040_instructions.pdf"
 
 # tools/build_mixed_fixture.py's own PAGE_PLAN: 0-based indices of the 3 constructed
-# zero-glyph scan pages, interleaved among 7 editable irs_publication_17.pdf pages.
-MIXED_SCANNED_SCAN_PAGES = {3, 6, 9}
+# zero-glyph scan pages, interleaved among 37 editable irs_publication_17.pdf pages.
+MIXED_SCANNED_PAGE_COUNT = 40
+MIXED_SCANNED_SCAN_PAGES = {12, 25, 38}
 
 # The specific page 02-08's brief verified: naive-sum coverage on this document is 2.749
 # only here, not on an arbitrary page -- most pages of this document give a different
@@ -245,32 +246,89 @@ def test_tr7_glyphs_are_invisible_and_a_render_mode_3_only_rule_misses_them(
 
 
 def test_mixed_scanned_page_buckets_match_construction() -> None:
-    """tools/build_mixed_fixture.py's own PAGE_PLAN: 7 editable irs_publication_17.pdf
+    """tools/build_mixed_fixture.py's own PAGE_PLAN: 37 editable irs_publication_17.pdf
     pages interleaved with 3 zero-glyph scan pages from invoice_book_1842.pdf, at 0-based
-    indices 3, 6, 9. classify_document's page_buckets must reproduce this exactly."""
+    indices 12, 25, 38. classify_document's page_buckets must reproduce this exactly."""
     result = classify_document(MIXED_SCANNED_FIXTURE)
-    assert len(result.page_buckets) == 10
+    assert len(result.page_buckets) == MIXED_SCANNED_PAGE_COUNT
     scan_indices = {i for i, b in enumerate(result.page_buckets) if b == "scan_no_text"}
     assert scan_indices == MIXED_SCANNED_SCAN_PAGES
-    editable_indices = set(range(10)) - MIXED_SCANNED_SCAN_PAGES
+    editable_indices = set(range(MIXED_SCANNED_PAGE_COUNT)) - MIXED_SCANNED_SCAN_PAGES
     assert all(result.page_buckets[i] == "editable" for i in editable_indices)
 
 
-def test_mixed_scanned_editable_pages_produce_editable_runs() -> None:
-    """CLAS-04's acceptance criterion: the 7 constructed editable pages report
-    editable_original/editable_substitution runs. irs_publication_17.pdf is a typeset,
-    non-OCR document with ordinary embedded fonts, so editable_original is expected, but
-    this asserts the weaker, more robust claim (either editable state) since exact font
-    resolution branch is not this test's concern -- test_shared_xobject_run_refuses_with_
-    share_count and the corpus-wide encoding_table tests already cover branch-level
-    correctness."""
+def test_gate_g1_criterion_3_forty_page_contract_reports_37_editable() -> None:
+    """ROADMAP.md Phase 2 Success Criterion 3, verbatim: "a 40-page contract with 3
+    scanned pages reports 37 editable pages and 40 page-op-able pages". Gate G1
+    verification found the mechanism proven corpus-wide but these literal numbers
+    asserted nowhere (the fixture was a 7+3 scaled-down analog), so the fixture was
+    grown to the literal scenario and this test pins the numbers the roadmap names.
+
+    HONEST SCOPE NOTE on the "40 page-op-able pages" half: Phase 2 contains no page-
+    operation code at all. Page insert/reorder/rotate/delete/merge is client-side
+    @cantoo/pdf-lib territory per CLAUDE.md's architecture split and lands in Phase 6 --
+    proving that every one of the 40 pages actually survives a page op is Phase 6's job,
+    not this test's, and inventing a page-op concept in engine/ purely to satisfy the
+    wording would be a papered-over assertion. What Phase 2 genuinely owns, and what is
+    asserted here instead, is the precondition: the document reports all 40 pages, every
+    page is addressed and bucketed regardless of whether its text is editable, and
+    classification never returns a whole-document refusal that would take pages off the
+    table wholesale.
+    """
     result = classify_document(MIXED_SCANNED_FIXTURE)
-    assert result.runs, "expected runs on the 7 editable pages"
-    states = {v.state for _, v in result.runs}
-    assert states <= {"editable_original", "editable_substitution"}, (
-        f"expected only editable states on mixed_scanned.pdf's constructed editable "
-        f"pages, got {states}"
+
+    # The literal claim: 40 pages, 37 editable, 3 scanned.
+    assert len(result.page_buckets) == 40
+    assert sum(1 for b in result.page_buckets if b == "editable") == 37
+    assert sum(1 for b in result.page_buckets if b == "scan_no_text") == 3
+
+    # The Phase-2-owned half of "40 page-op-able": every page is addressed and bucketed
+    # (no page dropped for being unreadable), and there is no whole-document verdict.
+    assert all(b for b in result.page_buckets), "every page must carry a bucket"
+    assert not hasattr(result, "editable"), (
+        "DocumentClassification must carry no whole-document editability field -- a "
+        "whole-document refusal is what would make pages non-addressable in bulk"
     )
+
+
+def test_mixed_scanned_editable_pages_produce_editable_runs() -> None:
+    """CLAS-04's acceptance criterion: every one of the 37 constructed editable pages
+    reports editable_original/editable_substitution runs. irs_publication_17.pdf is a
+    typeset, non-OCR document with ordinary embedded fonts, so editable_original is
+    expected, but this asserts the weaker, more robust claim (either editable state)
+    since the exact font resolution branch is not this test's concern --
+    test_shared_xobject_run_refuses_with_share_count and the corpus-wide encoding_table
+    tests already cover branch-level correctness.
+
+    WIDENED when the fixture grew from 10 pages to the roadmap's literal 40 (see
+    test_gate_g1_criterion_3_forty_page_contract_reports_37_editable): the 7-page fixture
+    happened to contain zero refusing runs, so the old assertion was "no run anywhere is
+    not_editable". Across 37 pages that is no longer true, and correctly so -- the wider
+    slice picks up runs drawn inside Form XObjects shared across other pages, which
+    classify_run refuses by design. Asserting per-PAGE editability (every editable-
+    bucketed page yields at least one editable run) rather than per-RUN is both the claim
+    CLAS-04 actually makes and the one that stays honest at scale; the refusals that do
+    occur are separately pinned to their real cause below.
+    """
+    result = classify_document(MIXED_SCANNED_FIXTURE)
+    assert result.runs, "expected runs on the 37 editable pages"
+
+    editable_states = {"editable_original", "editable_substitution"}
+    pages_with_editable_runs = {
+        run.page for run, v in result.runs if v.state in editable_states
+    }
+    expected_editable_pages = set(range(MIXED_SCANNED_PAGE_COUNT)) - MIXED_SCANNED_SCAN_PAGES
+    assert pages_with_editable_runs == expected_editable_pages, (
+        f"every editable-bucketed page must yield at least one editable run; "
+        f"{len(expected_editable_pages - pages_with_editable_runs)} did not"
+    )
+
+    # The only refusals on this fixture are shared-Form-XObject ones -- a real per-run
+    # refusal with a stated reason, never a silent or page-wide one.
+    refusal_reasons = {v.reason for _, v in result.runs if v.state == "not_editable"}
+    assert all(
+        r is not None and "shared Form XObject" in r for r in refusal_reasons
+    ), f"unexpected refusal reason(s) on this fixture: {sorted(map(str, refusal_reasons))}"
 
 
 def test_mixed_scanned_scan_pages_contribute_zero_runs() -> None:
@@ -297,9 +355,9 @@ def _document_uneditable_if_any_page_scanned(result: DocumentClassification) -> 
 
 def test_clas05_whole_document_refusal_is_wrong() -> None:
     """CLAS-05's negative case: mixed_scanned.pdf genuinely has 3 non-editable pages
-    (correctly bucketed scan_no_text) alongside 7 editable ones. The REJECTED rule would
+    (correctly bucketed scan_no_text) alongside 37 editable ones. The REJECTED rule would
     flag the whole document uneditable; classify_document's real per-page/per-run
-    granularity correctly keeps the 7 editable pages' runs editable regardless."""
+    granularity correctly keeps the 37 editable pages' runs editable regardless."""
     result = classify_document(MIXED_SCANNED_FIXTURE)
 
     assert _document_uneditable_if_any_page_scanned(result) is True, (
