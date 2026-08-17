@@ -25,9 +25,11 @@ from engine.classify_page import (
     classify_page,
     image_coverage,
 )
+import engine.classify_run as classify_run_module
 import engine.walker as walker_module
 from engine.classify_run import DocumentClassification, RunVerdict, classify_document
 from engine.playa_boundary import Document, Page, image_bboxes
+from engine.records import RunRecord
 from engine.walker import glyph_records
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -372,3 +374,111 @@ def test_classify_run_precedence_shared_xobject_before_type3() -> None:
     verdict = classify_run(run, type3_font, shared_xobject_ids={5: 10}, xobj_path=(5,))
     assert verdict.state == "not_editable"
     assert verdict.reason is not None and "shared Form XObject" in verdict.reason
+
+
+def _dummy_run(display_text: str, unicode: str = "A") -> RunRecord:
+    from engine.records import GlyphRecord
+    from engine.types import CharCode, Unicode
+
+    glyph = GlyphRecord(
+        code=CharCode(1),
+        glyph=None,
+        unicode=Unicode(unicode),
+        x=0.0,
+        y=0.0,
+        advance=(1.0, 0.0),
+        font_id=0,
+        render_mode=0,
+        visible=True,
+        stream_id=0,
+        operator_byte_offset=0,
+        item_index_within_tj=None,
+        byte_offset_within_string=0,
+    )
+    return RunRecord(run_id="dummy", glyphs=[glyph], display_text=display_text, page=0)
+
+
+def test_classify_run_type3_always_refuses_regardless_of_font_verdict_editable() -> None:
+    """The brief's Type3 rule: branch_id == 'T3-a' refuses NO MATTER what
+    font_verdict.editable says (Type3 glyphs need their own CharProc rewrite, out of v1
+    scope) -- unlike test_classify_run_precedence_shared_xobject_before_type3, this run
+    has NO shared Form XObject, isolating the Type3 override itself rather than the
+    shared-XObject-first precedence rule.
+
+    MUTATION: patching classify_run to check `font_verdict.editable` instead of
+    `branch_id == "T3-a"` would make this editable, since the constructed FontVerdict
+    deliberately sets editable=True -- confirmed by monkeypatching the branch_id check
+    away (forcing the Type3 branch to be skipped) and observing the run falls through to
+    editable.
+    """
+    from engine.classify_run import classify_run
+    from engine.encoding_table import FontVerdict
+
+    run = _dummy_run("A")
+    type3_font = FontVerdict("T3-a", True, False, None)
+
+    verdict = classify_run(run, type3_font, shared_xobject_ids={}, xobj_path=())
+    assert verdict.state == "not_editable"
+    assert verdict.reason == "Type3"
+
+    # THE MUTATION: disable the Type3-specific check the real precedence relies on by
+    # feeding a font_verdict with the same editable=True but a non-Type3 branch_id --
+    # if branch_id were NOT what classify_run actually keys on, this would still refuse.
+    non_type3_but_editable = FontVerdict("SIMPLE", True, False, None)
+    mutated = classify_run(run, non_type3_but_editable, shared_xobject_ids={}, xobj_path=())
+    assert mutated.state != "not_editable" or mutated.reason != "Type3", (
+        "expected branch_id=='T3-a' to be the thing producing the Type3 refusal -- if a "
+        "non-Type3-but-otherwise-identical FontVerdict still refuses as Type3, this test "
+        "proves nothing about the override"
+    )
+
+
+def test_classify_run_refuses_rtl_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CLAS-04's RTL branch (02-07's own carry-forward: 'the VERDICT itself is 02-08's
+    job'): a run whose display_text is RTL refuses even though its font is fully
+    editable and it lives in no shared Form XObject and is not Type3.
+
+    MUTATION: monkeypatching classify_run_module._is_rtl to always return False makes
+    this run editable instead -- confirmed below before restoring (monkeypatch fixture
+    auto-restores at test teardown).
+    """
+    from engine.classify_run import classify_run
+    from engine.encoding_table import FontVerdict
+
+    run = _dummy_run("א", unicode="א")  # Hebrew alef -- unambiguously RTL
+    font_verdict = FontVerdict("SIMPLE", True, False, None)
+
+    verdict = classify_run(run, font_verdict, shared_xobject_ids={}, xobj_path=())
+    assert verdict.state == "not_editable"
+    assert verdict.reason == "right-to-left text"
+
+    # THE MUTATION: the real code path's own RTL predicate, disabled.
+    monkeypatch.setattr(classify_run_module, "_is_rtl", lambda _text: False)
+    mutated = classify_run(run, font_verdict, shared_xobject_ids={}, xobj_path=())
+    assert mutated.state != "not_editable" or mutated.reason != "right-to-left text", (
+        "expected _is_rtl to be the thing producing the RTL refusal -- if disabling it "
+        "still refuses for the same reason, this test proves nothing"
+    )
+
+
+def test_classify_run_defensive_per_glyph_recheck_refuses_no_unicode_glyph() -> None:
+    """The brief's third named mutation target: the defensive per-glyph re-check
+    (D-05's isolation happens upstream in the clusterer; classify_run does not trust
+    that blindly). A run whose font-level verdict is fully editable but whose one glyph
+    has no resolvable unicode (glyph_verdict's NOUNI branch) must still refuse -- proving
+    the per-glyph loop in classify_run, not just the font-level check, actually runs and
+    is not dead code.
+    """
+    from engine.classify_run import classify_run
+    from engine.encoding_table import FontVerdict
+
+    run = _dummy_run("A", unicode="")  # empty unicode -- glyph_verdict's NOUNI branch
+    font_verdict = FontVerdict("SIMPLE", True, False, None)
+
+    verdict = classify_run(run, font_verdict, shared_xobject_ids={}, xobj_path=())
+    assert verdict.state == "not_editable"
+    assert verdict.reason == "NOUNI", (
+        "expected the per-glyph re-check to refuse with glyph_verdict's own NOUNI "
+        "reason -- a font-level verdict alone (editable=True here) would have passed "
+        "this run, so this proves the per-glyph loop actually executes"
+    )

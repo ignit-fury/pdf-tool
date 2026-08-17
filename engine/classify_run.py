@@ -132,7 +132,7 @@ def _resolve_font_for_glyph(
     page_index: int,
     path: StreamPath,
     glyph: GlyphRecord,
-    cache: dict[tuple[int, bytes], FontVerdict],
+    cache: dict[tuple[tuple[int, int], bytes], FontVerdict],
 ) -> FontVerdict:
     """The `FontVerdict` for whichever font was active at this glyph's own operator. A
     glyph the font-lookup itself cannot resolve (no `Tf` found, or the name is not in
@@ -152,7 +152,12 @@ def _resolve_font_for_glyph(
             "NO-TF", False, False, "active font resource name not found in /Resources /Font"
         )
 
-    cache_key = (id(resources), name)
+    # font_dict lookup above already returned when resources was None.
+    assert resources is not None
+    # objgen is the stable indirect-object identity; id(resources) is not --
+    # pikepdf.Object wrappers are ephemeral and ids get reused across
+    # distinct /Resources dicts (measured on real pages).
+    cache_key = (resources.objgen, name)
     if cache_key not in cache:
         cache[cache_key] = resolve_font(font_dict)
     return cache[cache_key]
@@ -193,8 +198,9 @@ def classify_run(
     build the run, and decoding a string this function's own caller just encoded would be
     redundant round-tripping.
     """
-    if xobj_path and any(oid in shared_xobject_ids for oid in xobj_path):
-        share_count = shared_xobject_ids[xobj_path[-1]]
+    shared_oid = next((oid for oid in xobj_path if oid in shared_xobject_ids), None)
+    if shared_oid is not None:
+        share_count = shared_xobject_ids[shared_oid]
         return RunVerdict(
             "not_editable",
             f"shared Form XObject, referenced by {share_count} pages",
@@ -227,7 +233,7 @@ def classify_document(path: str | Path) -> DocumentClassification:
     """
     pdf = pikepdf.open(path)
     shared = shared_form_xobjects(pdf)
-    font_cache: dict[tuple[int, bytes], FontVerdict] = {}
+    font_cache: dict[tuple[tuple[int, int], bytes], FontVerdict] = {}
 
     page_buckets: list[Bucket] = []
     runs: list[tuple[RunRecord, RunVerdict]] = []
