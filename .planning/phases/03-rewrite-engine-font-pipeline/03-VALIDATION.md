@@ -1,10 +1,11 @@
 ---
 phase: 3
 slug: rewrite-engine-font-pipeline
-status: draft
-nyquist_compliant: false
+status: planned
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-08-18
+planned: 2026-08-18
 ---
 
 # Phase 3 — Validation Strategy
@@ -44,23 +45,23 @@ must be preserved. Every row's command is the acceptance evidence for that requi
 
 | Plan | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD | EDIT-02 | — | Text matrix after the edited run unchanged within epsilon (D-04 runtime guard) | unit + corpus | `pytest tests/test_rewrite.py::test_edit02_matrix_invariant_holds_after_fit -x` | ❌ W0 | ⬜ pending |
-| TBD | EDIT-02 | — | Multi-operator run consolidates correctly (Pitfall 1/2 — 10.6% of runs, up to 167 ops) | unit | `pytest tests/test_rewrite.py::test_multi_operator_run_consolidates_to_one_instruction -x` | ❌ W0 | ⬜ pending |
-| TBD | EDIT-02 | — | **Non-contiguous run: a foreign run's interleaved operator survives unedited** (~1.1% of editable runs) | unit, negative case | `pytest tests/test_rewrite.py::test_foreign_interleaved_operator_survives_unedited -x` | ❌ W0 | ⬜ pending |
-| TBD | EDIT-03 | — | Tz condensing within 90–95%, scale restored after the run, subsequent text unaffected | unit | `pytest tests/test_fit.py::test_tz_condensing_restores_scale_after_run -x` | ❌ W0 | ⬜ pending |
-| TBD | EDIT-03 | — | Dry-run report matches the actual commit outcome (D-03) | integration (CLI) | `pytest tests/test_pdftool_edit.py::test_dry_run_matches_commit -x` | ❌ W0 | ⬜ pending |
-| TBD | EDIT-04 | T-03-V5 | Named refusal reasons for every failure mode; never generic | unit | `pytest tests/test_recipe.py::test_refusal_reasons_are_named_not_generic -x` | ❌ W0 | ⬜ pending |
-| TBD | FONT-01 | — | Static mapping table, exact-match only, no fuzzy/heuristic fallback | unit | `pytest tests/test_fonts.py::test_mapping_table_is_exact_match_no_fuzzy_logic -x` | ❌ W0 | ⬜ pending |
-| TBD | FONT-01 | — | Corpus-wide substitution coverage measured and reported (Pitfall 10) | corpus | `pytest -m corpus tests/test_fonts.py::test_corpus_substitution_coverage_report -x` | ❌ W0 | ⬜ pending |
-| TBD | FONT-02 | — | Subsetting covers the whole-recipe glyph union, once per family (D-13) | unit | `pytest tests/test_fonts.py::test_subset_covers_union_across_recipe -x` | ❌ W0 | ⬜ pending |
-| TBD | FONT-02 | — | Untouched text using the same font still renders correctly after re-subset (roadmap criterion 3) | corpus + pixel-diff | `pytest -m corpus tests/test_rewrite.py::test_untouched_same_font_text_unaffected_by_resubset -x` | ❌ W0 | ⬜ pending |
-| TBD | FONT-03 | T-03-V5 | Emitted font passes OTS (`ots-sanitize`, exit 0) | unit (subprocess) | `pytest tests/test_fonts.py::test_emitted_font_passes_ots -x` | ❌ W0 | ⬜ pending |
-| TBD | FONT-03 | — | `/ToUnicode` round-trips (copy-paste-out-of-Acrobat proxy) | unit | `pytest tests/test_fonts.py::test_tounicode_cmap_roundtrips_ascii_and_accented -x` | ❌ W0 | ⬜ pending |
-| TBD | FONT-04 | — | `/W` entries match the subset's own `hmtx`; no silent `/MissingWidth`-of-0 fallthrough | unit, negative case | `pytest tests/test_fonts.py::test_font04_missing_width_never_falls_through_silently -x` | ❌ W0 | ⬜ pending |
-| TBD | FONT-05 | — | Two subsets of the same family in one document get distinct tags | unit | `pytest tests/test_fonts.py::test_fresh_subset_tag_per_family -x` | ❌ W0 | ⬜ pending |
-| TBD | FONT-06 | — | **The new edit-time glyph-availability check fires on `editable_original` runs too**, not only `editable_substitution` (research Pattern 4 — this trigger does not exist in Phase 2) | unit, negative case | `pytest tests/test_fonts.py::test_editable_original_run_still_substitutes_on_missing_glyph -x` | ❌ W0 | ⬜ pending |
-| TBD | G2a | — | Confined-diff check is a **targeted structural comparison**, not a whole-file `qpdf --qdf` diff (see Manual-Only note below) | integration | `pytest tests/test_gate_g2a.py::test_confined_diff_isolated_to_edited_stream -x` | ❌ W0 | ⬜ pending |
-| TBD | G2b | T-03-V5 | Full pipeline with a character absent from the subset: same-engine zero-tolerance + cross-engine tolerant pixel diff, reusing `harness/` | corpus + pixel-diff | `pytest -m corpus tests/test_gate_g2b.py::test_g2b_full_pipeline -x` | ❌ W0 | ⬜ pending |
+| 03-06 | EDIT-02 | T-03-06-01 | Text matrix after the edited run unchanged within epsilon (D-04 runtime guard) | unit + corpus | `pytest tests/test_rewrite.py::test_edit02_matrix_invariant_holds_after_fit -x` | ❌ W0 | ⬜ pending |
+| 03-06 | EDIT-02 | — | Multi-operator run consolidates correctly (Pitfall 1/2 — 10.6% of runs, up to 167 ops) | unit | `pytest tests/test_rewrite.py::test_multi_operator_run_consolidates_to_one_instruction -x` | ❌ W0 | ⬜ pending |
+| 03-06 | EDIT-02 | — | **Non-contiguous run: a foreign run's interleaved operator survives unedited** (~1.1% of editable runs) | unit, negative case | `pytest tests/test_rewrite.py::test_foreign_interleaved_operator_survives_unedited -x` | ❌ W0 | ⬜ pending |
+| 03-03 | EDIT-03 | — | Tz condensing within 90–95%, scale restored after the run, subsequent text unaffected | unit | `pytest tests/test_fit.py::test_tz_condensing_restores_scale_after_run -x` | ❌ W0 | ⬜ pending |
+| 03-07 | EDIT-03 | — | Dry-run report matches the actual commit outcome (D-03) | integration (CLI) | `pytest tests/test_pdftool_edit.py::test_dry_run_matches_commit -x` | ❌ W0 | ⬜ pending |
+| 03-07 | EDIT-04 | T-03-07-* | Named refusal reasons for every failure mode; never generic | unit | `pytest tests/test_recipe.py::test_refusal_reasons_are_named_not_generic -x` | ❌ W0 | ⬜ pending |
+| 03-04 | FONT-01 | T-03-04-01 | Static mapping table, exact-match only, no fuzzy/heuristic fallback | unit | `pytest tests/test_fonts.py::test_mapping_table_is_exact_match_no_fuzzy_logic -x` | ❌ W0 | ⬜ pending |
+| 03-04 | FONT-01 | — | Corpus-wide substitution coverage measured and reported (Pitfall 10) | corpus | `pytest -m corpus tests/test_fonts.py::test_corpus_substitution_coverage_report -x` | ❌ W0 | ⬜ pending |
+| 03-05 | FONT-02 | — | Subsetting covers the whole-recipe glyph union, once per family (D-13) | unit | `pytest tests/test_fonts.py::test_subset_covers_union_across_recipe -x` | ❌ W0 | ⬜ pending |
+| 03-09 | FONT-02 | — | AMENDED 2026-08-18 (plan-checker finding): re-homed from the pre-planning guess `tests/test_rewrite.py` — no plan's scope actually fit that literal file (03-06 has no whole-recipe view of which other runs share a bundled family). A shared bundled-family re-subset serves every edited run that uses it: two edits into the same family produce exactly one embedded subset object, and both edits' display text and untouched-elsewhere pixels stay correct (roadmap criterion 3) | corpus + pixel-diff | `pytest -m corpus tests/test_gate_g2b.py::test_shared_family_resubset_serves_both_edited_runs -x` | ❌ W0 | ⬜ pending |
+| 03-05 | FONT-03 | T-03-05-* | Emitted font passes OTS (`ots-sanitize`, exit 0) | unit (subprocess) | `pytest tests/test_fonts.py::test_emitted_font_passes_ots -x` | ❌ W0 | ⬜ pending |
+| 03-05 | FONT-03 | — | `/ToUnicode` round-trips (copy-paste-out-of-Acrobat proxy) | unit | `pytest tests/test_fonts.py::test_tounicode_cmap_roundtrips_ascii_and_accented -x` | ❌ W0 | ⬜ pending |
+| 03-05 | FONT-04 | — | `/W` entries match the subset's own `hmtx`; no silent `/MissingWidth`-of-0 fallthrough | unit, negative case | `pytest tests/test_fonts.py::test_font04_missing_width_never_falls_through_silently -x` | ❌ W0 | ⬜ pending |
+| 03-05 | FONT-05 | — | Two subsets of the same family in one document get distinct tags | unit | `pytest tests/test_fonts.py::test_fresh_subset_tag_per_family -x` | ❌ W0 | ⬜ pending |
+| 03-04 | FONT-06 | T-03-04-02 | **The new edit-time glyph-availability check fires on `editable_original` runs too**, not only `editable_substitution` (research Pattern 4 — this trigger does not exist in Phase 2); AMENDED 2026-08-18 (plan-checker finding): a Type0/CIDFontType2 font (branch_id `"C-*"`) always substitutes without ever calling the simple-font-only `reverse_encoding_map` — see `test_type0_cid_font_always_substitutes_without_reverse_map_lookup` | unit, negative case | `pytest tests/test_fonts.py::test_editable_original_run_still_substitutes_on_missing_glyph -x` | ❌ W0 | ⬜ pending |
+| 03-08 | G2a | — | Confined-diff check is a **targeted structural comparison**, not a whole-file `qpdf --qdf` diff (see Manual-Only note below) | integration | `pytest tests/test_gate_g2a.py::test_confined_diff_isolated_to_edited_stream -x` | ❌ W0 | ⬜ pending |
+| 03-09 | G2b | T-03-09-* | Full pipeline with a character absent from the subset: same-engine zero-tolerance + cross-engine tolerant pixel diff, reusing `harness/` | corpus + pixel-diff | `pytest -m corpus tests/test_gate_g2b.py::test_g2b_full_pipeline -x` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -110,11 +111,18 @@ the "pixel-identical across all three engines" wording and should be recorded th
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or a Wave 0 dependency
-- [ ] Sampling continuity: no 3 consecutive tasks without an automated verify
-- [ ] Wave 0 covers every ❌ reference above
-- [ ] No watch-mode flags in any command
-- [ ] Feedback latency < 150s for the per-task loop
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or a Wave 0 dependency — confirmed across all 9
+      committed plans
+- [x] Sampling continuity: no 3 consecutive tasks without an automated verify
+- [x] Wave 0 (03-01) covers every ❌ reference above
+- [x] No watch-mode flags in any command
+- [x] Feedback latency < 150s for the per-task loop
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** planned 2026-08-18 — plan-checker ran a full cross-plan seam review (9 plans, chunked
+authorship) and returned CONCERNS: two blockers (a Type0/CIDFontType2 font silently mishandled by
+the FONT-06 substitution trigger; the FONT-02/criterion-3 test pinned above with no owning task).
+Both closed same-day via targeted plan amendments (03-04, 03-06, 03-09 — see their own AMENDED
+blocks) rather than a re-plan. Re-verification of the amended plans' frontmatter/structure passed;
+the fixes were not re-run through a second full plan-checker pass given their narrow,
+source-grounded scope. Execution may proceed.
