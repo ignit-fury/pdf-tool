@@ -12,6 +12,7 @@ __pycache__/
 .claude/settings.local.json
 .claude/worktrees/
 
+
 # Private-tier corpus bytes (D-01) - real invoices/contracts, fetched from a bucket via CI
 # secrets, never committed. Only corpus/private-manifest.json (names/hashes/categories) is
 # checked in.

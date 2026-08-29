@@ -1,0 +1,15 @@
+{
+  "fonts": [
+    {
+      "name": "Liberation Sans Regular",
+      "file": "LiberationSans-Regular.ttf",
+      "family": "Liberation Sans",
+      "style": "Regular",
+      "license": "SIL OFL 1.1",
+      "license_url": "https://opensource.org/licenses/OFL-1.1",
+      "metric_compatible_with": "Arial",
+      "weight": 400,
+      "italic": false
+    }
+  ]
+}
