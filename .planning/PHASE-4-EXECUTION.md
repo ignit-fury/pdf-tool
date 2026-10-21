@@ -70,3 +70,11 @@ This is a narrow performance correction on the existing reader, not a second par
 
 All edits remain in this checkout for review. Original worktree source was preserved.
 Linux/production and CDN outcomes must not be inferred from configured CI jobs.
+
+## Design-hook follow-up
+
+Reviewed the `side-tab` finding in `client/src/style.css`. Replaced the decorative
+2px side borders on selected original text and fit feedback with subtle uniform 1px
+borders; kept text labels and success/refusal colors. No detector suppression was added.
+This is a scoped follow-up in the existing Phase 4 execution, with no behavior change.
+The production client build passed; the targeted Impeccable detector returned no findings.
