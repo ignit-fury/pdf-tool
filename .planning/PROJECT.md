@@ -10,6 +10,11 @@ people who need to change a document that already exists and want the result to 
 
 It is a real product for other people, used anonymously — no signup to edit a file.
 
+## Current State
+
+Phase 4 is implemented and verified locally, including the full corpus suite. Linux/container/CDN
+release checks remain open in `STATE.md` and the Phase 4 verification report. No deployment was published.
+
 ## Core Value
 
 **Replace text across every page of an existing PDF and have the output look like nothing
@@ -19,7 +24,16 @@ happened.** If everything else on this list fails, this one capability must work
 
 ### Validated
 
-(None yet — ship to validate)
+Validated locally in Phases 1–4 (public release remains gated):
+
+- Open and render PDFs in the browser, including password-protected files.
+- Classify text and select server-issued text boxes before editing.
+- Replace a single run through the atomic content-stream recipe engine.
+- Subset/embed bundled fonts; change colour, bold and italic with explicit fitting/refusal.
+- Download and undo text/style edits; recover after losing the server cache.
+
+Evidence: `phases/04-web-tier-walking-skeleton-hardening/04-VERIFICATION.md`.
+Font-size changes are explicitly unsupported; later-phase features remain active.
 
 ### Active
 
@@ -39,7 +53,8 @@ happened.** If everything else on this list fails, this one capability must work
 - [ ] Export pages as images (PNG/JPEG) at a chosen DPI
 - [ ] Export to HTML, plain text, and Markdown
 - [ ] Export to DOCX (best-effort fidelity — see Constraints)
-- [ ] Uploaded files are processed ephemerally and deleted immediately after the response
+- [ ] Verify production ephemerality: memory-only evictable source cache, per-operation tmpfs
+      scratch cleanup, browser-held original recovery, and no queue/object store or content logs
 
 ### Out of Scope
 

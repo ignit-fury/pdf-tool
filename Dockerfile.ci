@@ -12,12 +12,31 @@
 # Digest verified against Docker Hub's registry API for the `python:3.13-slim-trixie` tag
 # (Debian 13 "trixie"), 2026-08-12 — pinned by digest, not just tag, so a repush of the tag
 # cannot silently change the base image under this build.
+FROM node:22-bookworm-slim AS client-checks
+WORKDIR /client
+COPY client/package.json client/package-lock.json ./
+RUN npm ci
+COPY client/ ./
+RUN node --test src/session.test.mjs && npm run build
+
 FROM python:3.13-slim-trixie@sha256:ffb752e139c0a19692a43af8d8523b274222dd68eebad5d583b45c2201c6e30a AS ci
 
 ARG POPPLER_UTILS_VERSION=25.03.0-5+deb13u4
 ARG MUPDF_TOOLS_VERSION=1.25.1+ds1-6+deb13u1
+# 12.2.0-1 is the newest version Debian trixie's own apt repository offers (confirmed
+# against packages.debian.org/trixie/qpdf, 2026-08-23, which lists only 12.2.0-1) — there is
+# no newer trixie-native package to bump this pin to. Local dev commonly has a newer qpdf
+# (e.g. 12.4.0 via Homebrew) from a non-apt source, so this version gap is expected and
+# legitimate, not a stale pin. Reconciled by tests/test_qpdf_qdf_stability.py, a permanent
+# tripwire that pins a `qpdf --qdf` output fingerprint and fails loudly the moment this
+# version gap actually changes normalization output, rather than trusting qpdf's docs that
+# --qdf is stable across minor versions on faith.
 ARG QPDF_VERSION=12.2.0-1
 ARG PDFCPU_VERSION=0.15.0
+# OTS (OpenType Sanitizer) — G2b's font-embedding validation gate (FONT-03). Verified
+# available at this exact version string for Debian trixie against
+# packages.debian.org/trixie/opentype-sanitizer, 2026-08-23.
+ARG OTS_VERSION=8.2.1+dfsg-2
 
 # apt package versions above are Debian 13 "trixie" versions (verified via the Debian
 # Sources API, sources.debian.org/api/src/<pkg>/, 2026-08-12) to match the trixie base image
@@ -27,7 +46,8 @@ RUN apt-get update && \
         curl ca-certificates xz-utils \
         poppler-utils="${POPPLER_UTILS_VERSION}" \
         mupdf-tools="${MUPDF_TOOLS_VERSION}" \
-        qpdf="${QPDF_VERSION}" && \
+        qpdf="${QPDF_VERSION}" \
+        opentype-sanitizer="${OTS_VERSION}" && \
     rm -rf /var/lib/apt/lists/*
 
 # pdfcpu ships as a GitHub release binary, not a Debian/Ubuntu package — pinned by exact
@@ -39,7 +59,7 @@ RUN curl -fsSL -o /tmp/pdfcpu.tar.xz \
     find /tmp/pdfcpu -type f -name pdfcpu -exec install -m 755 {} /usr/local/bin/pdfcpu \; && \
     rm -rf /tmp/pdfcpu /tmp/pdfcpu.tar.xz
 
-RUN pdftoppm -v && mutool -v && qpdf --version && pdfcpu version
+RUN pdftoppm -v && mutool -v && qpdf --version && pdfcpu version && ots-sanitize --version
 
 # uv installed by copying its published static binary — the project itself is installed via
 # `uv sync --locked`, matching Plan 01-01's pinned lockfile exactly.
@@ -50,4 +70,6 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-install-project
 
 COPY . .
+COPY --from=client-checks /client/node_modules ./client/node_modules
+COPY --from=client-checks /client/dist ./client/dist
 RUN uv sync --locked

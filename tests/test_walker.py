@@ -49,7 +49,7 @@ CORPUS_DIR = REPO_ROOT / "corpus" / "public"
 # Not an alignment issue: playa-pdf 1.1.0 cannot open this file without the optional
 # `cryptography` extra (`pip install playa-pdf[crypto]`), not installed as a runtime
 # dependency here. Its own finding, not a workaround for the tripwire.
-KNOWN_UNOPENABLE_FILES = frozenset({"irs_form_w9_encrypted.pdf"})
+KNOWN_UNOPENABLE_FILES: frozenset[str] = frozenset()
 
 # Not an alignment issue: raises before ever reaching walk_page's assertion, from an
 # inline-image tokenisation edge case inside ObjectParser itself. Its own finding.
@@ -116,7 +116,7 @@ def test_curpos_alignment_holds_across_corpus() -> None:
 # KNOWN_OTHER_ERROR_FILES above, which were measured against the raw walker only; RunIndex
 # composes four more stages that could newly fail or newly succeed). Measured 2026-08-17:
 # identical files, same underlying causes -- see the test's own docstring.
-KNOWN_RUNINDEX_UNOPENABLE_FILES = frozenset({"irs_form_w9_encrypted.pdf"})
+KNOWN_RUNINDEX_UNOPENABLE_FILES: frozenset[str] = frozenset()
 KNOWN_RUNINDEX_OTHER_ERROR_FILES = frozenset({"govdocs1_011_011089.pdf"})
 
 

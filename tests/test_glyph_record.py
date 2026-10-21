@@ -20,7 +20,7 @@ CORPUS_DIR = REPO_ROOT / "corpus" / "public"
 
 # Same two documented, diagnosed non-alignment failures Task 1 established (see
 # tests/test_walker.py's module docstring). Named exclusions, never a silent try/except.
-KNOWN_UNOPENABLE_FILES = frozenset({"irs_form_w9_encrypted.pdf"})
+KNOWN_UNOPENABLE_FILES: frozenset[str] = frozenset()
 KNOWN_OTHER_ERROR_FILES = frozenset({"govdocs1_011_011089.pdf"})
 
 # Fields that must never be None on any glyph. glyph, unicode and item_index_within_tj are

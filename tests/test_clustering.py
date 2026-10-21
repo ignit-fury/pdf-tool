@@ -434,9 +434,9 @@ def test_pitfall_3_skipping_the_sort_interleaves_two_columns() -> None:
 # failure in one file can't silently widen another file's allowance.
 # ---------------------------------------------------------------------------
 
-# playa-pdf 1.1.0 cannot open this file without the optional `cryptography` extra
-# (`pip install playa-pdf[crypto]`), not installed as a runtime dependency here.
-KNOWN_UNOPENABLE_FILES = frozenset({"irs_form_w9_encrypted.pdf"})
+# Phase 4 installs playa-pdf[crypto]; the encrypted W-9 now opens and is
+# explicitly covered by test_engine_passwords, so there are no encryption exclusions.
+KNOWN_UNOPENABLE_FILES: frozenset[str] = frozenset()
 
 # Raises a PDFSyntaxError from ObjectParser's inline-image (BI...ID...EI) handling,
 # unrelated to text operators or clustering -- see tests/test_walker.py's module docstring.

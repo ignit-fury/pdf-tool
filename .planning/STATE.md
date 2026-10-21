@@ -1,96 +1,53 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: milestone
-status: planning
-stopped_at: Phase 3 context gathered
-last_updated: "2026-08-17T17:30:43.396Z"
-last_activity: 2026-08-17 -- Phase 2 execution complete, Gate G1 verified
+milestone_name: PDF Tool
+status: verification
+stopped_at: Phase 4 locally verified; Linux/container and live CDN release gates remain open
+last_updated: "2026-10-21"
+last_activity: Phase 4 reviewed; final non-corpus run 420 passed, 5 skipped; renderer gates passed
 progress:
   total_phases: 8
-  completed_phases: 1
-  total_plans: 17
-  completed_plans: 7
-  percent: 13
+  completed_phases: 3
 ---
 
 # Project State
 
-## Project Reference
+**Core value:** Replace existing PDF text while preserving the surrounding document.
+**Current focus:** Phase 04 — browser editor and hardening verification.
 
-See: .planning/PROJECT.md (updated 2026-08-12)
+Phases 1–3 are complete. The Phase 3 engine and its fonts, CLI and regression gates are
+now present in this checkout; the original source worktree and local edits are preserved.
+Phase 4 implementation is delivered locally. Safari/Firefox open/edit/download and Safari
+password/undo/cache-recovery journeys were exercised. Public-release Gate G3 remains
+open until Linux/container and live CDN checks are actually run.
 
-**Core value:** Replace text across every page of an existing PDF and have the output look like nothing happened.
-**Current focus:** Phase 03 — Rewrite Engine + Font Pipeline (Phase 02 complete)
+Execution record: `.planning/PHASE-4-EXECUTION.md`.
+Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04-VERIFICATION.md`.
 
-## Current Position
+## Current work
 
-Phase: 02 (Text Model) — COMPLETE (Gate G1 passed 5/5, see 02-VERIFICATION.md)
-Plan: 10 of 10 complete
-Status: Ready to plan Phase 03 (Rewrite Engine + Font Pipeline)
-Last activity: 2026-08-17 -- Phase 2 execution complete, Gate G1 verified
+- Full regression run passed: 423 passed, 5 skipped; two subsequently added tests passed focused checks.
+- Frontend build, ten client helper tests, strict engine/server typing and local browser journeys passed.
+- Final review fixed Unicode password transport and added safe refusals for stateful text
+  operators and ambiguous/multi-character shaping. The final non-corpus rerun passed
+  (420 passed, 5 skipped, 19 deselected), as did all three renderer/font gates.
+- Linux resource limits, tmpfs and seccomp tests are configured in CI but not yet run here.
+- No deployment URL exists for the live CDN gate; no deployment was published.
 
-Progress: [██░░░░░░░░] 25%
+## Preserved constraints
 
-## Performance Metrics
+Server-issued run addresses; one atomic recipe against immutable original bytes; no overlay
+editing; no runtime AGPL; no persistent server document/session history; browser-held
+originals recover evicted memory cache. Phase 5 full-document find/replace, Phase 6 page
+operations, and later exports remain outside this milestone.
 
-**Velocity:**
+## Decisions made during execution
 
-- Total plans completed: 0
-- Average duration: —
-- Total execution time: 0.0 hours
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| - | - | - | - |
-
-**Recent Trend:**
-
-- Last 5 plans: —
-- Trend: —
-
-*Updated after each plan completion*
-
-## Accumulated Context
-
-### Decisions
-
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- [Roadmap]: Risk front-loaded on purpose — conformance harness and corpus before any engine code, and no web tier before Gate G2b
-- [Roadmap]: Rewrite engine and font pipeline are one phase (Phase 3); replace-without-subsetting is a shipped competitor limitation, not an increment
-- [Roadmap]: EDIT-01 and CLAS-06/07 moved to Phase 4 — their observable behaviour is a browser interaction and Phases 2–3 are CLI-only. Ordering unchanged; rationale in ROADMAP.md "Deviations from the research sequence"
-- [Research]: Server owns text addresses; the client echoes run IDs, never invents them (SETTLED, do not relitigate)
-- [Research]: No AGPL anywhere in the runtime tree, transitively; GPL/LGPL only as a file-in/file-out subprocess
-
-### Pending Todos
-
-[From .planning/todos/pending/ — ideas captured during sessions]
-
-None yet.
-
-### Blockers/Concerns
-
-[Issues that affect future work]
-
-- **Gate G2b is the project gate.** If replacing a word using a character absent from the embedded font subset cannot produce output that is pixel-identical outside the edited run in three engines and opens clean in Acrobat, there is no product and no fallback plan. Phase 3 exists to answer this. It should fail in week three, not month four.
-- **`playa-pdf` is on the critical path with thin third-party corroboration** — decided in Phase 1 against ≥4 real documents. `pdfminer.six` is the drop-in fallback; keep decode calls confined to one engine module so the swap stays contained. Do not build an abstraction layer for it.
-- **Phases 2, 3 and 8 are flagged for `/gsd:plan-phase --research-phase`** (encoding resolution chain and synthetic-space threshold; TJ-refit and substitution quality; PDF/A conformance and DOCX layout inference).
-- **CVE specifics in the research are partly aggregator-sourced** — re-verify against NVD when implementing Phase 4 hardening.
-
-## Deferred Items
-
-Items acknowledged and carried forward from previous milestone close:
-
-| Category | Item | Status | Deferred At |
-|----------|------|--------|-------------|
-| *(none)* | | | |
-
-## Session Continuity
-
-Last session: 2026-08-17T17:30:43.388Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-rewrite-engine-font-pipeline/03-CONTEXT.md
+- Use raw bounded PDF upload to avoid multipart disk spooling.
+- Use existing recipe engine exclusively; remove obsolete server rewrite/export forks.
+- Use OCRmyPDF's official guide as the named external OCR route; no file is sent there.
+- Allow same-origin decoder WASM via CSP's narrower wasm-unsafe-eval, never JS unsafe-eval.
+- Preserve positive word-space width; use bounded Tz or named refusal for larger compression.
+- Reconcile corpus exclusions after enabling AES support and replace obsolete zero-hash
+  diagnostic expectations with manifest digests.

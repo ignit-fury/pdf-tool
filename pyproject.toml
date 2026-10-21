@@ -1,24 +1,25 @@
 [project]
 name = "pdf-tool-engine"
 version = "0.1.0"
-description = "Add your description here"
+description = "Content-stream PDF editor with an ephemeral browser editing service"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fonttools==4.63.0",
     "pikepdf==10.11.0",
     "pillow==12.3.0",
-    "playa-pdf==1.1.0",
+    "playa-pdf[crypto]==1.1.0",
     "pypdfium2==5.12.1",
     "uharfbuzz==0.56.0",
     "fastapi==0.141.1",
     "uvicorn==0.52.1",
     "python-multipart==0.0.32",
-    "python-docx==1.2.0",
 ]
 
 [dependency-groups]
 dev = [
+    "opentype-sanitizer>=9.2,<10",
+    "httpx>=0.28,<0.29",
     "mypy==2.3.0",
     "pytest>=9.1.1",
 ]
@@ -28,15 +29,22 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
     "corpus: exercises the full corpus/public tier (slower, excluded from the quick per-commit run)",
+    "linux_only: requires Linux resource limits or tmpfs",
+    "e2e: browser journey verification",
+    "cdn: requires a configured live deployment URL",
 ]
 
 [tool.mypy]
 strict = true
-files = ["engine"]
+files = ["engine", "server"]
 
 # fontTools ships no py.typed marker, so strict mode cannot see its types. Scoped to
 # fontTools alone -- never a blanket ignore_missing_imports, which would silently hide a
 # genuinely missing import anywhere in the engine.
 [[tool.mypy.overrides]]
 module = ["fontTools.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["uharfbuzz.*"]
 ignore_missing_imports = true

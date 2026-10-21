@@ -301,7 +301,7 @@ def test_form_xobject_glyphs_address_the_xobjects_own_stream() -> None:
 def test_self_referencing_form_xobject_walks_to_completion(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """T-02-02 (CVE-2026-48155 shape). A Form XObject that `Do`-invokes itself, on a
+    """T-02-02 (GHSA-763m-79hh-57f2 XForm shape). A Form XObject that `Do`-invokes itself, on a
     2-page document so the per-BRANCH visited set is exercised rather than a global one.
 
     Two claims:

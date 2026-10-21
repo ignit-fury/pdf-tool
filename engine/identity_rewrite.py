@@ -51,7 +51,7 @@ coalesces the whole page before parsing, matching Section 9's own procedure -- s
 the scope note above). For most documents this is invisible downstream. But
 `engine.classify_run._find_active_font_name` (02-08) resolves a glyph's active font
 by regex-scanning for the LAST `Tf` at or before that glyph's byte offset **within
-that glyph's own /Contents PART ONLY** (`_stream_bytes_and_resources` returns one
+that glyph's own /Contents PART ONLY** (`stream_bytes_and_resources` returns one
 part's bytes, not the whole page's). On a document where a `Tf` is declared in part
 N and a later part N+k shows text under it with no intervening `Tf` -- legal PDF,
 and apparently common in IRS-generated accessible/tagged forms
@@ -119,7 +119,7 @@ from pathlib import Path
 
 import pikepdf
 
-from engine.classify_run import _stream_bytes_and_resources
+from engine.classify_run import stream_bytes_and_resources
 from engine.index import RunIndex
 from engine.records import GlyphRecord, RunRecord
 from engine.run_id import decode_run_id, resolve_run_id_offset
@@ -204,12 +204,12 @@ def _bytes_for_run(
 
     `resolve_run_id_offset` only ever consults `parts["part"]`; it has no idea what
     `xobj_path` means. The caller (here) is what picks the right byte source, via
-    `engine.classify_run._stream_bytes_and_resources` -- the SAME function
+    `engine.classify_run.stream_bytes_and_resources` -- the SAME function
     `classify_run.py`'s own font-resolution path already uses to pick page-vs-array
     vs. Form-XObject bytes, reused rather than reimplemented. This is also why an
     `xobj_path`-sourced run needs NO special case anywhere in this module: its own
     decoded `part` (always 0 -- a Form XObject stream is never an array, see
-    `_stream_bytes_and_resources`'s own docstring) is resolved against the XObject's
+    `stream_bytes_and_resources`'s own docstring) is resolved against the XObject's
     OWN bytes, which `identity_rewrite`/`null_edit_rewrite` never touch, so the check
     trivially passes for the same reason it passes for an untouched page part.
 
@@ -222,7 +222,7 @@ def _bytes_for_run(
     parts = decode_run_id(run_id)
     cache_key = (parts["part"], parts["xobj_path"])
     if cache_key not in cache:
-        stream_bytes, _resources = _stream_bytes_and_resources(
+        stream_bytes, _resources = stream_bytes_and_resources(
             pdf, page_index, parts["part"], parts["xobj_path"]
         )
         cache[cache_key] = stream_bytes

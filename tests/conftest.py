@@ -1,10 +1,21 @@
 """Shared pytest fixtures for the corpus test suite."""
 
 import json
+import os
 from pathlib import Path
 
 import pikepdf
 import pytest
+
+# Google's wheel packages the real OTS executable beside its Python module without
+# installing a console entry point. Keep the existing CLI gate unchanged on macOS
+# and Linux; system-installed OTS remains usable when the wheel is absent.
+try:
+    import ots
+except ImportError:
+    pass
+else:
+    os.environ['PATH'] = str(Path(ots.__file__).parent) + os.pathsep + os.environ.get('PATH', '')
 
 
 def _load_manifest():

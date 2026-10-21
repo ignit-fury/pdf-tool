@@ -51,6 +51,7 @@ message carries counts only -- never document content (T-02-04).
 
 from __future__ import annotations
 
+import hashlib
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
@@ -108,9 +109,17 @@ class RunIndex:
     manager, or call `close()` directly, to release both handles.
     """
 
-    def __init__(self, path: str | Path) -> None:
-        self._pdf = pikepdf.open(path)
-        self._doc: Document = open_document(path)
+    def __init__(self, path: str | Path, password: str = "") -> None:
+        self._pdf = pikepdf.open(path, password=password)
+        try:
+            self._doc: Document = open_document(path, password=password)
+        except Exception:
+            self._pdf.close()
+            raise
+        # D-10: the same digest `classify_document` embeds, computed once per document
+        # here rather than once per page -- both callers of `_classify_one_page` must mint
+        # run IDs a later `plan_recipe` can hash-check against the same file.
+        self._source_hash = hashlib.sha256(Path(path).read_bytes()).hexdigest()
         self._shared = shared_form_xobjects(self._pdf)
         self._font_cache: dict[tuple[tuple[int, int], bytes], FontVerdict] = {}
         self._cache: OrderedDict[int, PageIndex] = OrderedDict()
@@ -138,7 +147,13 @@ class RunIndex:
         actually caches rather than re-parsing."""
         page = self._doc.pages[page_index]
         bucket, runs, glyph_count = _classify_one_page(
-            self._pdf, self._doc, page, page_index, self._shared, self._font_cache
+            self._pdf,
+            self._doc,
+            page,
+            page_index,
+            self._shared,
+            self._font_cache,
+            self._source_hash,
         )
         self._total_glyphs_walked += glyph_count
         if self._total_glyphs_walked > MAX_DOCUMENT_GLYPHS:

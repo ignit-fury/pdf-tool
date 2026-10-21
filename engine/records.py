@@ -68,3 +68,8 @@ class RunRecord:
     glyphs: list[GlyphRecord]
     display_text: str  # synthetic spaces inserted by the clusterer (D-03)
     page: int
+    # Optional geometry context kept beside the fixed GlyphRecord provenance. playa's
+    # glyphs use device/screen space; selection boxes must invert this page transform.
+    page_ctm: tuple[float, float, float, float, float, float] | None = None
+    effective_em: float | None = None
+    direction: tuple[float, float] | None = None

@@ -12,6 +12,7 @@ No document content (page text, counts derived from it) appears in assertion mes
 per this project's standing convention.
 """
 
+import hashlib
 import tempfile
 from pathlib import Path
 
@@ -28,7 +29,9 @@ from engine.classify_page import (
 import engine.classify_run as classify_run_module
 import engine.walker as walker_module
 from engine.classify_run import DocumentClassification, RunVerdict, classify_document
+from engine.index import RunIndex
 from engine.playa_boundary import Document, Page, image_bboxes
+from engine.run_id import decode_run_id
 from engine.records import RunRecord
 from engine.walker import glyph_records
 
@@ -41,6 +44,10 @@ VECTOR_OUTLINED_SAMPLE = CORPUS_DIR / "vector_outlined_text_sample.pdf"
 RENDER_MODE_7_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "render_mode_7.pdf"
 MIXED_SCANNED_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "mixed_scanned.pdf"
 IRS_1040_INSTRUCTIONS = CORPUS_DIR / "irs_1040_instructions.pdf"
+
+# A small (17KB, 4-page) corpus document -- the source_hash tests below only need a real
+# document that produces real runs, and this is the cheapest one that does.
+SMALL_CORPUS_DOC = CORPUS_DIR / "govdocs1_012_012156.pdf"
 
 # tools/build_mixed_fixture.py's own PAGE_PLAN: 0-based indices of the 3 constructed
 # zero-glyph scan pages, interleaved among 37 editable irs_publication_17.pdf pages.
@@ -540,3 +547,44 @@ def test_classify_run_defensive_per_glyph_recheck_refuses_no_unicode_glyph() -> 
         "reason -- a font-level verdict alone (editable=True here) would have passed "
         "this run, so this proves the per-glyph loop actually executes"
     )
+
+
+# --------------------------------------------------------------------------------------
+# 03-07 Task 2: the source_hash root-cause fix (D-10)
+# --------------------------------------------------------------------------------------
+
+
+def test_classify_document_embeds_real_sha256_source_hash() -> None:
+    """D-10's precondition: a run ID's `source_hash` segment must be the SHA-256 of the
+    document's own bytes, so `plan_recipe` can refuse a recipe replayed against a
+    different file. `_classify_one_page` used to hardcode `"0" * 64` there ("neither
+    caller ever decodes an ID to bytes" -- true until 03-07's `plan_recipe` did exactly
+    that), which would have made every hash check trivially pass for every document.
+
+    The expected digest is computed independently here, from the file's own bytes, rather
+    than read back from anything the engine produced.
+    """
+    expected = hashlib.sha256(SMALL_CORPUS_DOC.read_bytes()).hexdigest()
+
+    result = classify_document(SMALL_CORPUS_DOC)
+    assert result.runs, "fixture must produce at least one run for this to be non-vacuous"
+
+    for run, _verdict in result.runs:
+        parts = decode_run_id(run.run_id)
+        assert parts["source_hash"] == expected
+        assert parts["source_hash"] != "0" * 64
+
+
+def test_run_index_embeds_the_same_real_source_hash() -> None:
+    """The same fix at the OTHER call site of `_classify_one_page`. `RunIndex` is the
+    lazy, page-at-a-time path; it must embed the identical digest for the identical
+    document, or a run ID minted interactively would refuse against the very file it came
+    from."""
+    expected = hashlib.sha256(SMALL_CORPUS_DOC.read_bytes()).hexdigest()
+
+    with RunIndex(SMALL_CORPUS_DOC) as index:
+        page = index.page(0)
+    assert page.runs, "fixture page 0 must produce runs for this to be non-vacuous"
+
+    for run, _verdict in page.runs:
+        assert decode_run_id(run.run_id)["source_hash"] == expected

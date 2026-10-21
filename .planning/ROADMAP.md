@@ -28,8 +28,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Conformance Harness + Engine Spike** - Real-world corpus, three-engine masked-diff CI, and the two bets that gate everything downstream — no product code (completed 2026-08-12)
 - [x] **Phase 2: Text Model** - The keystone: content-stream interpreter with per-glyph provenance, plus per-page and per-run editability classification (completed 2026-08-17)
-- [ ] **Phase 3: Rewrite Engine + Font Pipeline** - Replace text with correct widths AND subset/embed a bundled font in one phase — the project gate
-- [ ] **Phase 4: Web Tier Walking Skeleton + Hardening** - First untrusted input: isolation, structural ephemerality, viewer, and the first in-browser edit with undo
+- [x] **Phase 3: Rewrite Engine + Font Pipeline** - Replace text with correct widths AND subset/embed a bundled font in one phase — the project gate (completed 2026-08-28; Gate G2b GO, see `phases/03-rewrite-engine-font-pipeline/G2B-GATE-RESULTS.md`)
+- [ ] **Phase 4: Web Tier Walking Skeleton + Hardening** - Implemented and verified locally 2026-10-21; Linux/container/CDN public-release gates pending (see 04-VERIFICATION.md)
 - [ ] **Phase 5: Find and Replace Across All Pages** - The core value in its user-facing form: match list and preview first, apply second
 - [ ] **Phase 6: Page Ops and Merge** - Insert, reorder, rotate, delete, merge PDF and image — entirely in the browser, zero server round trips
 - [ ] **Phase 7: Exports** - Page images, compress, split, flatten, and text/Markdown/HTML — all consuming the one run index
@@ -322,13 +322,24 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → (5 ∥ 6 ∥ 7) → 8
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Conformance Harness + Engine Spike | 7/7 | Complete   | 2026-08-12 |
-| 2. Text Model | 0/TBD | Not started | - |
-| 3. Rewrite Engine + Font Pipeline | 0/TBD | Not started | - |
-| 4. Web Tier Walking Skeleton + Hardening | 0/TBD | Not started | - |
-| 5. Find and Replace Across All Pages | 0/TBD | Not started | - |
-| 6. Page Ops and Merge | 0/TBD | Not started | - |
-| 7. Exports | 0/TBD | Not started | - |
-| 8. PDF/A, then DOCX | 0/TBD | Not started | - |
+| 2. Text Model | 10/10 | Complete   | 2026-08-17 |
+| 3. Rewrite Engine + Font Pipeline | 9/9 | Complete   | 2026-08-28 |
+| 4. Web Tier Walking Skeleton + Hardening | Consolidated execution | Implemented locally; release verification pending | - |
+| 5. Find and Replace Across All Pages | 0/TBD | Planning | - |
+| 6. Page Ops and Merge | 0/TBD | Planning | - |
+| 7. Exports | 0/TBD | Planning | - |
+| 8. PDF/A, then DOCX | 0/TBD | Planning | - |
+
+**Table corrected 2026-08-30.** The rows for Phases 2 and 3 read "Not started" until this date
+while both were in fact complete — Phase 2 closed 2026-08-17 (Gate G1, `02-VERIFICATION.md`) and
+Phase 3 closed 2026-08-28 (Gate G2b, `G2B-GATE-RESULTS.md`). Phases 5–8 remain marked **Planning** (Phase 4 implementation updated 2026-10-21)
+because their `CONTEXT.md`, `RESEARCH.md`, and `VALIDATION.md` artifacts exist; plan counts stay
+`TBD` until each phase's planner runs.
+
+**Branch state updated 2026-10-21.** Phase 3 source/fonts/tests and Phase 4–8 planning artifacts
+are integrated into this checkout. The original worktree and local edits are preserved. Phase 4
+implementation and its review evidence are tracked in `.planning/PHASE-4-EXECUTION.md` and
+`04-VERIFICATION.md`; Linux/container and live CDN public-release gates remain open.
 
 ## Requirement Coverage
 

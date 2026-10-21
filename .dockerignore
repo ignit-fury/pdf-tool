@@ -1,0 +1,10 @@
+.git
+.claude
+.venv
+.mypy_cache
+.pytest_cache
+**/__pycache__
+client/node_modules
+client/dist
+corpus/private
+.DS_Store

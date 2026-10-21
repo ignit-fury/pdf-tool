@@ -1,6 +1,6 @@
 # PDF Tool
 
-A browser-based PDF editor that edits the **actual existing content** of a PDF — replacing text inside the page's content stream rather than pasting annotations or white boxes on top. Users open a PDF, find-and-replace text across every page, insert blank pages, merge in images or other PDFs, restyle text with embedded fonts, and export to several formats. It is aimed at people who need to change a document that already exists and want the result to look untouched.
+A browser-based PDF editor that edits the **actual existing content** of a PDF — replacing text inside the page's content stream rather than pasting annotations or white boxes on top. The current browser milestone supports opening a PDF, selecting existing text, replacing it, changing colour or font style, undoing changes and downloading the edited PDF. Full-document find/replace, page operations and format conversions are planned later milestones. It is aimed at people who need to change a document that already exists and want the result to look untouched.
 
 It is a real product for other people, used anonymously — no signup to edit a file.
 
@@ -8,7 +8,7 @@ It is a real product for other people, used anonymously — no signup to edit a 
 
 ## Architecture
 
-Hybrid client/server — light operations (page insert, reorder, rotate, merge, preview) run in the browser for instant feedback; heavy operations (content-stream text rewrite, font subsetting, format conversion) run on the server. Two code paths is the accepted cost of a responsive UI without shipping the whole engine as multi-megabyte WASM.
+Hybrid client/server — rendering, text selection, original-byte retention and downloads run in the browser. Content indexing, text rewrites and font work run in isolated server workers. Planned page operations will remain browser-local.
 
 Editing is **content-stream only**. No white-box overlays. No reflow across lines or pages — replaced text occupies the original text run's space.
 
@@ -57,49 +57,105 @@ GPL/LGPL permitted only as a subprocess with a file-in/file-out interface (GPL t
 | uvicorn | 0.52.1 | BSD-3 | ASGI server |
 | @cantoo/pdf-lib | 2.8.1 | MIT | Client-side page ops |
 | pdfjs-dist | 6.2.108 | Apache-2.0 | Browser rendering |
-| React | 19.2.8 | MIT | UI |
-| Vite | 8.2.1 | MIT | Build |
+| React | 18.3.1 | MIT | UI |
+| Vite | 5.4.21 | MIT | Build |
 
 ### Bundled fonts
 
 | Family | License | Why |
 |---|---|---|
 | Liberation (Sans/Serif/Mono) | SIL OFL 1.1 | Metric-compatible with Arial/Times/Courier. When the original PDF used a Base-14 or Microsoft core font, Liberation substitutes with identical advance widths — replacement text lands in the same place with zero fitting work. |
-| Noto Sans / Serif | SIL OFL 1.1 | Coverage fallback for anything Liberation lacks. |
-| DejaVu | Bitstream Vera / free | Broad glyph coverage, permissive. |
+
+## Current stage
+
+Phase 3's rewrite engine is integrated into this checkout. Phase 4 implements a browser
+viewer and single-run editor with text/style preview, PDF download and recipe-level undo.
+The editor uses the actual content stream. Unsupported edits are refused explicitly.
+
+Implemented: password-protected PDFs, signature warnings, server-issued edit boxes,
+selectable browser text, progressive thumbnails/classification, bold/italic and colour,
+immutable-source replay, cache-loss recovery and isolated parser workers. Font-size
+changes are refused because replacements must fit the original run width.
+Edits using stateful quote operators or unsupported Unicode shaping are also refused to
+preserve layout and searchable text. Precomposed accents such as `é` remain supported.
+
+Full-document find/replace, page operations, format exports and built-in OCR are later
+milestones. The current screen links to OCRmyPDF's external guide without uploading the
+PDF there. The OCR interest counter collects no document or contact data.
 
 ## How to run
+
+Python 3.13+ and Node 22.13+ are required. From the repository root:
+
+```bash
+uv sync --locked
+cd client
+npm ci
+npm run build
+cd ..
+uv run uvicorn server.app:app --host 127.0.0.1 --port 8000 --no-access-log
+```
+
+Open <http://127.0.0.1:8000>. The FastAPI service serves the built client and all pdf.js
+assets on the same origin. Select a text run, preview its fit, then apply and download.
+Undo restores the previous whole recipe, including text and style. Repeated edits to
+one run replace that run's operation instead of creating duplicate addresses.
+
+For frontend development, run the API on port 8000 and `npm run dev` in `client/`;
+Vite proxies API routes. Opening a file uploads it for analysis; rendering and download
+happen locally. Original bytes and passwords stay in browser memory while open, with
+passwords sent to the worker when needed. Closing/reloading clears the browser session.
+The client transports passwords as UTF-8/base64 in `X-PDF-Password-B64` so Unicode and
+whitespace survive HTTP header handling. Base64 is encoding; TLS is required publicly.
+
+### Production container
+
+```bash
+docker build -t pdf-tool .
+docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges \
+  --tmpfs /dev/shm:rw,nosuid,nodev,size=1536m --memory 3g --pids-limit 64 \
+  -p 127.0.0.1:8000:8000 pdf-tool
+```
+
+Use TLS and an appropriately configured reverse proxy for a public deployment. The
+server enforces bounded reads with deadlines, concurrent-request/worker caps, no-store
+headers and a CSP without JavaScript `unsafe-eval`. Linux workers enforce CPU/address
+space limits and seccomp network/process restrictions; production scratch must be tmpfs.
+macOS development cannot provide the Linux memory/seccomp/tmpfs guarantees. Container,
+Linux and live CDN checks must pass before claiming public-release readiness.
+
+The memory cache is capped at 128 MiB, expires sources after 10 minutes and can be cleared
+at any point. A missing source returns `409 SOURCE_MISSING`; the browser reuploads its
+original bytes and retries once. No document bytes are placed in queues/object stores,
+no password/filename is stored in the cache, and no undo history is held server-side.
 
 ### Engine CLI
 
 ```bash
-cd /Users/prempatel/Pictures/pdf-tool
-uv sync
 uv run python tools/pdftool.py index path/to/document.pdf
+uv run python tools/pdftool.py index path/to/document.pdf --page 0
+uv run python tools/pdftool.py edit path/to/document.pdf --recipe recipe.json -o edited.pdf
 ```
 
-`tools/pdftool.py` is the CLI over the Phase 2 pipeline (`engine.index.RunIndex`). One subcommand, `index`:
+A recipe is an array of `{ "run_id": "server-issued-id", "new_text": "replacement" }`.
+Optional `style` supports RGB `color` values from 0 to 1 and boolean `bold`/`italic`.
+`--dry-run` reports fit/refusal without writing. Edits replay atomically against the
+original bytes, and stale source hashes are refused.
 
-- **No `--page`**: a per-page summary table (page number, run count, editable/substitution/not-editable counts, page bucket), iterating every page so `RunIndex`'s own cache/evict machinery runs as intended.
-- **With `--page N`**: that page's run list (run ID, display text with synthetic spaces, verdict state, and reason only when state is `not_editable`).
-
-### Server
+### Verification
 
 ```bash
-cd /Users/prempatel/Pictures/pdf-tool
-uv run uvicorn server.app:app
+uv run --frozen pytest -q
+uv run --frozen mypy engine/ server/
+uv run --frozen python tools/license_gate.py
+node --test client/src/session.test.mjs
 ```
 
-The server runs a FastAPI service. Heavy operations — content-stream text rewrite, font subsetting, format conversion — execute here.
-
-### Client
-
-```bash
-cd client
-npm run dev
-```
-
-A React/Vite SPA. Light operations (page insert, reorder, rotate, merge, preview) run in the browser via `@cantoo/pdf-lib` + `pdfjs-dist`. The client never edits content streams — that always goes to the server.
+Full corpus checks require `qpdf`, `pdftoppm` and `mutool`; these test renderers belong
+only in CI/dev. The OpenType Sanitizer dev wheel supplies the font gate executable.
+`Dockerfile.ci` provides pinned renderer versions. Linux-only tests are explicit skips
+on macOS; live CDN tests require `PDF_TOOL_DEPLOYMENT_URL`. Browser journey evidence
+and remaining release checks are recorded in the Phase 4 verification report.
 
 ## Corpus testing
 
@@ -108,7 +164,7 @@ Two-tier corpus of real-world PDFs used to validate the engine's structural hand
 - **Public tier** (`corpus/public/`): committed to the repo, git-lfs tracked, runs on every PR including fork PRs with no CI secrets. Every structural category required by the conformance design has at least one public-tier example. See `corpus/README.md` for the full schema and list of the 15 canonical categories.
 - **Private tier**: never committed. Holds real invoices and contracts that carry third-party personal data. Fetched from a bucket via CI secrets, gates `main` and release branches, and is skipped where credentials are absent. The private tier adds volume and real-world messiness — never unique structural categories.
 
-The public tier is intentionally small (17 files as of this writing). Every file was individually structurally verified via `pikepdf` object introspection and, for rendering-dependent categories, a `pypdfium2` visual spot-check, rather than added to pad the count.
+The public tier contains more than 200 PDFs; the manifest is the authoritative inventory. Every file was individually structurally verified via `pikepdf` object introspection and, for rendering-dependent categories, a `pypdfium2` visual spot-check, rather than added to pad the count.
 
 Testing tools:
 - `tools/probe_corpus.py` — walks the corpus through the engine pipeline and reports per-category coverage.
@@ -123,7 +179,7 @@ pdf-tool/
 ├── pyproject.toml         # Python deps (pikepdf, playa-pdf, fontTools, etc.)
 ├── uv.lock                # pinned lockfile
 ├── tools/
-│   ├── pdftool.py         # Engine CLI (index subcommand)
+│   ├── pdftool.py         # Engine CLI (index and edit)
 │   ├── probe_corpus.py    # Corpus coverage probe
 │   ├── check_corpus_size.py
 │   ├── license_gate.py    # AGPL gate for CI
@@ -137,7 +193,7 @@ pdf-tool/
 └── client/                # React/Vite SPA (separate repo or subdirectory)
 ```
 
-## Export paths — honest quality
+## Planned export paths — honest quality
 
 | Export | Tool | Quality |
 |---|---|---|

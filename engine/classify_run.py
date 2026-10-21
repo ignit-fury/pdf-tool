@@ -43,6 +43,7 @@ distinct fonts) and a run's own verdict, after clustering, is simply its first g
 
 from __future__ import annotations
 
+import hashlib
 import re
 import unicodedata
 from dataclasses import dataclass
@@ -102,7 +103,7 @@ def _find_active_font_name(stream_bytes: bytes, byte_offset: int) -> bytes | Non
     return name
 
 
-def _stream_bytes_and_resources(
+def stream_bytes_and_resources(
     pdf: pikepdf.Pdf, page_index: int, part: int, xobj_path: tuple[int, ...]
 ) -> tuple[bytes, pikepdf.Object | None]:
     """The raw bytes and `/Resources` dict of the ONE stream a glyph's provenance
@@ -111,6 +112,11 @@ def _stream_bytes_and_resources(
     have a `/Contents` array -- the XObject stream itself IS the content, so `part` is
     only meaningful for the page's own `/Contents` (which may be a single stream or an
     array).
+
+    Public (no leading underscore) as of plan 03-06: `engine.identity_rewrite` and
+    `engine.rewrite` both resolve a run's own bytes through this, which makes the rewrite
+    engine its third consumer -- exactly the point 03-CONTEXT.md's Integration Points
+    named for promoting it out of private.
     """
     page = pdf.pages[page_index]
     if not xobj_path:
@@ -133,12 +139,13 @@ def _resolve_font_for_glyph(
     path: StreamPath,
     glyph: GlyphRecord,
     cache: dict[tuple[tuple[int, int], bytes], FontVerdict],
+    stream_context: tuple[bytes, pikepdf.Object | None] | None = None,
 ) -> FontVerdict:
     """The `FontVerdict` for whichever font was active at this glyph's own operator. A
     glyph the font-lookup itself cannot resolve (no `Tf` found, or the name is not in
     `/Resources /Font`) refuses with its own distinct reason -- never silently treated
     as editable, and never conflated with `resolve_font`'s own named refusal branches."""
-    stream_bytes, resources = _stream_bytes_and_resources(
+    stream_bytes, resources = stream_context if stream_context is not None else stream_bytes_and_resources(
         pdf, page_index, glyph.stream_id, path.xobj_path
     )
     name = _find_active_font_name(stream_bytes, glyph.operator_byte_offset)
@@ -233,6 +240,7 @@ def _classify_one_page(
     page_index: int,
     shared_xobject_ids: dict[int, int],
     font_cache: dict[tuple[tuple[int, int], bytes], FontVerdict],
+    source_hash: str,
 ) -> tuple[Bucket, list[tuple[RunRecord, RunVerdict]], int]:
     """The per-page pipeline body: walk -> resolve fonts -> cluster -> classify, for ONE
     page. Extracted from `classify_document`'s own loop (02-09-PLAN.md Task 1 brief,
@@ -241,6 +249,14 @@ def _classify_one_page(
     is now a thin loop calling this once per page -- a mechanical extraction, not a
     behaviour change, which is why every pre-existing `tests/test_classify.py` assertion
     still holds unmodified.
+
+    `source_hash` is the SHA-256 hex digest of the WHOLE document's bytes, computed once by
+    each caller and threaded down into every run ID this page mints (03-07 Task 2). It used
+    to be hardcoded here as `"0" * 64` on the reasoning that "neither caller ever decodes an
+    ID to bytes" -- true only until `engine.recipe.plan_recipe` did exactly that to enforce
+    D-10's source-hash refusal, at which point a constant here would make every hash check
+    pass for every document. Fixed at the root, in this one shared function, rather than in
+    either caller.
 
     Returns `(bucket, runs, glyph_count)`. `glyph_count` is the page's own total located-
     glyph count (every location, visible and invisible) -- `classify_document` has no use
@@ -257,21 +273,38 @@ def _classify_one_page(
     # GlyphRecord-keyed structure.
     glyph_font: dict[int, FontVerdict] = {}
     glyph_path: dict[int, tuple[int, ...]] = {}
+    # Immutable page-read context only: avoid decoding a compressed stream and
+    # rescanning its Tf operators once for every glyph in one Tj/TJ. An operator
+    # cannot change font internally. Include the complete provenance path so
+    # nested streams, annotations and patterns never share an address by accident.
+    streams: dict[tuple[StreamPath, int], tuple[bytes, pikepdf.Object | None]] = {}
+    operator_fonts: dict[tuple[StreamPath, int, int], FontVerdict] = {}
     for stream_path, record, _attrs in located:
-        glyph_font[id(record)] = _resolve_font_for_glyph(
-            pdf, page_index, stream_path, record, font_cache
-        )
+        stream_key = (stream_path, record.stream_id)
+        operator_key = (*stream_key, record.operator_byte_offset)
+        if operator_key not in operator_fonts:
+            if stream_key not in streams:
+                streams[stream_key] = stream_bytes_and_resources(
+                    pdf, page_index, record.stream_id, stream_path.xobj_path
+                )
+            operator_fonts[operator_key] = _resolve_font_for_glyph(
+                pdf, page_index, stream_path, record, font_cache, streams[stream_key]
+            )
+        glyph_font[id(record)] = operator_fonts[operator_key]
         glyph_path[id(record)] = stream_path.xobj_path
 
     def _verdict_fn(record: GlyphRecord) -> GlyphVerdict:
         return glyph_verdict(glyph_font[id(record)], record)
 
-    source_hash = "0" * 64  # neither caller ever decodes an ID to bytes
     page_runs = cluster_page(page_index, located, source_hash, _verdict_fn)
+    geometry = {id(record): attrs for _path, record, attrs in located}
 
     runs: list[tuple[RunRecord, RunVerdict]] = []
     for run in page_runs:
         first_glyph_id = id(run.glyphs[0])
+        run.page_ctm = page.ctm
+        run.effective_em = geometry[first_glyph_id].effective_em
+        run.direction = geometry[first_glyph_id].direction
         run_font_verdict = glyph_font.get(first_glyph_id)
         run_xobj_path = glyph_path.get(first_glyph_id, ())
         if run_font_verdict is None:
@@ -288,7 +321,7 @@ def _classify_one_page(
     return bucket, runs, len(glyph_only)
 
 
-def classify_document(path: str | Path) -> DocumentClassification:
+def classify_document(path: str | Path, password: str = "") -> DocumentClassification:
     """CLAS-05: walk every page, cluster every run, classify every run. Refusal is
     always per-page (`page_buckets`) or per-run (`runs`) -- never a whole-document
     verdict; there is no field on `DocumentClassification` that could express one.
@@ -299,7 +332,10 @@ def classify_document(path: str | Path) -> DocumentClassification:
     round-trip). `engine.index.RunIndex` is the lazy, cached, page-at-a-time alternative
     (D-06) built for interactive latency; both call the same `_classify_one_page` above.
     """
-    pdf = pikepdf.open(path)
+    pdf = pikepdf.open(path, password=password)
+    # D-10: read once, hash once -- every run ID this document mints carries this digest,
+    # and `engine.recipe.plan_recipe` re-derives it from the file it is asked to edit.
+    source_hash = hashlib.sha256(Path(path).read_bytes()).hexdigest()
     shared = shared_form_xobjects(pdf)
     font_cache: dict[tuple[tuple[int, int], bytes], FontVerdict] = {}
 
@@ -307,10 +343,10 @@ def classify_document(path: str | Path) -> DocumentClassification:
     runs: list[tuple[RunRecord, RunVerdict]] = []
 
     try:
-        with open_document(path) as doc:
+        with open_document(path, password=password) as doc:
             for page_index, page in enumerate(doc.pages):
                 bucket, page_runs, _glyph_count = _classify_one_page(
-                    pdf, doc, page, page_index, shared, font_cache
+                    pdf, doc, page, page_index, shared, font_cache, source_hash
                 )
                 page_buckets.append(bucket)
                 runs.extend(page_runs)
@@ -325,4 +361,5 @@ __all__ = [
     "RunVerdict",
     "classify_document",
     "classify_run",
+    "stream_bytes_and_resources",
 ]
