@@ -38,3 +38,10 @@ test('current recipe and stable incremental IDs retain refused occurrences and c
   const edited=findMatches(pages,'dog',{recipe:[{run_id:'r1',new_text:'dog cat'}]});assert.equal(edited.length,1);assert.equal(edited[0].text,'dog');assert.equal(edited[0].after,' cat');
   const context=findMatches(page('x'.repeat(60)+'cat'+'z'.repeat(60)),'cat')[0];assert.equal(context.before,'…'+'x'.repeat(48));assert.equal(context.after,'z'.repeat(48)+'…');
 });
+
+test('long literal matches avoid argument-count limits and preserve astral context',async()=>{
+  const {findMatches}=await api();const text='a'.repeat(150000);
+  assert.equal(findMatches(page(text),text)[0].replaceable,true);
+  const context=findMatches(page('😀'.repeat(60)+'cat'+'😀'.repeat(60)),'cat')[0];
+  assert.equal(context.before,'…'+'😀'.repeat(48));assert.equal(context.after,'😀'.repeat(48)+'…');
+});
