@@ -2,6 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { upsertOperation, commitRecipe, previousRecipe, withSourceRetry, viewportBox, createRequestQueue, retryWorkerBusy } from './session.mjs';
 
+test('font choice is explicit, removable and restored with whole-recipe undo', async () => {
+  const {chooseFontFamily,needsFontChoice,explainReason}=await import('./session.mjs');
+  const run={state:'editable_substitution',suggested_font_family:null};
+  assert.equal(needsFontChoice(run,{}),true);
+  const style=chooseFontFamily({bold:true},'Serif');
+  assert.equal(needsFontChoice(run,style),false);
+  assert.deepEqual(chooseFontFamily(style,''),{bold:true});
+  const initial={recipe:[{run_id:'id',new_text:'original',style}],history:[]};
+  const changed=commitRecipe(initial,upsertOperation(initial.recipe,{run_id:'id',new_text:'changed',style:chooseFontFamily(style,'Mono')}));
+  assert.deepEqual(previousRecipe(changed).recipe,initial.recipe);
+  assert.match(explainReason("no mapping table entry for BaseFont 'Unrecognized'"),/Choose a replacement font/);
+});
+
 test('password headers preserve UTF-8, whitespace and control characters', async () => {
   const {passwordHeaders} = await import('./session.mjs');
   const password = ' \t密碼\r\n ';

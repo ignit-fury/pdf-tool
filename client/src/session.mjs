@@ -7,6 +7,14 @@ export function operationLocation(operations) {return operations.length ? 'serve
 export function passwordHeaders(password) {
   return password ? {'X-PDF-Password-B64': btoa(Array.from(new TextEncoder().encode(password), byte=>String.fromCharCode(byte)).join(''))} : {};
 }
+export function chooseFontFamily(style, family) {
+  const next = {...style};
+  if(family)next.font_family=family;else delete next.font_family;
+  return next;
+}
+export function needsFontChoice(run, style) {
+  return run?.state==='editable_substitution'&&!run.suggested_font_family&&!style.font_family;
+}
 export async function withSourceRetry(session, operation, upload) {
   try {return await operation(session.jobId);}
   catch (error) {
@@ -28,6 +36,7 @@ export async function disposeDocument(document) {
   try {await document?.loadingTask?.destroy();} catch {}
 }
 export function explainReason(reason) {
+  if(reason?.startsWith('no mapping table entry for BaseFont'))return 'No automatic match for this font. Choose a replacement font, then preview again.';
   if(reason==='stateful_text_showing_unsupported')return 'This text uses line or spacing operators that cannot be safely rewritten yet.';
   if(reason==='multi_character_shaping_unsupported'||reason==='ambiguous_glyph_unicode_mapping')return 'This replacement cannot preserve exact searchable text with the available font. Try a simpler spelling or a different text run.';
   const explanations={overflow:'The replacement does not fit. Try shorter text.',fit_overflow:'The replacement does not fit. Try shorter text.',font_size_change_unsupported:'Font-size changes are not supported. Edits must fit the original width.',font_size_unsupported:'Font-size changes are not supported. Edits must fit the original width.',run_id_not_found:'The original text address could not be resolved.','right-to-left text':'Right-to-left text cannot be safely rewritten yet.',Type3:'This Type 3 font cannot be safely rewritten.'};

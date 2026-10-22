@@ -12,7 +12,9 @@ that makes the substitution pipeline's replacement text actually reference the c
 glyphs once the bundled Liberation face is subset and re-embedded per document.
 
 D-05: a missing glyph substitutes the entire visual run, never a partial one -- FONT-06.
-D-06: a font with no entry in this table refuses BY NAME. No serif/sans fallback derived
+D-06: automatic matching for a font with no entry refuses BY NAME. The recipe API also
+allows an explicit user-selected replacement family; that choice bypasses this lookup,
+without claiming to identify the original. No serif/sans fallback derived
 from `/FontDescriptor` flags -- that is precisely the heuristic FONT-01 forbids, the flags
 lie often, and a confident-wrong pick is the failure mode this product exists to avoid.
 D-07: the bundled set is the Liberation trio only (Sans/Serif/Mono, 4 weights each) --
@@ -154,10 +156,25 @@ SEAM_ADVANCE_DELTA_PT: float = 500.0
 
 
 # D-06/FONT-01: flat, finite, exact-match dictionary -- never built from a name-parsing
-# or regex step. 36 entries: 12 Base-14 non-symbol names + 24 MS-core-font variants
+# or regex step. Base-14 non-symbol names plus explicit MS-core-font aliases
 # (Arial x4, TimesNewRoman x4, TimesNewRomanPS...MT x4, CourierNewPS...MT x4,
 # CourierNew x4 -- Pitfall 10's forward-looking robustness set).
 BASE_FONT_MAPPING: dict[str, tuple[BundledFamily, BundledVariant]] = {
+    # Exact display-name aliases emitted by PDF producers, including escaped spaces.
+    "Times New Roman": ("Serif", "Regular"),
+    "Times New Roman,Bold": ("Serif", "Bold"),
+    "Times New Roman,Italic": ("Serif", "Italic"),
+    "Times New Roman,BoldItalic": ("Serif", "BoldItalic"),
+    "Times New Roman Bold": ("Serif", "Bold"),
+    "Times New Roman Italic": ("Serif", "Italic"),
+    "Times New Roman Bold Italic": ("Serif", "BoldItalic"),
+    "Courier New": ("Mono", "Regular"),
+    "Courier New,Bold": ("Mono", "Bold"),
+    "Courier New,Italic": ("Mono", "Italic"),
+    "Courier New,BoldItalic": ("Mono", "BoldItalic"),
+    "Courier New Bold": ("Mono", "Bold"),
+    "Courier New Italic": ("Mono", "Italic"),
+    "Courier New Bold Italic": ("Mono", "BoldItalic"),
     # Base-14 non-symbol names (STANDARD_14 minus Symbol/ZapfDingbats -- deliberately
     # absent, refuse by omission per D-06 and Pitfall 10).
     "Helvetica": ("Sans", "Regular"),

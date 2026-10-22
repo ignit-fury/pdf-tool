@@ -83,6 +83,7 @@ MAX_NEW_TEXT_CHARS = 10_000
 
 
 class RecipeStyle(TypedDict, total=False):
+    font_family: BundledFamily
     color: list[float]
     bold: bool
     italic: bool
@@ -90,8 +91,10 @@ class RecipeStyle(TypedDict, total=False):
 
 
 def _validated_style(value: object) -> RecipeStyle:
-    if not isinstance(value, dict) or set(value) - {"color", "bold", "italic", "font_size"}:
+    if not isinstance(value, dict) or set(value) - {"color", "bold", "italic", "font_size", "font_family"}:
         raise ValueError("invalid recipe style object")
+    if "font_family" in value and (not isinstance(value["font_family"], str) or value["font_family"] not in ("Sans", "Serif", "Mono")):
+        raise ValueError("style font_family must be Sans, Serif or Mono")
     for key in ("bold", "italic"):
         if key in value and type(value[key]) is not bool:
             raise ValueError("style weight and italic must be booleans")
@@ -268,6 +271,25 @@ def _base_font_name(font: pikepdf.Object) -> str:
     return name
 
 
+def source_font_info(
+    stream_bytes: bytes, resources: pikepdf.Object | None, operator_offset: int
+) -> tuple[str | None, BundledFamily | None]:
+    """Source identity and a known substitute; never guess an unknown font family."""
+    active = active_font_name_and_size(stream_bytes, operator_offset)
+    if active is None or resources is None:
+        return None, None
+    fonts = resources.get("/Font")
+    font = fonts.get("/" + active[0].decode("latin-1")) if fonts is not None else None
+    if font is None:
+        return None, None
+    name = font.get("/BaseFont")
+    if name is None:
+        descriptor = font.get("/FontDescriptor")
+        name = descriptor.get("/FontName") if descriptor is not None else None
+    return (str(name).lstrip("/") if name is not None else None,
+            lookup_bundled_font(_base_font_name(font)).family)
+
+
 def _part_key(run: RunRecord) -> tuple[int, int, tuple[int, ...]]:
     """The identity of the ONE content-stream part this run lives in: `(page, part,
     xobj_path)`. Every byte offset in a run ID is meaningful only within this scope
@@ -326,7 +348,8 @@ def _resolve_op(
         trigger = run_needs_substitution(font_obj, font_verdict, program, op.new_text)
 
         substitution_key: tuple[BundledFamily, BundledVariant] | None = None
-        change_face = op.style is not None and bool({"bold", "italic"}.intersection(op.style))
+        change_face = op.style is not None and bool({"bold", "italic", "font_family"}.intersection(op.style))
+        chosen_family = op.style.get("font_family") if op.style is not None else None
         if verdict.state == "editable_substitution" or trigger.substitute or change_face:
             mapping = lookup_bundled_font(_base_font_name(font_obj))
             # The `family`/`variant` halves are tested alongside `mapped` rather than
@@ -336,16 +359,19 @@ def _resolve_op(
             # broken invariant into a `TypeError` swallowed by the catch-all below as a
             # misleading `"resolution_failed"`. `mapping.reason` is set whenever `mapped` is
             # False, so the refusal is still named by the table, not by this module.
-            if not mapping.mapped or mapping.family is None or mapping.variant is None:
+            if chosen_family is None and (not mapping.mapped or mapping.family is None or mapping.variant is None):
                 return ResolvedOp(
                     op, ok=False, reason=mapping.reason, run=run, verdict=verdict
                 )
-            variant = mapping.variant
+            family = chosen_family if chosen_family is not None else mapping.family
+            if family is None:
+                raise ValueError("no replacement family")
+            variant: BundledVariant = mapping.variant or "Regular"
             if change_face and op.style is not None:
                 bold = op.style.get("bold", variant in ("Bold", "BoldItalic"))
                 italic = op.style.get("italic", variant in ("Italic", "BoldItalic"))
                 variant = "BoldItalic" if bold and italic else "Bold" if bold else "Italic" if italic else "Regular"
-            substitution_key = (mapping.family, variant)
+            substitution_key = (family, variant)
             # D-06 one rung lower, at the CHARACTER level. The mapping table above answers
             # "which bundled face"; this answers "does that face actually have a glyph for
             # every character of `new_text`". Both must hold, and a miss here is the same
@@ -457,7 +483,7 @@ def plan_recipe(pdf_path: str | Path, recipe: tuple[RecipeOp, ...], password: st
       independently of Phase 2's own state, because a run can be `editable_original` and
       still need the bundled substitute the moment `new_text` contains a character the
       embedded program has no glyph for.
-    * D-06 -- a substituting run whose `/BaseFont` has no mapping-table entry refuses BY
+    * D-06 -- automatic substitution whose `/BaseFont` has no mapping-table entry refuses BY
       NAME, with `MappingVerdict`'s own reason. No fallback face is guessed.
     * D-06 again, one rung lower: a substituting run whose `new_text` contains a character
       the CHOSEN bundled face has no glyph for refuses as
@@ -800,7 +826,7 @@ def apply_recipe(
                 applied.fit_result,
                 substitution_target=substitution_target,
                 color=tuple(applied.op.style["color"]) if applied.op.style is not None and "color" in applied.op.style else None,
-                force_substitution=applied.op.style is not None and bool({"bold", "italic"}.intersection(applied.op.style)),
+                force_substitution=applied.op.style is not None and bool({"bold", "italic", "font_family"}.intersection(applied.op.style)),
             )
             if not outcome.ok:
                 # Return WITHOUT saving; the `finally` closes the mutated handle and it is

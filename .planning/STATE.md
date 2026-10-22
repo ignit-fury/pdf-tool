@@ -5,7 +5,7 @@ milestone_name: PDF Tool
 status: verification
 stopped_at: Phase 4 locally verified; Linux/container and live CDN release gates remain open
 last_updated: "2026-10-21"
-last_activity: Phase 4 reviewed; final non-corpus run 420 passed, 5 skipped; renderer gates passed
+last_activity: Added detected font display and explicit replacement-family selection; Times New Roman aliases fixed
 progress:
   total_phases: 8
   completed_phases: 3
@@ -51,3 +51,9 @@ operations, and later exports remain outside this milestone.
 - Preserve positive word-space width; use bounded Tz or named refusal for larger compression.
 - Reconcile corpus exclusions after enabling AES support and replace obsolete zero-hash
   diagnostic expectations with manifest digests.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Result | Directory |
+|---|---|---|---|---|
+| 261021-ply | Detect source font and allow explicit replacement when automatic matching fails | 2026-10-22 | 160 regression/gate tests, 17 font-choice tests, 11 client tests passed; build/types passed | [Font selection](./quick/261021-ply-detect-font-names-and-allow-explicit-rep/) |

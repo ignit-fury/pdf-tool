@@ -139,6 +139,11 @@ uv run python tools/pdftool.py edit path/to/document.pdf --recipe recipe.json -o
 
 A recipe is an array of `{ "run_id": "server-issued-id", "new_text": "replacement" }`.
 Optional `style` supports RGB `color` values from 0 to 1 and boolean `bold`/`italic`.
+The inspector displays the detected source font. Choose a replacement when automatic
+matching is unavailable, or intentionally change the typeface: Liberation Serif, Sans,
+or Mono. Recipes express this as `style.font_family: "Serif" | "Sans" | "Mono"`.
+An explicit choice works with unknown source font names and replaces embedded originals;
+glyph coverage, searchable Unicode, width fitting and safe geometry are still checked.
 `--dry-run` reports fit/refusal without writing. Edits replay atomically against the
 original bytes, and stale source hashes are refused.
 
