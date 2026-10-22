@@ -32,6 +32,14 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
 
 ## Current work
 
+- Phase 5 reviewed plans are committed in `e23512b`; local implementation is active.
+- Resumable indexing and exact full-recipe preview controllers are implemented;
+  their 9 tests plus 12 existing session tests pass. UI integration is pending.
+- Engine snapshot reuse and canonical Unicode search/builder implementation are
+  being verified. Full-batch timing and Phase 5 renderer/browser evidence remain pending.
+
+### Earlier Phase 4 baseline
+
 - Full regression run passed: 423 passed, 5 skipped; two subsequently added tests passed focused checks.
 - Frontend build, ten client helper tests, strict engine/server typing and local browser journeys passed.
 - Final review fixed Unicode password transport and added safe refusals for stateful text
