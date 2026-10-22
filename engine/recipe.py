@@ -45,7 +45,7 @@ from typing import TypedDict, cast
 
 import pikepdf
 
-from engine.classify_run import RunVerdict, classify_document, stream_bytes_and_resources
+from engine.classify_run import RunVerdict, stream_bytes_and_resources
 from engine.encoding_table import embedded_font_bytes, resolve_font
 from engine.fit import FitResult, advance_pt_for_codes, fit_run, load_font
 from engine.fonts import (
@@ -535,15 +535,29 @@ def plan_recipe(pdf_path: str | Path, recipe: tuple[RecipeOp, ...], password: st
     path = Path(pdf_path)
     actual_hash = hashlib.sha256(path.read_bytes()).hexdigest()
 
-    classification = classify_document(path, password=password)
     by_run_id: dict[str, tuple[RunRecord, RunVerdict]] = {}
     page_runs_by_page: dict[int, list[RunRecord]] = {}
-    for run, verdict in classification.runs:
-        by_run_id[run.run_id] = (run, verdict)
-        page_runs_by_page.setdefault(run.page, []).append(run)
+    requested_pages: set[int] = set()
+    for op in recipe:
+        try:
+            parts = decode_run_id(op.run_id)
+        except ValueError:
+            continue  # Preserve the per-operation named refusal below.
+        if parts["source_hash"] == actual_hash:
+            requested_pages.add(parts["page"])
+    # Classifying unrelated pages made one edit exceed worker limits on long PDFs.
+    # Keep all runs on each requested page for correlation/geometry checks, but no
+    # document-wide eager pass. Addresses still resolve against immutable source bytes.
+    with RunIndex(path, password=password) as index:
+        for page_number in sorted(requested_pages):
+            if not 0 <= page_number < index.page_count:
+                continue
+            for run, verdict in index.page(page_number).runs:
+                by_run_id[run.run_id] = (run, verdict)
+                page_runs_by_page.setdefault(run.page, []).append(run)
 
     resolved: list[ResolvedOp] = []
-    # A SECOND, independent open of the same bytes: `classify_document` opens and closes
+    # A SECOND, independent open of the same bytes: RunIndex opens and closes
     # its own handles internally, and threading a shared one through its signature would
     # change a Phase 2 public API for this module's convenience. Read-only, and closed in
     # the `finally` below.
