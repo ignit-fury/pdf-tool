@@ -6,7 +6,8 @@ from pathlib import Path
 import pikepdf
 import pytest
 
-import engine.recipe as recipe_module
+import engine.rewrite as rewrite_module
+import engine.fonts as fonts_module
 from engine.classify_run import RunVerdict
 from engine.index import RunIndex
 from engine.recipe import RecipeOp, apply_recipe
@@ -67,3 +68,75 @@ def test_snapshot_fresh_classification_refusal_is_atomic(tmp_path, monkeypatch, 
     assert report.resolved[1].reason == "snapshot_test_refusal"
     assert source.read_bytes() == original_bytes
     assert not output.exists()
+
+
+def test_snapshot_projection_preserves_geometry_and_unedited_pages(tmp_path):
+    source, _ = _source(tmp_path)
+    with pikepdf.open(source) as pdf:
+        page = pdf.pages[0]
+        page.Rotate = 90
+        page.Annots = pikepdf.Array([pdf.make_indirect(pikepdf.Dictionary(
+            Type=pikepdf.Name.Annot, Subtype=pikepdf.Name.Link,
+            Rect=pikepdf.Array([0, 0, 10, 10])))])
+        pdf.pages.append(page)
+        pdf.save(tmp_path / "two-pages.pdf")
+    path = tmp_path / "two-pages.pdf"
+    with RunIndex(path) as index:
+        before = index.page(1).runs
+        operations = tuple(RecipeOp(run.run_id, run.display_text.replace("line", "lane"))
+                           for run, _ in before)
+    with pikepdf.open(path) as pdf:
+        assert rewrite_module._can_project_page(pdf.pages[1])
+        snapshot = rewrite_module._current_page_snapshot(pdf, 1)
+        assert [(r.page, r.display_text, r.page_ctm, [(g.x, g.y, g.code) for g in r.glyphs], v)
+                for r, v in snapshot.runs] == [
+                    (r.page, r.display_text, r.page_ctm, [(g.x, g.y, g.code) for g in r.glyphs], v)
+                    for r, v in before]
+        other = pdf.pages[0].Contents.read_bytes()
+    output = tmp_path / "edited.pdf"
+    assert apply_recipe(path, operations, output).ok
+    with pikepdf.open(output) as pdf:
+        assert pdf.pages[0].Contents.read_bytes() == other
+        assert len(pdf.pages[1].Annots) == 1
+
+
+def test_snapshot_shared_form_keeps_full_document_classification(tmp_path):
+    source, _ = _source(tmp_path)
+    with pikepdf.open(source) as pdf:
+        page = pdf.pages[0]
+        form = pdf.make_stream(page.Contents.read_bytes())
+        form.Type = pikepdf.Name.XObject
+        form.Subtype = pikepdf.Name.Form
+        form.BBox = pikepdf.Array([0, 0, 612, 792])
+        form.Resources = page.Resources
+        page.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Shared=form))
+        page.Contents = pdf.make_stream(b"/Shared Do")
+        pdf.pages.append(page)
+        pdf.save(tmp_path / "shared.pdf")
+    with pikepdf.open(tmp_path / "shared.pdf") as pdf:
+        assert not rewrite_module._can_project_page(pdf.pages[0])
+        snapshot = rewrite_module._current_page_snapshot(pdf, 0)
+        assert len(snapshot.runs) == 3
+        assert all(verdict.state == "not_editable" and "shared" in verdict.reason
+                   for _, verdict in snapshot.runs)
+
+
+def test_bundled_metadata_loaded_once_without_caching_document_text(monkeypatch):
+    # The metadata cache is bounded by the twelve installed bundled faces, never
+    # by user text. Every call still shapes its own buffer.
+    cache = getattr(fonts_module, "_bundled_shaping_metadata", None)
+    if cache is not None:
+        cache.cache_clear()
+    calls = []
+    original = fonts_module.TTFont
+
+    def counted(*args, **kwargs):
+        calls.append(args)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(fonts_module, "TTFont", counted)
+    first = fonts_module.shape_glyph_names("Sans", "Regular", "Hello world")
+    second = fonts_module.shape_glyph_names("Sans", "Regular", "Hello ﬁ world")
+    assert first == ("H", "e", "l", "l", "o", "space", "w", "o", "r", "l", "d")
+    assert second == ("H", "e", "l", "l", "o", "space", "uniFB01", "space", "w", "o", "r", "l", "d")
+    assert len(calls) == 1

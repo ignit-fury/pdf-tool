@@ -2,6 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { upsertOperation, commitRecipe, previousRecipe, withSourceRetry, viewportBox, createRequestQueue, retryWorkerBusy } from './session.mjs';
 
+test('find refusals explain normalized boundaries and retain unknown diagnostic codes', async () => {
+  const {explainReason,refusalCode,needsFontChoice}=await import('./session.mjs');
+  assert.match(explainReason('normalization_boundary_unreplaceable'),/part of a character/);
+  assert.equal(explainReason('future_safe_refusal'),'This text cannot be safely rewritten.');
+  assert.equal(refusalCode('future_safe_refusal'),'future_safe_refusal');
+  assert.equal(needsFontChoice({state:'editable_original',suggested_font_family:null},{}),true);
+  assert.equal(needsFontChoice({state:'editable_original',suggested_font_family:null},{font_family:'Serif'}),false);
+});
+
 test('fit refusals use readable copy and never repeat a prose error as a code', async () => {
   const {explainReason,refusalCode,explainFit}=await import('./session.mjs');
   const reason='delta -209.98pt exceeds trailing-kern (+/-3.00pt) and inter-word-kern (+/-0.00pt over 0 gaps) absorption range';
