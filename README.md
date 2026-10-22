@@ -76,6 +76,8 @@ Implemented: password-protected PDFs, signature warnings, server-issued edit box
 selectable browser text, progressive thumbnails/classification, bold/italic and colour,
 immutable-source replay, cache-loss recovery and isolated parser workers. Font-size
 changes are refused because replacements must fit the original run width.
+Shorter replacements can leave unused space after the new text while preserving the
+following text's position; they do not need to be stretched to the original width.
 Edits using stateful quote operators or unsupported Unicode shaping are also refused to
 preserve layout and searchable text. Precomposed accents such as `é` remain supported.
 

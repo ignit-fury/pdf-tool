@@ -116,14 +116,19 @@ def test_tightening_never_consumes_or_reverses_the_word_space() -> None:
     assert result.condensed_scale == pytest.approx(93)
 
 
-def test_refuses_rather_than_guesses_when_delta_is_too_large(
+def test_very_short_replacement_leaves_unused_space_after_text(
     original_advance_pt: float,
 ) -> None:
-    # "X" is drastically shorter than the original run -- no honest kern-only fit exists.
+    # A terminal adjustment fills the unused advance without stretching the glyph.
     result = fit_run(original_advance_pt, "X", FONT, FONT_SIZE_PT)
-    assert result.refused
-    assert result.refusal_reason is not None
-    assert result.strategy == "refused"
+    assert not result.refused
+    assert result.strategy == "trailing_kern"
+    assert len(result.kerns) == 1
+    assert result.kerns[0] < 0
+    assert result.condensed_scale is None
+    assert total_advance_with_kerns(
+        result.replacement_shaped_advance_pt, result.kerns, FONT_SIZE_PT
+    ) == pytest.approx(original_advance_pt)
 
 
 def test_tz_condensing_restores_scale_after_run() -> None:

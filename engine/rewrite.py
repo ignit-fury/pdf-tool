@@ -127,7 +127,7 @@ from __future__ import annotations
 import re
 import tempfile
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pikepdf
@@ -135,7 +135,7 @@ from fontTools.agl import UV2AGL
 
 from engine.classify_run import RunVerdict, stream_bytes_and_resources
 from engine.encoding_table import embedded_font_bytes, resolve_font
-from engine.fit import FitResult
+from engine.fit import FitResult, advance_pt_for_codes
 from engine.fonts import (
     SubsetFont,
     reverse_encoding_map,
@@ -777,6 +777,22 @@ def _substitution_triggered(
         return False
 
 
+def _trailing_fit_for_written_font(
+    fit: FitResult, font: pikepdf.Object, codes: list[int], font_size: float
+) -> FitResult:
+    """Preserve pen advance using the widths the PDF viewer will actually read.
+
+    Font-program metrics and serialized /Widths or /W can differ by rounding.
+    A terminal adjustment must cancel that difference too, particularly when the
+    next showing operator relies on this run's pen position. Do not relax the guard.
+    """
+    if fit.strategy != "trailing_kern" or not fit.kerns:
+        return fit
+    actual = advance_pt_for_codes(font, codes, font_size)
+    return replace(fit, replacement_shaped_advance_pt=actual, delta_pt=0.0,
+                   kerns=[(actual - fit.original_advance_pt) / font_size * 1000.0])
+
+
 def _show_instruction(
     units: tuple[tuple[bytes, str], ...], fit_result: FitResult
 ) -> pikepdf.ContentStreamInstruction:
@@ -967,7 +983,9 @@ def _resolve_substituted_operand(
         if str(exc) in {"multi_character_shaping_unsupported", "ambiguous_glyph_unicode_mapping"}:
             return RewriteOutcome(ok=False, reason=str(exc))
         raise
-    replacement = _show_instruction(units, fit_result)
+    fitted = _trailing_fit_for_written_font(
+        fit_result, font_obj, [int.from_bytes(code, "big") for code, _ in units], font_size)
+    replacement = _show_instruction(units, fitted)
     resource_key = _substitution_resource_key(resources, font_obj, subset)
     tf_new = pikepdf.ContentStreamInstruction(
         [pikepdf.Name(resource_key), font_size], pikepdf.Operator("Tf")
@@ -1060,9 +1078,14 @@ def _resolve_non_substituted_operand(
     # from single-byte codes this module looked up -- never from `new_text`'s own bytes and
     # never by formatting. Hostile PDF syntax in the replacement text (`(`, `)`, `\`) is
     # therefore escaped by pikepdf on unparse and cannot break out of the string literal.
-    return _show_instruction(
-        tuple((bytes([code_map[ch]]), ch) for ch in new_text), fit_result
-    )
+    part, xobj_path = _part_key(run)
+    stream_bytes, _resources = stream_bytes_and_resources(pdf, page_index, part, xobj_path)
+    active = _active_font_operands(stream_bytes, min(g.operator_byte_offset for g in run.glyphs))
+    if active is None:
+        return RewriteOutcome(ok=False, reason="no_active_font_for_original_encoding")
+    fitted = _trailing_fit_for_written_font(
+        fit_result, font, [code_map[ch] for ch in new_text], active[1])
+    return _show_instruction(tuple((bytes([code_map[ch]]), ch) for ch in new_text), fitted)
 
 
 def rewrite_run(

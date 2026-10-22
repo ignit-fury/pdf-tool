@@ -76,7 +76,7 @@ import engine.classify_run  # noqa: E402
 import engine.rewrite  # noqa: E402
 from engine.classify_run import RunVerdict, stream_bytes_and_resources  # noqa: E402
 from engine.encoding_table import resolve_font  # noqa: E402
-from engine.fit import FitResult  # noqa: E402
+from engine.fit import FitResult, advance_pt_for_codes  # noqa: E402
 from engine.fonts import (  # noqa: E402
     SubsetFont,
     embed_type0_font,
@@ -1083,6 +1083,18 @@ def _fit_kerns(strategy: str, kerns: list[float]) -> FitResult:
     return FitResult(10.0, 10.0, 0.0, strategy, kerns)
 
 
+def _fit_prescribed_trailing(pdf, run, font, codes, kern) -> FitResult:
+    # Terminal adjustment is now reconciled against written font widths. Give the
+    # high-level rewrite a real measured fit, rather than placeholder 10pt metrics.
+    raw, _resources = stream_bytes_and_resources(pdf, run.page, *_part_key(run))
+    active = engine.rewrite._active_font_operands(raw, run.glyphs[0].operator_byte_offset)
+    assert active is not None
+    size = active[1]
+    shaped = advance_pt_for_codes(font, codes, size)
+    original = shaped - kern / 1000.0 * size
+    return FitResult(original, shaped, 0.0, "trailing_kern", [kern])
+
+
 def _substituted_slot(
     pdf: pikepdf.Pdf, run: RunRecord, first_touched: int, length: int
 ) -> list[ParsedInstruction]:
@@ -1371,6 +1383,8 @@ def test_trailing_kern_strategy_emits_tj_array_with_correct_kern() -> None:
         before = _parse_part(pdf, 0, target)
         touched = _touched(before, target, runs)
         subset, font_obj = _substitution_target(pdf, SUBSTITUTING_TEXT)
+        fit = _fit_prescribed_trailing(pdf, target, font_obj,
+            [cid for cid, _ in shape_cids(subset, SUBSTITUTING_TEXT)], kern)
 
         outcome = rewrite_run(
             pdf,
@@ -1379,7 +1393,7 @@ def test_trailing_kern_strategy_emits_tj_array_with_correct_kern() -> None:
             RunVerdict("editable_substitution"),
             runs,
             SUBSTITUTING_TEXT,
-            _fit_kerns("trailing_kern", [kern]),
+            fit,
             (subset, font_obj),
         )
         assert outcome.ok is True, outcome.reason
@@ -1879,6 +1893,9 @@ def test_non_substituted_trailing_kern_emits_tj_array() -> None:
     with pikepdf.open(IRS_1040) as pdf:
         before = _parse_part(pdf, 0, target)
         touched = _touched(before, target, runs)
+        font = engine.rewrite._run_font_object(pdf, 0, target)
+        fit = _fit_prescribed_trailing(pdf, target, font,
+                                      list(_original_codes(pdf, target, NON_SUBSTITUTED_TEXT)), kern)
 
         outcome = rewrite_run(
             pdf,
@@ -1887,7 +1904,7 @@ def test_non_substituted_trailing_kern_emits_tj_array() -> None:
             _verdict(),
             runs,
             NON_SUBSTITUTED_TEXT,
-            _fit_kerns("trailing_kern", [kern]),
+            fit,
         )
         assert outcome.ok is True, outcome.reason
 

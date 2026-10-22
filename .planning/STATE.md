@@ -5,7 +5,7 @@ milestone_name: PDF Tool
 status: verification
 stopped_at: Phase 4 locally verified; Linux/container and live CDN release gates remain open
 last_updated: "2026-10-21"
-last_activity: Added detected font display and explicit replacement-family selection; Times New Roman aliases fixed
+last_activity: Fixed large-shortening refusal and duplicate fit messages; 445 regression tests and renderer gates passed
 progress:
   total_phases: 8
   completed_phases: 3
@@ -57,3 +57,10 @@ operations, and later exports remain outside this milestone.
 | # | Description | Date | Result | Directory |
 |---|---|---|---|---|
 | 261021-ply | Detect source font and allow explicit replacement when automatic matching fails | 2026-10-22 | 160 regression/gate tests, 17 font-choice tests, 11 client tests passed; build/types passed | [Font selection](./quick/261021-ply-detect-font-names-and-allow-explicit-rep/) |
+
+### Debug fixes
+
+- 2026-10-22: [Short replacement fit](./debug/short-replacement-fit.md) resolved. Shorter
+  replacement text can leave unused space after it while preserving following positions;
+  fit feedback no longer repeats technical prose. 445 non-corpus tests, renderer gates,
+  client build/tests, typing and live HTTP verification passed.

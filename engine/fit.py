@@ -17,11 +17,14 @@ widths"):
      line.
   4. Otherwise, distribute the delta evenly across the inter-word kerns already present in the
      run (bounded absorption range -- see `_INTER_WORD_ABSORB_MULTIPLIER` below).
+     If a shorter replacement exceeds that range, leave the unused space after its last
+     glyph with a trailing TJ kern. This preserves the following text's position without
+     stretching the replacement's glyphs or word spaces.
   5. Otherwise, if the replacement is longer than the original (delta > 0), try condensing it
      with `Tz` horizontal scaling down to `TZ_FLOOR_PERCENT`. This is priority 3 of the ladder:
      `trailing_kern` -> `inter_word_kern` -> `tz` -> refuse.
-  6. Otherwise, refuse. Refusing honestly is the point: a confident wrong fit is the failure
-     mode this ladder guards against, not an acceptable shortcut.
+  6. Otherwise, refuse longer replacements. Refusing honestly is the point: a confident wrong
+     fit is the failure mode this ladder guards against, not an acceptable shortcut.
 
 TJ sign convention (load-bearing -- get this backwards and the fix doubles the error instead of
 cancelling it): a TJ array number K is expressed in thousandths of text space and is SUBTRACTED
@@ -344,6 +347,20 @@ def fit_run(
             shaped,
             final_advance - original_advance_pt,
             "inter_word_kern",
+            kerns,
+        )
+
+    # Large underflow leaves blank space AFTER the replacement. A terminal negative
+    # TJ adjustment advances the next text operator to the original endpoint; unlike
+    # inter-word widening, it cannot deform the replacement's visible spacing.
+    if delta < 0:
+        kerns = [delta / font_size_pt * 1000.0]
+        final_advance = total_advance_with_kerns(shaped, kerns, font_size_pt)
+        return FitResult(
+            original_advance_pt,
+            shaped,
+            final_advance - original_advance_pt,
+            "trailing_kern",
             kerns,
         )
 

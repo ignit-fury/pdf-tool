@@ -498,10 +498,10 @@ def test_plan_recipe_fits_against_widths_not_device_space_glyph_advances() -> No
 
     This asserts both halves, so it cannot pass vacuously:
 
-    1. the OLD measurement, computed here from the same run, still refuses -- and refuses
-       even for a no-op replacement of the run's own text with itself, which is the most
-       damning form of the bug: a replacement that is provably exactly the right width;
-    2. the NEW measurement, through the real `plan_recipe`, fits that same no-op edit.
+    1. the OLD device-space measurement differs substantially from the font dictionary;
+    2. the NEW measurement, through the real `plan_recipe`, uses the dictionary width
+       and fits that same no-op edit. Large underflow is now allowed, so an accidental
+       device-space measurement must be detected by its width, not by a refusal.
 
     Any residual delta is pure Liberation-vs-original metric divergence, not a space
     mismatch -- D-07 picked Liberation to make that near-zero.
@@ -525,19 +525,7 @@ def test_plan_recipe_fits_against_widths_not_device_space_glyph_advances() -> No
         "the Tm scale -- if they have converged, this test no longer exercises the bug"
     )
 
-    # (1) THE OLD MEASUREMENT, on the identical run and an identical-width replacement.
-    old = fit_run(
-        device_space_advance,
-        original_text,
-        load_font(liberation_font_path("Serif", "Regular").read_bytes()),
-        1.0,
-    )
-    assert old.refused is True, (
-        "the device-space advance should refuse even a no-op replacement -- if it no "
-        "longer does, this test is not pinning the bug it names"
-    )
-
-    # (2) THE REAL PATH, same run, same text.
+    # THE REAL PATH, same run, same text: pin the actual width supplied to fitting.
     report = plan_recipe(
         TM_SCALED_DOC, (RecipeOp(run_id=run_id, new_text=original_text),)
     )
@@ -545,6 +533,7 @@ def test_plan_recipe_fits_against_widths_not_device_space_glyph_advances() -> No
     (resolved,) = report.resolved
     assert resolved.ok is True
     assert resolved.fit_result is not None
+    assert resolved.fit_result.original_advance_pt == pytest.approx(widths_advance)
     assert resolved.fit_result.refused is False
     assert resolved.delta_pt == pytest.approx(0.0, abs=0.01)
 

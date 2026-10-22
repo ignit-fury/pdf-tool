@@ -2,6 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { upsertOperation, commitRecipe, previousRecipe, withSourceRetry, viewportBox, createRequestQueue, retryWorkerBusy } from './session.mjs';
 
+test('fit refusals use readable copy and never repeat a prose error as a code', async () => {
+  const {explainReason,refusalCode,explainFit}=await import('./session.mjs');
+  const reason='delta -209.98pt exceeds trailing-kern (+/-3.00pt) and inter-word-kern (+/-0.00pt over 0 gaps) absorption range';
+  assert.doesNotMatch(explainReason(reason),/delta|kern/);
+  assert.equal(refusalCode(reason),null);
+  assert.equal(refusalCode('unknown prose error'),null);
+  assert.equal(refusalCode('font_size_change_unsupported'),'font_size_change_unsupported');
+  assert.match(explainReason('delta 20.00pt exceeds trailing-kern absorption range'),/too wide/);
+  assert.match(explainFit('trailing_kern'),/font size/);
+});
+
 test('font choice is explicit, removable and restored with whole-recipe undo', async () => {
   const {chooseFontFamily,needsFontChoice,explainReason}=await import('./session.mjs');
   const run={state:'editable_substitution',suggested_font_family:null};
