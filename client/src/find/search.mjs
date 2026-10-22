@@ -25,10 +25,24 @@ function boundaries(text,granularity){
   if(typeof Intl.Segmenter!=='function')return null;
   return new Set([0,text.length,...Array.from(new Intl.Segmenter('en',{granularity}).segment(text),part=>part.index)]);
 }
-function sourceSpan(projection,from,to,graphemes){
-  const selected=projection.spans.slice(from,to);
-  const start=Math.min(...selected.map(span=>span[0])),end=Math.max(...selected.map(span=>span[1]));
-  const closed=projection.spans.every(([a,b],index)=>b<=start||a>=end||(index>=from&&index<to));
+function inverseSpans(projection){
+  const inverse=new Map();
+  projection.spans.forEach(([start,end],index)=>{
+    for(let offset=start;offset<end;offset++){
+      const range=inverse.get(offset);
+      if(range)range[1]=index;else inverse.set(offset,[index,index]);
+    }
+  });
+  return inverse;
+}
+function sourceSpan(projection,from,to,graphemes,inverse){
+  let start=Infinity,end=0;
+  for(let index=from;index<to;index++){const [a,b]=projection.spans[index];start=Math.min(start,a);end=Math.max(end,b);}
+  let closed=true;
+  for(let offset=start;offset<end;offset++){
+    const range=inverse.get(offset);
+    if(!range||range[0]<from||range[1]>=to){closed=false;break;}
+  }
   return {start,end,safe:closed&&Boolean(graphemes?.has(start)&&graphemes?.has(end))};
 }
 
@@ -45,20 +59,21 @@ export function findMatches(pages,query,{matchCase=false,wholeWords=false,recipe
       const effective=overrides.get(run.run_id)?.new_text??run.text;
       const cached=effective===run.text&&run.search?.version===SEARCH_VERSION?run.search:null;
       const projection=cached?.[matchCase?'sensitive':'folded']||projectText(effective,{matchCase});
-      const graphemes=boundaries(effective,'grapheme'),words=wholeWords?boundaries(projection.text,'word'):null;
+      const graphemes=boundaries(effective,'grapheme'),words=wholeWords?boundaries(projection.text,'word'):null,inverse=inverseSpans(projection);
       for(let from=0;;){
         const normalizedStart=projection.text.indexOf(needle,from);
         if(normalizedStart<0)break;
         const normalizedEnd=normalizedStart+needle.length;from=normalizedEnd;
         if(wholeWords&&!(words.has(normalizedStart)&&words.has(normalizedEnd)))continue;
-        const {start,end,safe}=sourceSpan(projection,normalizedStart,normalizedEnd,graphemes);
+        const {start,end,safe}=sourceSpan(projection,normalizedStart,normalizedEnd,graphemes,inverse);
         const editable=run.state==='editable_original'||run.state==='editable_substitution';
         const reason=!safe?'normalization_boundary_unreplaceable':editable?null:run.reason||'uneditable';
-        const left=Array.from(effective.slice(0,start)),right=Array.from(effective.slice(end));
+        const left=Array.from(effective.slice(Math.max(0,start-98),start)).slice(-48).join('');
+        const right=Array.from(effective.slice(end,end+98)).slice(0,48).join('');
         results.push({id:JSON.stringify([query,matchCase,wholeWords,run.run_id,effective,normalizedStart,normalizedEnd]),
           runId:run.run_id,page:Number(pageKey),runOrder,start,end,normalizedStart,normalizedEnd,
-          text:effective.slice(start,end),before:(left.length>48?'…':'')+left.slice(-48).join(''),
-          after:right.slice(0,48).join('')+(right.length>48?'…':''),state:run.state,reason,replaceable:!reason});
+          text:effective.slice(start,end),before:(left.length<start?'…':'')+left,
+          after:right+(end+right.length<effective.length?'…':''),state:run.state,reason,replaceable:!reason});
       }
     });
   }
