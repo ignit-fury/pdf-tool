@@ -173,6 +173,7 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
             return {"page_count": count, "signed": signed, "encrypted": pdf.is_encrypted,
                     "worker_pid": os.getpid()}
         if action == "page":
+            from engine.search import project_search_text
             from engine.boxes import run_box
             from engine.classify_run import stream_bytes_and_resources
             from engine.run_id import decode_run_id
@@ -192,6 +193,7 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
                     raw, resources = streams[stream_key]
                     source_font, suggested_family = source_font_info(raw, resources, run.glyphs[0].operator_byte_offset)
                     runs.append({"run_id": run.run_id, "text": run.display_text,
+                        "search": project_search_text(run.display_text),
                         "box": run_box(run, raw, resources), "state": verdict.state,
                         "reason": verdict.reason, "source_font": source_font,
                         "suggested_font_family": suggested_family})
