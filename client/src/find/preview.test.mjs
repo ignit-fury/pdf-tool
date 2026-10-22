@@ -38,6 +38,7 @@ test('a refusal in a prior operation blocks instead of deleting that edit',async
 test('batch errors and nonprogressing reports cannot publish ready reviews',async()=>{
   await assert.rejects(previewReplacement({buildCandidate:candidate,key:'x',requestPreview:async()=>({error:'WORKER_FAILED'})}),/WORKER_FAILED/);
   await assert.rejects(previewReplacement({buildCandidate:candidate,key:'x',requestPreview:async()=>({ok:false,resolved:[{run_id:'new-a',ok:true}]})}),/preview/i);
+  await assert.rejects(previewReplacement({buildCandidate:candidate,key:'x',requestPreview:async()=>({ok:true,resolved:[{run_id:'new-a',ok:true}]})}),/complete replacement preview/i);
 });
 
 test('cancelled generations cannot return a ready review after the worker completes',async()=>{
