@@ -177,6 +177,18 @@ _TRUNCATED_PARSE_WARNING = "unexpected end of stream"
 
 
 @dataclass(frozen=True, slots=True)
+class PageSnapshot:
+    """Complete current classification, owned by one atomic recipe application.
+
+    Only the caller that owns the PDF handle may assert freshness. No snapshot is
+    accepted from the wire. A successful splice always produces a new snapshot.
+    """
+
+    page: int
+    runs: tuple[tuple[RunRecord, RunVerdict], ...]
+
+
+@dataclass(frozen=True, slots=True)
 class RewriteOutcome:
     """The project's established verdict shape (frozen/slots, named reason). `reason` is
     populated only when `ok` is False, and is drawn from a fixed vocabulary -- it never
@@ -184,6 +196,7 @@ class RewriteOutcome:
 
     ok: bool
     reason: str | None = None
+    snapshot: PageSnapshot | None = None
 
 
 def _instruction_has_text(instruction: ParsedInstruction) -> bool:
@@ -451,7 +464,7 @@ def _part_glyphs_in_stream_order(
     )
 
 
-def _current_page_runs(pdf: pikepdf.Pdf, page_index: int) -> list[RunRecord]:
+def _current_page_snapshot(pdf: pikepdf.Pdf, page_index: int) -> PageSnapshot:
     """`page_index`'s runs as they stand in `pdf` RIGHT NOW, including any mutation this
     module has already applied in memory.
 
@@ -477,7 +490,11 @@ def _current_page_runs(pdf: pikepdf.Pdf, page_index: int) -> list[RunRecord]:
         path = Path(scratch) / "rewalk.pdf"
         pdf.save(path)
         with RunIndex(path) as index:
-            return [run for run, _verdict in index.page(page_index).runs]
+            return PageSnapshot(page_index, tuple(index.page(page_index).runs))
+
+
+def _current_page_runs(pdf: pikepdf.Pdf, page_index: int) -> list[RunRecord]:
+    return [run for run, _verdict in _current_page_snapshot(pdf, page_index).runs]
 
 
 # D-04's comparison tolerance for a re-derived glyph origin, in PDF device-space units.
@@ -537,6 +554,17 @@ def _matrix_after_run(
     longer describes a part with that much content -- `None` again, which (paired with a
     non-`None` "before") makes the guard REFUSE rather than pass.
     """
+    last = max(_stream_position(glyph) for glyph in run.glyphs)
+    if not any(_stream_position(glyph) > last
+               for glyph in _part_glyphs_in_stream_order(all_page_runs, _part_key(run))):
+        return None
+    return _matrix_from_runs(run, all_page_runs, _current_page_runs(pdf, page_index))
+
+
+def _matrix_from_runs(
+    run: RunRecord, all_page_runs: list[RunRecord], current_runs: list[RunRecord]
+) -> tuple[float, float] | None:
+    """The same invariant tail-count lookup, using explicitly current records."""
     part_key = _part_key(run)
     last_position = max(_stream_position(glyph) for glyph in run.glyphs)
     recorded = _part_glyphs_in_stream_order(all_page_runs, part_key)
@@ -544,7 +572,7 @@ def _matrix_after_run(
     if tail_count == 0:
         return None
 
-    current = _part_glyphs_in_stream_order(_current_page_runs(pdf, page_index), part_key)
+    current = _part_glyphs_in_stream_order(current_runs, part_key)
     if tail_count > len(current):
         return None
     following = current[len(current) - tail_count]
@@ -1114,6 +1142,7 @@ def rewrite_run(
     substitution_target: tuple[SubsetFont, pikepdf.Object] | None = None,
     color: tuple[float, ...] | None = None,
     force_substitution: bool = False,
+    current_snapshot: PageSnapshot | None = None,
 ) -> RewriteOutcome:
     """EDIT-02/EDIT-03/EDIT-04: the module's public entry point. Builds the replacement
     instruction for `run` (substituted or not), brackets it per the fit ladder's chosen
@@ -1156,7 +1185,13 @@ def rewrite_run(
                 _read_part_bytes(pdf, page_index, part, xobj_path),
                 min(glyph.operator_byte_offset for glyph in run.glyphs),
             )
-        matrix_before = _matrix_after_run(pdf, page_index, run, all_page_runs)
+        if current_snapshot is not None:
+            if current_snapshot.page != page_index:
+                return RewriteOutcome(ok=False, reason="correlation_failed")
+            matrix_before = _matrix_from_runs(
+                run, all_page_runs, [r for r, _ in current_snapshot.runs])
+        else:
+            matrix_before = _matrix_after_run(pdf, page_index, run, all_page_runs)
     except Exception:
         return RewriteOutcome(ok=False, reason="correlation_failed")
 
@@ -1217,12 +1252,18 @@ def rewrite_run(
         return outcome
 
     try:
-        matrix_after = _matrix_after_run(pdf, page_index, run, all_page_runs)
+        snapshot = None
+        if current_snapshot is not None:
+            snapshot = _current_page_snapshot(pdf, page_index)
+            matrix_after = _matrix_from_runs(
+                run, all_page_runs, [r for r, _ in snapshot.runs])
+        else:
+            matrix_after = _matrix_after_run(pdf, page_index, run, all_page_runs)
     except Exception:
         return RewriteOutcome(ok=False, reason="correlation_failed")
     if not _positions_match(matrix_before, matrix_after):
         return RewriteOutcome(ok=False, reason="text_matrix_shifted_after_edit")
-    return RewriteOutcome(ok=True)
+    return RewriteOutcome(ok=True, snapshot=snapshot)
 
 
 __all__ = [

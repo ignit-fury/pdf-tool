@@ -67,7 +67,7 @@ from engine.fonts import (
 )
 from engine.index import RunIndex
 from engine.records import RunRecord
-from engine.rewrite import RewriteOutcome, rewrite_run, rewrite_preflight_refusal
+from engine.rewrite import PageSnapshot, RewriteOutcome, rewrite_run, rewrite_preflight_refusal
 from engine.run_id import decode_run_id
 
 # 03-RESEARCH.md Security Domain, Known Threat Patterns table: "Recipe JSON with an
@@ -197,6 +197,7 @@ class ResolvedOp:
     all_page_runs: tuple[RunRecord, ...] | None = None
     fit_result: FitResult | None = None
     substitution_key: tuple[BundledFamily, BundledVariant] | None = None
+    page_snapshot: PageSnapshot | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -553,6 +554,7 @@ def plan_recipe(pdf_path: str | Path, recipe: tuple[RecipeOp, ...], password: st
 
     by_run_id: dict[str, tuple[RunRecord, RunVerdict]] = {}
     page_runs_by_page: dict[int, list[RunRecord]] = {}
+    snapshots: dict[int, PageSnapshot] = {}
     requested_pages: set[int] = set()
     for op in recipe:
         try:
@@ -568,7 +570,8 @@ def plan_recipe(pdf_path: str | Path, recipe: tuple[RecipeOp, ...], password: st
         for page_number in sorted(requested_pages):
             if not 0 <= page_number < index.page_count:
                 continue
-            for run, verdict in index.page(page_number).runs:
+            snapshots[page_number] = PageSnapshot(page_number, tuple(index.page(page_number).runs))
+            for run, verdict in snapshots[page_number].runs:
                 by_run_id[run.run_id] = (run, verdict)
                 page_runs_by_page.setdefault(run.page, []).append(run)
 
@@ -597,7 +600,8 @@ def plan_recipe(pdf_path: str | Path, recipe: tuple[RecipeOp, ...], password: st
 
             run, verdict = found
             resolved.append(
-                _resolve_op(pdf, op, run, verdict, tuple(page_runs_by_page[run.page]))
+                replace(_resolve_op(pdf, op, run, verdict, tuple(page_runs_by_page[run.page])),
+                        page_snapshot=snapshots[run.page])
             )
     finally:
         pdf.close()
@@ -665,7 +669,9 @@ def _match_run(
     return matches[0] if len(matches) == 1 else None
 
 
-def _rederive_op(pdf: pikepdf.Pdf, planned: ResolvedOp) -> ResolvedOp | str:
+def _rederive_op(
+    pdf: pikepdf.Pdf, planned: ResolvedOp, snapshot: PageSnapshot | None = None
+) -> ResolvedOp | str:
     """`planned` re-resolved against `pdf`'s CURRENT bytes, or the named reason it cannot
     be -- see `apply_recipe`'s "Two ops on ONE part" section for why this exists.
 
@@ -680,11 +686,15 @@ def _rederive_op(pdf: pikepdf.Pdf, planned: ResolvedOp) -> ResolvedOp | str:
         return "resolution_failed"
     page_index = planned.run.page
     try:
-        with tempfile.TemporaryDirectory() as scratch:
-            scratch_path = Path(scratch) / "rederive.pdf"
-            pdf.save(scratch_path)
-            with RunIndex(scratch_path) as index:
-                current = list(index.page(page_index).runs)
+        if snapshot is None:
+            with tempfile.TemporaryDirectory() as scratch:
+                scratch_path = Path(scratch) / "rederive.pdf"
+                pdf.save(scratch_path)
+                with RunIndex(scratch_path) as index:
+                    snapshot = PageSnapshot(page_index, tuple(index.page(page_index).runs))
+        if snapshot.page != page_index:
+            return "resolution_failed"
+        current = list(snapshot.runs)
     except Exception:  # noqa: BLE001 - classify-never-crash, a named refusal instead
         return "resolution_failed"
 
@@ -703,7 +713,7 @@ def _rederive_op(pdf: pikepdf.Pdf, planned: ResolvedOp) -> ResolvedOp | str:
         # PLANNED keys. Honouring a changed one would point the replacement at a subset that
         # was never asked to cover its glyphs.
         return "substitution_key_changed_after_earlier_edit"
-    return redone
+    return replace(redone, page_snapshot=snapshot)
 
 
 def apply_recipe(
@@ -811,7 +821,8 @@ def apply_recipe(
 
         # Parts this call has already mutated, and therefore whose byte offsets every
         # not-yet-applied op's records are now stale against.
-        edited_parts: set[tuple[int, int, tuple[int, ...]]] = set()
+        edited_pages: set[int] = set()
+        current_snapshot: PageSnapshot | None = None
         for index, r in enumerate(report.resolved):
             if (
                 r.run is None
@@ -827,8 +838,10 @@ def apply_recipe(
                 return _refuse_at(report, index, r, "resolution_failed")
 
             applied = r
-            if _part_key(r.run) in edited_parts:
-                redone = _rederive_op(pdf, r)
+            if r.run.page in edited_pages:
+                redone = _rederive_op(pdf, r, current_snapshot
+                                     if current_snapshot is not None and current_snapshot.page == r.run.page
+                                     else None)
                 if isinstance(redone, str):
                     return _refuse_at(report, index, r, redone)
                 applied = redone
@@ -857,13 +870,15 @@ def apply_recipe(
                 substitution_target=substitution_target,
                 color=tuple(applied.op.style["color"]) if applied.op.style is not None and "color" in applied.op.style else None,
                 force_substitution=applied.substitution_key is not None,
+                current_snapshot=applied.page_snapshot,
             )
             if not outcome.ok:
                 # Return WITHOUT saving; the `finally` closes the mutated handle and it is
                 # discarded. See this function's docstring and `engine/rewrite.py`'s own
                 # "Refusal does NOT roll back (D-11)" section.
                 return _refuse_at(report, index, r, outcome.reason)
-            edited_parts.add(_part_key(applied.run))
+            edited_pages.add(applied.run.page)
+            current_snapshot = outcome.snapshot
 
         pdf.save(Path(output_path))
     finally:
