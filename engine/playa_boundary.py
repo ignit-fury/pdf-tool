@@ -121,7 +121,9 @@ from typing import Iterator
 from playa import open as open_document
 from playa.content import GlyphObject, GraphicState, ImageObject, TextObject, XObjectObject
 from playa.document import Document
+from playa.exceptions import PDFSyntaxError
 from playa.font import Font
+from playa.fontmetrics import FONT_METRICS
 from playa.interp import LazyInterpreter, Type3Interpreter
 from playa.page import Page
 from playa.parser import ObjectParser
@@ -156,11 +158,13 @@ __all__ = [
     "GraphicState",
     "Matrix",
     "Page",
+    "PDFSyntaxError",
     "Resources",
     "TextOp",
     "TextObject",
     "XObjectObject",
     "annotation_appearances",
+    "core_font_widths",
     "glyph_byte_offsets",
     "image_bboxes",
     "open_document",
@@ -182,6 +186,12 @@ Resources = dict[str, PDFObject]
 TextOp = tuple[int, int, list[object], TextObject]
 
 TEXT_OPS = {b"Tj", b"TJ", b"'", b'"'}
+
+
+def core_font_widths(base_font_name: str) -> dict[str, int] | None:
+    """Return PLAYA's Standard 14 Unicode widths, or None for an unknown font."""
+    metrics = FONT_METRICS.get(base_font_name)
+    return None if metrics is None else dict(metrics[1])
 
 
 def _has_visible_text(kw: bytes, operands: list[object]) -> bool:

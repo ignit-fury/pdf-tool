@@ -101,114 +101,17 @@ MIN_MULTI_OPERATOR_RUNS_CHECKED = 10_000
 # Pinned exact-set constants (task-2-brief.md action (4)/(5)) -- start empty, and only
 # ever grow if the sweep genuinely finds an entry. Never pre-populated with a guess.
 #
-# KNOWN_CORRELATION_FAILURES: measured directly running this sweep, 2026-08-23 -- 89
-# editable runs across 19 documents (govdocs1_* and three IRS PDFs) where
-# `touched_instruction_indices` produced zero touched instructions. Confirmed NOT an
-# artifact of this test's amortized invocation (see module docstring): re-running the
-# literal `correlate_run(path, page_index, run_id)` on one of these entries
-# (`govdocs1_014_014103.pdf`, run ending `:c4:o3090`) independently reproduces the exact
-# same `ok=False, reason="correlation produced zero touched instructions"` verdict. This
-# is `correlate_run`'s own safety check doing its job -- every one of these 89 is a
-# REFUSAL (a named, detected disagreement), not a silently-wrong index: the mechanism's
-# own in-range/text-operator validation cannot produce a false "ok" here, only a
-# correctly-flagged failure. The likely cause (not verified further -- out of this
-# task's scope) is the same part-boundary truncation
-# `spike/instruction_correlation_probe.py`'s own docstring already names as an open
-# risk: playa's walk counts a text-showing operator whose bytes are completed by the
-# NEXT /Contents array element in the original coalesced stream, while pikepdf's
-# isolated re-parse of THIS part alone hits "Unexpected end of stream" and never reaches
-# it, undercounting relative to what playa's ordinal assumed.
+# Re-measured 2026-10-22 over the same five-page corpus cap. Keeping physical
+# /Contents parts separate during clustering resolved 85 of the original 89
+# zero-index failures, with no new failures. Four remain in this historical
+# spike algorithm; the production bridge additionally handles glyphless showing
+# operators and enforces its own count/part-boundary guards.
 KNOWN_CORRELATION_FAILURES: frozenset[tuple[str, str, str]] = frozenset(
     {
-        ("govdocs1_000_000009.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o2326", "correlation produced zero touched instructions"),
-        ("govdocs1_000_000009.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o2326:g0-8", "correlation produced zero touched instructions"),
-        ("govdocs1_000_000137.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c1:o2248", "correlation produced zero touched instructions"),
-        ("govdocs1_000_000137.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c1:o2305:g0-6", "correlation produced zero touched instructions"),
-        ("govdocs1_000_000137.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o2211:g0-30", "correlation produced zero touched instructions"),
-        ("govdocs1_000_000137.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c5:o2269:g0-15", "correlation produced zero touched instructions"),
-        ("govdocs1_003_003072.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c5:o1759:g0-1", "correlation produced zero touched instructions"),
         ("govdocs1_005_005000.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o4651", "correlation produced zero touched instructions"),
         ("govdocs1_005_005000.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o4719", "correlation produced zero touched instructions"),
-        ("govdocs1_006_006053.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p1:c4:o295", "correlation produced zero touched instructions"),
-        ("govdocs1_006_006053.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p2:c4:o295", "correlation produced zero touched instructions"),
-        ("govdocs1_006_006053.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p3:c4:o295", "correlation produced zero touched instructions"),
-        ("govdocs1_006_006053.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p4:c4:o295", "correlation produced zero touched instructions"),
-        ("govdocs1_008_008025.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o15120", "correlation produced zero touched instructions"),
-        ("govdocs1_008_008025.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o15456", "correlation produced zero touched instructions"),
-        ("govdocs1_008_008025.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o15741", "correlation produced zero touched instructions"),
-        ("govdocs1_008_008025.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o15869", "correlation produced zero touched instructions"),
-        ("govdocs1_008_008025.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o16175", "correlation produced zero touched instructions"),
-        ("govdocs1_008_008025.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o16430:g0-11", "correlation produced zero touched instructions"),
-        ("govdocs1_008_008025.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c6:o15024", "correlation produced zero touched instructions"),
-        ("govdocs1_008_008025.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c6:o15156", "correlation produced zero touched instructions"),
-        ("govdocs1_008_008025.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c6:o15288", "correlation produced zero touched instructions"),
-        ("govdocs1_008_008025.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c6:o15495", "correlation produced zero touched instructions"),
-        ("govdocs1_008_008025.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c6:o15627", "correlation produced zero touched instructions"),
-        ("govdocs1_008_008025.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c6:o15759", "correlation produced zero touched instructions"),
-        ("govdocs1_008_008025.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c6:o16020", "correlation produced zero touched instructions"),
-        ("govdocs1_008_008025.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c6:o16148:g0-6", "correlation produced zero touched instructions"),
-        ("govdocs1_008_008028.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c1:o10019:g0-3", "correlation produced zero touched instructions"),
-        ("govdocs1_009_009015.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o994:g0-18", "correlation produced zero touched instructions"),
-        ("govdocs1_010_010118.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c1:o2218:g0-6", "correlation produced zero touched instructions"),
-        ("govdocs1_010_010118.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o1843", "correlation produced zero touched instructions"),
-        ("govdocs1_010_010118.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o2082", "correlation produced zero touched instructions"),
-        ("govdocs1_010_010118.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o2214:g0-20", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011078.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o6744:g53-60", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011078.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o6744:g61-63", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011078.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o6744:g64-67", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011078.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o6744:g68-75", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011078.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o6744:g76-84", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011078.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o6744:g86-88", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011078.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o6744:g89-92", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011078.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o6744:g93-97", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011078.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o6744:g98-102", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011080.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o6059:g111-120", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011080.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o6059:g121-126", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011080.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o6059:g127-132", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011080.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o7436:g0-3", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011080.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o7436:g11-21", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011080.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o7436:g22-24", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011080.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o7436:g25-28", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011080.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o7436:g29-32", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011080.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o7436:g33-38", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011080.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o7436:g39-45", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011080.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o7436:g4-10", "correlation produced zero touched instructions"),
-        ("govdocs1_011_011080.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o7436:g46-50", "correlation produced zero touched instructions"),
         ("govdocs1_011_011098.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o1260", "correlation produced zero touched instructions"),
         ("govdocs1_011_011098.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o1384", "correlation produced zero touched instructions"),
-        ("govdocs1_012_012159.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o3508", "correlation produced zero touched instructions"),
-        ("govdocs1_012_012159.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o3816", "correlation produced zero touched instructions"),
-        ("govdocs1_012_012159.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o4149:g0-2", "correlation produced zero touched instructions"),
-        ("govdocs1_012_012159.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c4:o4128:g0-18", "correlation produced zero touched instructions"),
-        ("govdocs1_013_013083.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c4:o7439:g0-10", "correlation produced zero touched instructions"),
-        ("govdocs1_014_014103.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c4:o2641", "correlation produced zero touched instructions"),
-        ("govdocs1_014_014103.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c4:o2691", "correlation produced zero touched instructions"),
-        ("govdocs1_014_014103.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c4:o2744", "correlation produced zero touched instructions"),
-        ("govdocs1_014_014103.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c4:o2794", "correlation produced zero touched instructions"),
-        ("govdocs1_014_014103.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c4:o2866", "correlation produced zero touched instructions"),
-        ("govdocs1_014_014103.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c4:o2942", "correlation produced zero touched instructions"),
-        ("govdocs1_014_014103.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c4:o3090", "correlation produced zero touched instructions"),
-        ("govdocs1_014_014103.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c4:o3202", "correlation produced zero touched instructions"),
-        ("govdocs1_014_014103.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c4:o3283", "correlation produced zero touched instructions"),
-        ("govdocs1_014_014103.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c4:o3341", "correlation produced zero touched instructions"),
-        ("govdocs1_014_014103.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c4:o3366", "correlation produced zero touched instructions"),
-        ("govdocs1_014_014230.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c1:o1049", "correlation produced zero touched instructions"),
-        ("govdocs1_014_014230.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o1024", "correlation produced zero touched instructions"),
-        ("govdocs1_014_014230.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o1084:g0-34", "correlation produced zero touched instructions"),
-        ("govdocs1_014_014230.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o891", "correlation produced zero touched instructions"),
-        ("irs_form_1040.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c5:o8481", "correlation produced zero touched instructions"),
-        ("irs_form_1040.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c5:o8512", "correlation produced zero touched instructions"),
-        ("irs_form_1040.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c5:o8527", "correlation produced zero touched instructions"),
-        ("irs_form_1040.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c5:o8542", "correlation produced zero touched instructions"),
-        ("irs_form_1040.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c5:o8557", "correlation produced zero touched instructions"),
-        ("irs_form_1040.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c5:o8735", "correlation produced zero touched instructions"),
-        ("irs_form_1040.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c5:o9052", "correlation produced zero touched instructions"),
-        ("irs_form_1040.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c5:o9129:g0-19", "correlation produced zero touched instructions"),
-        ("irs_form_1040_spanish.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c0:o10826:g0-10", "correlation produced zero touched instructions"),
-        ("irs_form_1040_spanish.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o10022:g0-58", "correlation produced zero touched instructions"),
-        ("irs_publication_17.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o3371", "correlation produced zero touched instructions"),
-        ("irs_publication_17.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o5395", "correlation produced zero touched instructions"),
-        ("irs_publication_17.pdf", "0000000000000000000000000000000000000000000000000000000000000000:p0:c2:o5487", "correlation produced zero touched instructions"),
     }
 )
 # Phase 3 fixed RunIndex to issue the real immutable source hash. The original

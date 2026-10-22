@@ -11,11 +11,10 @@ the only file that may import playa).
 
 ## The pipeline, four stages
 
-1. **Group by StreamPath** (required, not optional). A run must never span two different
-   StreamPaths -- they are different physical byte ranges, and `encode_run_id` only has
-   room for one `:c{part}` anchor. `StreamPath` is frozen/hashable, so it is used directly
-   as a dict key; two glyphs both inside Form XObject /I1 share one StreamPath's field
-   values regardless of which glyph produced it.
+1. **Group by (StreamPath, stream_id)** (required, not optional). A run must never span
+   two different physical streams, and `encode_run_id` only has room for one `:c{part}`
+   anchor. `StreamPath` identifies the enclosing page/XObject/appearance path;
+   `GlyphRecord.stream_id` adds the /Contents array part within that path.
 2. **Band by baseline, per rotation angle** (02-RESEARCH.md Section 3, "Rotated text").
    Glyphs are bucketed by their quantized text-direction angle (~1 degree) so 0/45/90-degree
    text bands independently, then each bucket is banded into visual lines by ONE sort (on
@@ -330,12 +329,12 @@ def cluster_page(
     does not know which font a glyph resolved to; the caller closes over the FontVerdict
     table it built in 02-06 (see the controller-resolved interface in this task's brief).
     """
-    groups: dict[StreamPath, list[_GlyphItem]] = {}
+    groups: dict[tuple[StreamPath, int], list[_GlyphItem]] = {}
     for path, record, attrs in located:
-        groups.setdefault(path, []).append((record, attrs))
+        groups.setdefault((path, record.stream_id), []).append((record, attrs))
 
     runs: list[RunRecord] = []
-    for path, items in groups.items():
+    for (path, _part), items in groups.items():
         # Rotated text bands independently by quantized angle (Section 3), so 0/45/90-degree
         # text on the same page never gets banded together.
         buckets: dict[int, list[_GlyphItem]] = {}

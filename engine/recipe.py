@@ -34,6 +34,8 @@ This module has three layers, built across this plan's tasks:
 from __future__ import annotations
 
 import hashlib
+from bisect import bisect_right
+from functools import lru_cache
 import json
 import math
 import re
@@ -65,7 +67,7 @@ from engine.fonts import (
 )
 from engine.index import RunIndex
 from engine.records import RunRecord
-from engine.rewrite import RewriteOutcome, rewrite_run, stateful_showing_refusal
+from engine.rewrite import RewriteOutcome, rewrite_run, rewrite_preflight_refusal
 from engine.run_id import decode_run_id
 
 # 03-RESEARCH.md Security Domain, Known Threat Patterns table: "Recipe JSON with an
@@ -223,6 +225,19 @@ _POSITION_EPSILON = 1e-6
 _TF_NAME_SIZE_RE = re.compile(rb"/([^\s/\[\](){}<>%]+)\s+([+-]?[0-9.]+)\s+Tf\b")
 
 
+@lru_cache(maxsize=1)
+def _font_size_history(stream_bytes: bytes) -> tuple[tuple[int, ...], tuple[tuple[bytes, float] | None, ...]]:
+    positions: list[int] = []
+    values: list[tuple[bytes, float] | None] = []
+    for match in _TF_NAME_SIZE_RE.finditer(stream_bytes):
+        positions.append(match.start())
+        try:
+            values.append((match.group(1), float(match.group(2))))
+        except ValueError:
+            values.append(None)  # Invalid latest Tf must not fall back to an older font.
+    return tuple(positions), tuple(values)
+
+
 def active_font_name_and_size(
     stream_bytes: bytes, byte_offset: int
 ) -> tuple[bytes, float] | None:
@@ -234,14 +249,9 @@ def active_font_name_and_size(
     crash: the whole body is guarded, matching `engine.rewrite._correlate`'s pattern.
     """
     try:
-        found: re.Match[bytes] | None = None
-        for match in _TF_NAME_SIZE_RE.finditer(stream_bytes):
-            if match.start() > byte_offset:
-                break
-            found = match
-        if found is None:
-            return None
-        return found.group(1), float(found.group(2))
+        positions, values = _font_size_history(stream_bytes)
+        index = bisect_right(positions, byte_offset) - 1
+        return values[index] if index >= 0 else None
     except Exception:  # noqa: BLE001 - classify-never-crash, see docstring
         return None
 
@@ -323,7 +333,7 @@ def _resolve_op(
     if verdict.state == "not_editable":
         return ResolvedOp(op, ok=False, reason=verdict.reason, run=run, verdict=verdict)
 
-    stateful_reason = stateful_showing_refusal(pdf, run.page, run, list(all_page_runs))
+    stateful_reason = rewrite_preflight_refusal(pdf, run.page, run, list(all_page_runs))
     if stateful_reason is not None:
         return ResolvedOp(op, ok=False, reason=stateful_reason, run=run, verdict=verdict)
 
@@ -346,11 +356,17 @@ def _resolve_op(
         font_verdict = resolve_font(font_obj)
         program = embedded_font_bytes(font_obj.get("/FontDescriptor"))
         trigger = run_needs_substitution(font_obj, font_verdict, program, op.new_text)
+        # Glyph inspection can read raw Type 1/CFF programs, but load_font's
+        # replacement shaper requires an sfnt container. Use a bundled face for
+        # these originals, with the usual explicit-choice path for unknown names.
+        shaping_substitution = program is not None and program.data[:4] not in (
+            b"OTTO", b"\x00\x01\x00\x00", b"true", b"typ1"
+        )
 
         substitution_key: tuple[BundledFamily, BundledVariant] | None = None
         change_face = op.style is not None and bool({"bold", "italic", "font_family"}.intersection(op.style))
         chosen_family = op.style.get("font_family") if op.style is not None else None
-        if verdict.state == "editable_substitution" or trigger.substitute or change_face:
+        if verdict.state == "editable_substitution" or trigger.substitute or shaping_substitution or change_face:
             mapping = lookup_bundled_font(_base_font_name(font_obj))
             # The `family`/`variant` halves are tested alongside `mapped` rather than
             # asserted after it: `MappingVerdict`'s own construction ties them together (a
@@ -840,7 +856,7 @@ def apply_recipe(
                 applied.fit_result,
                 substitution_target=substitution_target,
                 color=tuple(applied.op.style["color"]) if applied.op.style is not None and "color" in applied.op.style else None,
-                force_substitution=applied.op.style is not None and bool({"bold", "italic", "font_family"}.intersection(applied.op.style)),
+                force_substitution=applied.substitution_key is not None,
             )
             if not outcome.ok:
                 # Return WITHOUT saving; the `finally` closes the mutated handle and it is

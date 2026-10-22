@@ -44,6 +44,8 @@ distinct fonts) and a run's own verdict, after clustering, is simply its first g
 from __future__ import annotations
 
 import hashlib
+from bisect import bisect_right
+from functools import lru_cache
 import re
 import unicodedata
 from dataclasses import dataclass
@@ -92,15 +94,18 @@ class DocumentClassification:
     runs: list[tuple[RunRecord, RunVerdict]]
 
 
+@lru_cache(maxsize=1)
+def _font_name_history(stream_bytes: bytes) -> tuple[tuple[int, ...], tuple[bytes, ...]]:
+    matches = tuple(_TF_RE.finditer(stream_bytes))
+    return tuple(m.start() for m in matches), tuple(m.group(1) for m in matches)
+
+
 def _find_active_font_name(stream_bytes: bytes, byte_offset: int) -> bytes | None:
     """The resource name of the LAST `Tf` at or before `byte_offset` in `stream_bytes`.
     `None` if no `Tf` precedes it."""
-    name: bytes | None = None
-    for match in _TF_RE.finditer(stream_bytes):
-        if match.start() > byte_offset:
-            break
-        name = match.group(1)
-    return name
+    positions, names = _font_name_history(stream_bytes)
+    index = bisect_right(positions, byte_offset) - 1
+    return names[index] if index >= 0 else None
 
 
 def stream_bytes_and_resources(

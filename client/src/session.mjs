@@ -40,6 +40,11 @@ export function explainReason(reason) {
   if(widthError)return Number(widthError[1])>0?'The replacement is too wide for this text area. Try shorter text or another replacement font.':'The replacement is shorter than the original text. Preview again with the updated editor.';
   if(reason?.startsWith('no mapping table entry for BaseFont'))return 'No automatic match for this font. Choose a replacement font, then preview again.';
   if(reason==='stateful_text_showing_unsupported')return 'This text uses line or spacing operators that cannot be safely rewritten yet.';
+  if(reason==='part_boundary_truncated')return 'This text crosses PDF content-stream boundaries that cannot be safely rewritten yet. Try another text run.';
+  if(reason==='operator_shared_by_multiple_runs')return 'This text shares a PDF instruction with other text. Editing it separately could change nearby text. Try another text run.';
+  if(reason==='stale_run_index'||reason==='correlation_failed')return 'The text could not be matched safely to its PDF instructions. Try another text run.';
+  if(reason==='resolution_failed')return 'This font could not be prepared for editing. Try a replacement font or another text run.';
+  if(reason==='matrix_shift_detected'||reason==='text_matrix_shifted_after_edit')return 'This edit would move nearby text, so it was refused. Try another replacement or text run.';
   if(reason==='multi_character_shaping_unsupported'||reason==='ambiguous_glyph_unicode_mapping')return 'This replacement cannot preserve exact searchable text with the available font. Try a simpler spelling or a different text run.';
   const explanations={overflow:'The replacement does not fit. Try shorter text.',fit_overflow:'The replacement does not fit. Try shorter text.',font_size_change_unsupported:'Font-size changes are not supported. Edits must fit the original width.',font_size_unsupported:'Font-size changes are not supported. Edits must fit the original width.',run_id_not_found:'The original text address could not be resolved.','right-to-left text':'Right-to-left text cannot be safely rewritten yet.',Type3:'This Type 3 font cannot be safely rewritten.'};
   return explanations[reason] || reason || 'This text cannot be safely rewritten.';

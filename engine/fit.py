@@ -48,8 +48,10 @@ from pathlib import Path
 import pikepdf
 import uharfbuzz as hb
 from fontTools.ttLib import TTFont
+from fontTools.agl import toUnicode
 
-from engine.encoding_table import cid_width
+from engine.encoding_table import STANDARD_14, cid_width, encoding_map
+from engine.playa_boundary import core_font_widths
 
 # "Roughly one space width" per Pitfall 5's priority-ordered absorption strategy -- the natural
 # threshold below which a single trailing TJ kern looks invisible rather than like a gap.
@@ -257,6 +259,22 @@ def advance_pt_for_codes(
             / 1000.0
             * font_size_pt
         )
+
+    base_name = str(font.get("/BaseFont", "")).lstrip("/")
+    if (font.get("/Widths") is None and font.get("/Subtype") == pikepdf.Name.Type1
+            and base_name in STANDARD_14 - {"Symbol", "ZapfDingbats"}):
+        # Standard Type1 fonts may omit /Widths; use the same Adobe AFM metrics
+        # as the read engine, with the font's actual Encoding/Differences applied.
+        metrics = core_font_widths(base_name)
+        mapping = encoding_map(font)
+        total = 0
+        for code in codes:
+            glyph_name = mapping.get(code)
+            width = metrics.get(toUnicode(glyph_name)) if metrics is not None and glyph_name else None
+            if width is None:
+                raise ValueError("standard_font_code_has_no_metric")
+            total += width
+        return total / 1000.0 * font_size_pt
 
     first_char = int(font["/FirstChar"])
     last_char = int(font["/LastChar"])

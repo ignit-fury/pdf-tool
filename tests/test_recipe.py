@@ -20,7 +20,7 @@ from fontTools.ttLib import TTFont
 import engine.recipe as recipe_module
 from engine.classify_run import RunVerdict, classify_document
 from engine.records import RunRecord
-from engine.fit import advance_pt_for_codes, fit_run, load_font, read_original_advance_pt
+from engine.fit import FitResult, advance_pt_for_codes, fit_run, load_font, read_original_advance_pt
 from engine.fonts import (
     BundledFamily,
     BundledVariant,
@@ -595,11 +595,12 @@ def test_plan_recipe_measures_original_by_character_code_not_decoded_unicode() -
     resolved_by_id = {r.op.run_id: r for r in report.resolved}
     assert all(resolved_by_id[run_id].ok for run_id in non_ascii_ids)
 
-    # (3) The only remaining refusal on this document is D-06's own by-name mapping
-    #     refusal (a Wingdings run), which is correct behaviour, not a measurement bug.
+    # (3) Preview also discloses the shared-operator refusal that used to appear
+    #     only at apply time. Neither refusal is a character-width lookup failure.
     refusals = [r for r in report.resolved if not r.ok]
     assert all(
-        r.reason is not None and r.reason.startswith("no mapping table entry")
+        r.reason is not None and (r.reason.startswith("no mapping table entry")
+                                 or r.reason == "operator_shared_by_multiple_runs")
         for r in refusals
     )
 
@@ -1271,29 +1272,29 @@ def test_refusal_reasons_are_named_not_generic(
     )
     assert direct_fit.refused is True, "this op must actually refuse for the check to bind"
 
-    # A SAVE-TIME `RewriteOutcome` reason, obtained by calling `rewrite_run` directly for
-    # the same run and inputs `apply_recipe` will feed it below.
+    # A rewrite refusal that preview now discloses, independently obtained from
+    # rewrite_run on the genuine indexed run and its sibling operators.
     shared_run_id = (
         hashlib.sha256(TM_SCALED_DOC.read_bytes()).hexdigest() + SHARED_OPERATOR_RUN_SUFFIX
     )
     shared_op = RecipeOp(run_id=shared_run_id, new_text=SHARED_OPERATOR_TEXT)
     shared_plan = plan_recipe(TM_SCALED_DOC, (shared_op,))
-    planned_shared = shared_plan.resolved[0]
-    assert planned_shared.ok is True, planned_shared.reason
-    assert planned_shared.run is not None and planned_shared.verdict is not None
-    assert planned_shared.all_page_runs is not None
-    assert planned_shared.fit_result is not None
+    assert not shared_plan.ok
+    shared_runs = classify_document(TM_SCALED_DOC).runs
+    shared_run, shared_verdict = next((run, verdict) for run, verdict in shared_runs
+                                     if run.run_id == shared_run_id)
     with pikepdf.open(TM_SCALED_DOC) as shared_pdf:
         direct_outcome = rewrite_run(
             shared_pdf,
-            planned_shared.run.page,
-            planned_shared.run,
-            planned_shared.verdict,
-            list(planned_shared.all_page_runs),
+            shared_run.page,
+            shared_run,
+            shared_verdict,
+            [run for run, _verdict in shared_runs if run.page == shared_run.page],
             shared_op.new_text,
-            planned_shared.fit_result,
+            FitResult(0.0, 0.0, 0.0, "trailing_kern", []),
         )
     assert direct_outcome.ok is False, "this run must actually refuse at rewrite time"
+    assert shared_plan.resolved[0].reason == direct_outcome.reason
 
     known_foreign = {
         type3_reason,

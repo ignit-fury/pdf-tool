@@ -27,7 +27,7 @@ def run_box(
     """
     if not run.glyphs:
         raise ValueError("run_box_requires_glyphs")
-    active = active_font_name_and_size(raw_bytes, run.glyphs[0].operator_byte_offset)
+    active = None if run.effective_em else active_font_name_and_size(raw_bytes, run.glyphs[0].operator_byte_offset)
     em = abs(run.effective_em or (active[1] if active is not None else 1.0))
     em = max(em, 0.01)
     direction = run.direction or run.glyphs[0].advance

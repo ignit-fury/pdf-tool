@@ -183,9 +183,13 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
             with RunIndex(path, password=secret.get_secret_value()) as index:
                 indexed = index.page(number)
                 runs = []
+                streams: dict[tuple[int, tuple[int, ...]], tuple[bytes, pikepdf.Object | None]] = {}
                 for run, verdict in indexed.runs:
                     parts = decode_run_id(run.run_id)
-                    raw, resources = stream_bytes_and_resources(pdf, number, parts["part"], parts["xobj_path"])
+                    stream_key = (parts["part"], parts["xobj_path"])
+                    if stream_key not in streams:
+                        streams[stream_key] = stream_bytes_and_resources(pdf, number, *stream_key)
+                    raw, resources = streams[stream_key]
                     source_font, suggested_family = source_font_info(raw, resources, run.glyphs[0].operator_byte_offset)
                     runs.append({"run_id": run.run_id, "text": run.display_text,
                         "box": run_box(run, raw, resources), "state": verdict.state,
@@ -209,15 +213,17 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
         except (ValueError, RecipeTooLargeError):
             raise WorkerRefusal("INVALID_RECIPE") from None
         output = Path(scratch) / "output.pdf"
-        if request.get("dry_run") is True or action == "plan":
+        if action == "plan":
             report = plan_recipe(path, recipe, password=secret.get_secret_value())
         else:
+            # Preview must exercise the same splice and layout guards as Apply.
+            # Its output stays inside this disposable worker's scratch directory.
             report = apply_recipe(path, recipe, output, password=secret.get_secret_value())
         return {"ok": report.ok, "resolved": [
             {"run_id": resolved.op.run_id, "ok": resolved.ok, "reason": resolved.reason,
              "strategy": resolved.strategy, "delta_pt": resolved.delta_pt}
             for resolved in report.resolved], "pdf": base64.b64encode(output.read_bytes()).decode("ascii")
-            if output.exists() and report.ok else None}
+            if request.get("dry_run") is not True and output.exists() and report.ok else None}
 
 
 def main() -> None:
@@ -230,6 +236,7 @@ def main() -> None:
         import engine.index  # noqa: F401
         import engine.recipe  # noqa: F401
         import engine.boxes  # noqa: F401
+        from engine.playa_boundary import PDFSyntaxError
         from server.linux_sandbox import restrict_worker
         restrict_worker()
         raw = sys.stdin.buffer.read(MAX_REQUEST_BYTES + 1)
@@ -238,7 +245,12 @@ def main() -> None:
         request: object = json.loads(raw)
         if not isinstance(request, dict):
             raise WorkerRefusal("INVALID_INPUT")
-        result = _execute(request)
+        try:
+            result = _execute(request)
+        except PDFSyntaxError:
+            # Malformed content must refuse the whole operation. The parser's
+            # message can contain document bytes, so only return the fixed code.
+            raise WorkerRefusal("PDF_INVALID") from None
     except WorkerRefusal as refusal:
         result = {"error": str(refusal.args[0])}
     except (MemoryError, RecursionError):

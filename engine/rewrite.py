@@ -186,6 +186,25 @@ class RewriteOutcome:
     reason: str | None = None
 
 
+def _instruction_has_text(instruction: ParsedInstruction) -> bool:
+    """Count the same showing operators as the reader's nonempty-string gate.
+
+    Empty strings and number-only TJ arrays produce no glyph operator offset.
+    They retain their state/advance effects and stay in the instruction list;
+    only the ordinal bridge omits them.
+    """
+    operator = str(instruction.operator)
+    operands = instruction.operands
+    if operator not in TEXT_SHOWING_OPERATORS or not operands:
+        return False
+    if operator == "TJ":
+        array = operands[0]
+        return isinstance(array, pikepdf.Array) and any(
+            isinstance(item, pikepdf.String) and bool(bytes(item)) for item in array
+        )
+    return isinstance(operands[-1], pikepdf.String) and bool(bytes(operands[-1]))
+
+
 def touched_instruction_indices(
     instructions: list[ParsedInstruction],
     run_operator_offsets: set[int],
@@ -198,8 +217,9 @@ def touched_instruction_indices(
 
     Both playa (which produced `operator_byte_offset`) and pikepdf (which produced
     `instructions`) walk the SAME bytes in the SAME order, so the Nth text-showing
-    operator counted by one is the Nth counted by the other, without either side ever
-    exposing the other's addressing scheme.
+    operator with a nonempty string counted by one is the Nth counted by the other,
+    without either side ever exposing the other's addressing scheme. Glyphless showing
+    instructions keep their original slots but do not consume these ordinals.
     """
     ordinal_of_offset = {off: i for i, off in enumerate(all_operator_offsets_sorted)}
     wanted_ordinals = {ordinal_of_offset[off] for off in run_operator_offsets}
@@ -207,7 +227,7 @@ def touched_instruction_indices(
     result: list[int] = []
     seen = 0
     for idx, instr in enumerate(instructions):
-        if str(instr.operator) in TEXT_SHOWING_OPERATORS:
+        if _instruction_has_text(instr):
             if seen in wanted_ordinals:
                 result.append(idx)
             seen += 1
@@ -301,17 +321,11 @@ def _correlate(
         # is-a-text-operator checks below cannot catch that -- a misaligned index still
         # lands on a perfectly valid `Tj`, just the wrong one.
         #
-        # MEASURED: on a freshly derived (non-stale) index the two counts agree for most
-        # parts, but not all -- over the same 12-document, 66-part sample as the truncation
-        # rate above, 13 of the 58 non-truncated parts (19.7% of all sampled parts)
-        # disagree even with no edit in between. Those are parts where playa's glyph-derived
-        # operator offsets and pikepdf's instruction list genuinely do not line up (observed
-        # adjacent to part-boundary splits, where playa attributes an operator to the
-        # neighbouring part). Refusing them is correct for the same reason as the stale
-        # case: the bridge is misaligned, so any index would be a guess.
-        text_operator_count = sum(
-            1 for instr in instructions if str(instr.operator) in TEXT_SHOWING_OPERATORS
-        )
+        # Use the reader's nonempty-string domain on both sides: numeric-only TJ
+        # arrays and empty strings retain their state effects but supply no glyph
+        # offset. Any remaining count mismatch still refuses; do not guess an ordinal
+        # when the current instruction list and the caller's run records disagree.
+        text_operator_count = sum(_instruction_has_text(instr) for instr in instructions)
         if text_operator_count != len(all_offsets):
             return RewriteOutcome(ok=False, reason="stale_run_index")
 
@@ -330,17 +344,18 @@ def _correlate(
         return RewriteOutcome(ok=False, reason="correlation_failed")
 
 
-def stateful_showing_refusal(
+def rewrite_preflight_refusal(
     pdf: pikepdf.Pdf, page_index: int, run: RunRecord, all_page_runs: list[RunRecord]
 ) -> str | None:
-    """The splice cannot preserve implicit line/spacing effects of quote operators.
-
-    Check every touched operator, including later operators in a clustered run.
-    Correlation failures retain the existing runtime refusal path.
-    """
+    """Disclose detectable splice refusals before presenting a successful preview."""
+    try:
+        if _operator_shared_with_another_run(run, all_page_runs):
+            return "operator_shared_by_multiple_runs"
+    except Exception:
+        return "correlation_failed"
     correlated = _correlate(pdf, page_index, run, all_page_runs)
     if isinstance(correlated, RewriteOutcome):
-        return None
+        return correlated.reason
     instructions, touched = correlated
     if any(str(instructions[i].operator) in ("'", '"') for i in touched):
         return "stateful_text_showing_unsupported"
@@ -1121,7 +1136,7 @@ def rewrite_run(
         # `RewriteOutcome(ok=False, reason=None)` is the unnamed failure EDIT-04 forbids.
         return RewriteOutcome(ok=False, reason=fit_result.refusal_reason or "fit_refused")
 
-    stateful_reason = stateful_showing_refusal(pdf, page_index, run, all_page_runs)
+    stateful_reason = rewrite_preflight_refusal(pdf, page_index, run, all_page_runs)
     if stateful_reason is not None:
         return RewriteOutcome(ok=False, reason=stateful_reason)
 
