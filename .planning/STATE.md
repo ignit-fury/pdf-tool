@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
-status: verification
-stopped_at: Phase 4 locally verified; Linux/container and live CDN release gates remain open
+status: executing
+stopped_at: Phase 5 plans checked; starting engine and search implementation, deployment remains on hold
 last_updated: "2026-10-22"
-last_activity: Audited 217 public PDFs and 8,254 pages; fixed font, stream-addressing, timeout and preview errors; 473 regression tests passed
+last_activity: Executing Phase 5 find and replace across all pages locally
 progress:
   total_phases: 8
   completed_phases: 3
@@ -14,13 +14,18 @@ progress:
 # Project State
 
 **Core value:** Replace existing PDF text while preserving the surrounding document.
-**Current focus:** Phase 04 — browser editor and hardening verification.
+**Current focus:** Phase 05 — find and replace across all pages.
 
 Phases 1–3 are complete. The Phase 3 engine and its fonts, CLI and regression gates are
 now present in this checkout; the original source worktree and local edits are preserved.
 Phase 4 implementation is delivered locally. Safari/Firefox open/edit/download and Safari
 password/undo/cache-recovery journeys were exercised. Public-release Gate G3 remains
 open until Linux/container and live CDN checks are actually run.
+
+On 2026-10-22 the user explicitly instructed: "dont deploy it yet just go to nxt
+phase". Phase 5 proceeds locally using the delivered Phase 4 interfaces. Deployment
+and the open Linux/container/CDN release gates are retained; no public-release
+completion is implied. The interrupted container-tool setup was not continued.
 
 Execution record: `.planning/PHASE-4-EXECUTION.md`.
 Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04-VERIFICATION.md`.
@@ -39,8 +44,8 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
 
 Server-issued run addresses; one atomic recipe against immutable original bytes; no overlay
 editing; no runtime AGPL; no persistent server document/session history; browser-held
-originals recover evicted memory cache. Phase 5 full-document find/replace, Phase 6 page
-operations, and later exports remain outside this milestone.
+originals recover evicted memory cache. Phase 5 full-document find/replace is the active
+local phase. Phase 6 page operations and later exports remain future work.
 
 ## Decisions made during execution
 

@@ -1,5 +1,13 @@
 # Phase 5: Find and Replace Across All Pages - Research
 
+> Historical research, superseded for implementation on 2026-10-22 by
+> [05-RESEARCH-UPDATE.md](05-RESEARCH-UPDATE.md). Its open questions are resolved there:
+> the existing `/edit?dry_run=...` endpoint performs actual rewrite preview; Unicode
+> whole-word search uses `Intl.Segmenter`; and indexing exposes partial progress,
+> Stop/Resume and failed-page retry. The old native-normalization/ASCII-boundary
+> examples and plan-only filtering below must not be implemented. The refreshed
+> research also records the measured batch CPU defect and shared Unicode contract.
+
 **Researched:** 2026-08-31
 **Domain:** Client-side text search over a server-issued run index; N-op batch replace through the
 existing Phase 3 recipe/apply path. No new engine capability — this phase is an assembly problem,

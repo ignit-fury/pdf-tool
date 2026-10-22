@@ -194,7 +194,14 @@ Plans:
   4. Replace-all across a 40-page corpus contract changes every remaining match in one action, and the masked differential diff is confined to the edited runs on every changed page in all three engines
   5. One Ctrl+Z reverts the entire replace-all batch as a single step
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Reuse verified rewrite snapshots and prove full-batch worker performance
+- [ ] 05-02-PLAN.md — Canonical Unicode search/provenance and per-instance full-recipe builder
+- [ ] 05-03-PLAN.md — Complete-document find, opt-outs, navigation and exact replacement preview
+- [ ] 05-04-PLAN.md — Atomic replace-all, one undo and local 40-page fidelity/browser proof
+
 **Research**: no — a client-side query over the cached index producing N ordinary overrides through the ordinary apply path. There is no `POST /find-replace`; a separate bulk endpoint means two rewrite implementations within six months.
 **Parallel**: yes — independent of Phases 6 and 7 after G3
 **UI hint**: yes

@@ -1,5 +1,25 @@
 # Phase 5: Find and Replace Across All Pages - Context
 
+## Execution amendment — 2026-10-22
+
+The user explicitly authorized Phase 5 with "dont deploy it yet just go to nxt
+phase". Build this phase locally against the delivered Phase 4 UI/API. Keep
+deployment on hold and preserve the outstanding Linux/container/CDN release gates;
+their absence does not block this user-authorized local phase execution.
+
+The earlier research predates the current Phase 4 implementation. Read
+`05-RESEARCH-UPDATE.md` and `05-PATTERNS.md` when present for current contracts.
+The existing client uses React/JavaScript and Node's built-in test runner. Reuse
+the current style system, cancellation/queue/source-recovery helpers, recipe
+engine, explicit replacement-font controls and single undo model. Routine
+implementation/UI choices remain delegated to the builder, not new user decisions.
+
+Edit preview now executes actual rewrite validation in disposable worker scratch;
+it returns a report without PDF bytes. Preserve all worker limits and fidelity
+guards. Search must distinguish partial indexing from a complete-document result,
+retain failed/uneditable page information, and invalidate stale previews when the
+query, replacement, selection, document or current recipe changes.
+
 **Gathered:** 2026-08-30
 **Status:** Ready for planning
 **Source:** Batch planning pass (no `/gsd:discuss-phase` run). Phase boundary and constraints
