@@ -1,5 +1,5 @@
 ---
-status: investigating
+status: resolved
 trigger: Test all corpus/public PDFs and fix reproducible errors
 created: 2026-10-22
 ---
@@ -107,3 +107,16 @@ editable, or that every corpus output received an outside-box pixel comparison.
 Independent final code review found the F-06 handoff defect and verified its
 correction; no other introduced defects were found. Linux/container and live CDN
 release gates remain open and are outside this local corpus task.
+
+Final audit complete on implementation `5457863`: 217 files, 238 sampled pages,
+764 edit cases, 346 returned outputs, 333 independently verified output texts.
+154 files have verified identity/shorter pairs (103 automatic, 51 explicit font);
+10 more have at least one verified edit. No detected corrupt/wrong-text output,
+preview/apply disagreement or edit-worker crash/timeout. All source hashes are
+unchanged in a fresh final check. Remaining sample outcomes: 35 named edit
+refusals, 10 without an editable sample, 6 independently unverifiable and 2 input/
+resource page refusals. These compatibility limits remain disclosed, not erased.
+
+Final quick regression suite: 473 passed, 5 platform/deployment skips, 25 corpus
+tests deselected; latest focused font/recipe/preview/render suite: 94 passed;
+all three renderer gates and 12 client tests pass; build and strict typing pass.

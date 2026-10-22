@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: PDF Tool
 status: verification
 stopped_at: Phase 4 locally verified; Linux/container and live CDN release gates remain open
-last_updated: "2026-10-21"
-last_activity: Fixed large-shortening refusal and duplicate fit messages; 445 regression tests and renderer gates passed
+last_updated: "2026-10-22"
+last_activity: Audited 217 public PDFs and 8,254 pages; fixed font, stream-addressing, timeout and preview errors; 473 regression tests passed
 progress:
   total_phases: 8
   completed_phases: 3
@@ -64,3 +64,12 @@ operations, and later exports remain outside this milestone.
   replacement text can leave unused space after it while preserving following positions;
   fit feedback no longer repeats technical prose. 445 non-corpus tests, renderer gates,
   client build/tests, typing and live HTTP verification passed.
+- 2026-10-22: [Corpus compatibility](./debug/corpus-compatibility.md) audit complete.
+  All 217 public PDFs and 8,254 pages read-tested; sampled edits independently
+  verified in 164 PDFs. Font fallback, physical stream anchors, empty operators,
+  dense-page performance, syntax-error routing and full rewrite preview corrected.
+  Final 346 outputs: 333 independently verified text results, no detected corruption
+  or wrong text, no preview/apply disagreements, immutable sources. Remaining sample
+  refusals/unverifiable cases are explicit in the [report](./audits/corpus-compatibility-2026-10-22.md).
+  473 quick regression tests, latest 94 focused/gate tests, 12 client tests,
+  production build and strict typing passed. Release gates above remain open.
