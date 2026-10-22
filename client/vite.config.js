@@ -26,6 +26,7 @@ function pdfAssets(){
 export default defineConfig({
   plugins: [react(),pdfAssets()],
   server: {
+    fs: {allow: [resolve('.'), resolve('../engine/data')]},
     port: 5173,
     host: '127.0.0.1',
     proxy: {
