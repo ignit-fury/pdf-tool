@@ -45,6 +45,20 @@ def test_snapshot_one_post_classification_per_edit(tmp_path, monkeypatch):
     assert calls == [0] * (len(ops) + 1)
 
 
+def test_snapshot_guard_sorts_each_before_and_after_part_once(tmp_path, monkeypatch):
+    source, ops = _source(tmp_path)
+    calls = []
+    original = rewrite_module._part_glyphs_in_stream_order
+
+    def counted(*args):
+        calls.append(1)
+        return original(*args)
+
+    monkeypatch.setattr(rewrite_module, "_part_glyphs_in_stream_order", counted)
+    assert apply_recipe(source, ops, tmp_path / "output.pdf").ok
+    assert len(calls) <= 2 * len(ops)
+
+
 @pytest.mark.parametrize("encrypted", [False, True])
 def test_snapshot_fresh_classification_refusal_is_atomic(tmp_path, monkeypatch, encrypted):
     source, ops = _source(tmp_path, encrypted)
