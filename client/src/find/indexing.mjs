@@ -4,7 +4,7 @@ export function createIndexingController({fetchPage,onProgress,isCurrent=()=>tru
   const completed=new Set(),failed=new Set();
   let total=0,generation=0,disposed=false,status='idle',pending;
   const alive=token=>!disposed&&token===generation&&isCurrent();
-  const publish=()=>{if(!disposed&&isCurrent())onProgress({completed:completed.size,total,failedPages:[...failed].sort((a,b)=>a-b),status});};
+  const publish=()=>{if(!disposed&&isCurrent())onProgress({completed:completed.size,completedPages:[...completed].sort((a,b)=>a-b),total,failedPages:[...failed].sort((a,b)=>a-b),status});};
   const run=()=>{
     if(disposed||!isCurrent())return Promise.resolve();
     if(status==='indexing')return pending;

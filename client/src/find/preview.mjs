@@ -27,6 +27,10 @@ export async function previewReplacement({buildCandidate,requestPreview,isCurren
       return immutable(structuredClone({...candidate,recipe,key,refusals,result}));
     }
     const failures=(result.resolved||[]).filter(row=>row.ok===false);
+    if(failures.some(row=>['run_id_not_found','source_mismatch'].includes(row.reason))){
+      const error=new Error('This preview no longer matches the document. Refresh the index and preview again.');
+      error.code='SOURCE_MISMATCH';throw error;
+    }
     if(!failures.length)throw new Error('Could not preview replacements. Your PDF is unchanged.');
     const proposed=new Set(candidate.changes.map(change=>change.runId));
     if(failures.some(row=>!proposed.has(row.run_id))){

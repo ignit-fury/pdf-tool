@@ -2,12 +2,12 @@ import React, {useEffect,useRef,useState} from 'react';
 import * as pdfjs from 'pdfjs-dist';
 import {viewportBox,explainReason,explainBucket} from './session.mjs';
 
-export function PageCanvas({pdf,pageNumber,scale,mode,runs,selected,onSelect}) {
-  const canvas=useRef(null),text=useRef(null);
-  const [viewport,setViewport]=useState(null),[error,setError]=useState('');
+export function PageCanvas({pdf,pageNumber,scale,mode,runs,selected,onSelect,findTarget,onFindRendered}) {
+  const canvas=useRef(null),text=useRef(null),highlight=useRef(null);
+  const [viewport,setViewport]=useState(null),[error,setError]=useState(''),[rendered,setRendered]=useState(null);
   useEffect(()=>{
     let stopped=false,render,layer;
-    setViewport(null);setError('');
+    setViewport(null);setError('');setRendered(null);
     (async()=>{
       const page=await pdf.getPage(pageNumber);
       if(stopped)return;
@@ -19,13 +19,20 @@ export function PageCanvas({pdf,pageNumber,scale,mode,runs,selected,onSelect}) {
       text.current.replaceChildren();
       layer=new pdfjs.TextLayer({textContentSource:page.streamTextContent(),container:text.current,viewport:view});
       await Promise.all([render.promise,layer.render()]);
+      if(!stopped)setRendered({pdf,pageNumber,scale});
     })().catch(error=>{if(!stopped&&error.name!=='RenderingCancelledException')setError('This page could not be rendered. Try reopening the PDF.');});
     return ()=>{stopped=true;render?.cancel();layer?.cancel();};
   },[pdf,pageNumber,scale]);
+  useEffect(()=>{
+    if(!findTarget||findTarget.page!==pageNumber||rendered?.pdf!==pdf||rendered?.pageNumber!==pageNumber||rendered?.scale!==scale||!highlight.current)return;
+    const frame=requestAnimationFrame(()=>{highlight.current?.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});onFindRendered?.(findTarget);});
+    return()=>cancelAnimationFrame(frame);
+  },[pdf,pageNumber,scale,rendered,findTarget,onFindRendered]);
   return <div className="paper" style={viewport?{width:viewport.width,height:viewport.height,'--scale-factor':scale,'--total-scale-factor':viewport.scale}:undefined}>
     <canvas ref={canvas} aria-label={`PDF page ${pageNumber}`}/>
     <div ref={text} className={`textLayer ${mode==='edit'?'inactive':''}`}/>
     {viewport&&mode==='edit'&&<div className="edit-layer" aria-label="Text edit targets">{runs.map(run=><button key={run.run_id} type="button" className={`run-box ${selected===run.run_id?'selected':''} ${run.state==='not_editable'?'refused':''}`} style={viewportBox(run.box,viewport)} title={`${run.text}: ${run.state==='not_editable'?explainReason(run.reason):'Edit text'}`} aria-label={`Edit text: ${run.text}`} onClick={()=>onSelect(run)}/>)}</div>}
+    {viewport&&findTarget?.page===pageNumber&&findTarget.box&&<div ref={highlight} className="find-highlight" style={viewportBox(findTarget.box,viewport)} aria-label="Current search result text area"/>}
     {error&&<p className="render-error" role="alert">{error}</p>}
   </div>;
 }

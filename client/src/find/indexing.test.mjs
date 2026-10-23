@@ -9,10 +9,10 @@ test('indexing counts successful empty pages and retries only missing or failed 
   const seen=[],progress=[];let fail=true;
   const controller=createIndexingController({fetchPage:async page=>{seen.push(page);if(page===2&&fail)throw Error('busy');return {runs:[]};},onProgress:value=>progress.push(value)});
   await controller.start(3);
-  assert.deepEqual(progress.at(-1),{completed:2,total:3,failedPages:[2],status:'failed'});
+  assert.deepEqual(progress.at(-1),{completed:2,completedPages:[1,3],total:3,failedPages:[2],status:'failed'});
   fail=false;await controller.resume();
   assert.deepEqual(seen,[1,2,3,2]);
-  assert.deepEqual(progress.at(-1),{completed:3,total:3,failedPages:[],status:'complete'});
+  assert.deepEqual(progress.at(-1),{completed:3,completedPages:[1,2,3],total:3,failedPages:[],status:'complete'});
 });
 
 test('stop ignores a late page and resume retains only completed work',async()=>{
@@ -20,6 +20,7 @@ test('stop ignores a late page and resume retains only completed work',async()=>
   const controller=createIndexingController({fetchPage:page=>{seen.push(page);return page===2?waiting.promise:Promise.resolve({runs:[]});},onProgress:value=>progress.push(value)});
   const first=controller.start(3);await tick();controller.stop();
   assert.equal(progress.at(-1).completed,1);
+  assert.deepEqual(progress.at(-1).completedPages,[1]);
   assert.equal(progress.at(-1).status,'stopped');
   const count=progress.length;waiting.resolve({runs:[]});await first;
   assert.equal(progress.length,count);
