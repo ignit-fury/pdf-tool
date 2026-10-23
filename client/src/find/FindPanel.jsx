@@ -1,7 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {explainReason,refusalCode,needsFontChoice} from '../session.mjs';
 
-const plural=(count,word)=>`${count} ${word}${count===1?'':'s'}`;
+const plural=(count,word)=>`${count} ${word}${count===1?'':word.endsWith('match')?'es':'s'}`;
 export default function FindPanel({query,replacement,fontFamily,matchCase,wholeWords,onQuery,onReplacement,onFont,onMatchCase,onWholeWords,
   progress,matches,excludedIds,onToggle,onStop,onResume,review,previewing,locked,onPreview,onCancelPreview,error,
   activeId,onNavigate,resultPage,onResultPage,queryRef,rowRefs,recipe=[],runsById,sourceMismatch=false,onRefresh,applyAllowed=false,onApply}){
