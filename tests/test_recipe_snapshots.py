@@ -14,6 +14,12 @@ from engine.recipe import RecipeOp, apply_recipe
 from tools.build_security_fixtures import text_pdf
 
 
+@pytest.fixture
+def full_classification_fallback(monkeypatch):
+    from engine.part_snapshot import PartSnapshot
+    monkeypatch.setattr(PartSnapshot, "create", lambda *_args: None)
+
+
 def _source(tmp_path: Path, encrypted: bool = False) -> tuple[Path, tuple[RecipeOp, ...]]:
     source = tmp_path / "source.pdf"
     with pikepdf.open(io.BytesIO(text_pdf(b"Hello world"))) as pdf:
@@ -29,7 +35,7 @@ def _source(tmp_path: Path, encrypted: bool = False) -> tuple[Path, tuple[Recipe
     return source, ops
 
 
-def test_snapshot_one_post_classification_per_edit(tmp_path, monkeypatch):
+def test_snapshot_one_post_classification_per_edit(tmp_path, monkeypatch, full_classification_fallback):
     source, ops = _source(tmp_path)
     calls = []
     original = RunIndex._parse_page
@@ -59,8 +65,69 @@ def test_snapshot_guard_sorts_each_before_and_after_part_once(tmp_path, monkeypa
     assert len(calls) <= 2 * len(ops)
 
 
+def test_fast_context_checks_every_splice_without_full_reclassification(tmp_path, monkeypatch):
+    from engine.part_snapshot import PartSnapshot
+    source, ops = _source(tmp_path)
+    checks, parses = [], []
+    original_check = PartSnapshot.check_after
+    original_parse = RunIndex._parse_page
+
+    def checked(self, pdf):
+        checks.append(1)
+        return original_check(self, pdf)
+
+    def parsed(self, page):
+        parses.append(page)
+        return original_parse(self, page)
+
+    monkeypatch.setattr(PartSnapshot, "check_after", checked)
+    monkeypatch.setattr(RunIndex, "_parse_page", parsed)
+    report = apply_recipe(source, ops, tmp_path / "output.pdf")
+    assert report.ok, [row.reason for row in report.resolved]
+    assert len(checks) == len(ops)
+    assert parses == [0]
+
+
+def test_fast_context_correlates_current_operator_domain_only_once(tmp_path, monkeypatch):
+    source, ops = _source(tmp_path)
+    original = rewrite_module._correlate
+    calls = []
+
+    def counted(*args):
+        calls.append(1)
+        return original(*args)
+
+    monkeypatch.setattr(rewrite_module, "_correlate", counted)
+    assert apply_recipe(source, ops, tmp_path / "output.pdf").ok
+    # Immutable-source planning plus one current proof per actual splice.
+    assert len(calls) <= 2 * len(ops)
+
+
 @pytest.mark.parametrize("encrypted", [False, True])
-def test_snapshot_fresh_classification_refusal_is_atomic(tmp_path, monkeypatch, encrypted):
+def test_fast_context_late_guard_refusal_discards_every_edit(tmp_path, monkeypatch, encrypted):
+    from engine.part_snapshot import PartSnapshot
+    source, ops = _source(tmp_path, encrypted)
+    before = source.read_bytes()
+    original = PartSnapshot.check_after
+    calls = []
+
+    def fail_second(self, pdf):
+        result = original(self, pdf)
+        calls.append(1)
+        return "text_matrix_shifted_after_edit" if len(calls) == 2 else result
+
+    monkeypatch.setattr(PartSnapshot, "check_after", fail_second)
+    output = tmp_path / "output.pdf"
+    report = apply_recipe(source, ops, output, password="secret" if encrypted else "")
+    assert not report.ok
+    assert report.resolved[1].reason == "text_matrix_shifted_after_edit"
+    assert len(calls) == 2
+    assert not output.exists()
+    assert source.read_bytes() == before
+
+
+@pytest.mark.parametrize("encrypted", [False, True])
+def test_snapshot_fresh_classification_refusal_is_atomic(tmp_path, monkeypatch, encrypted, full_classification_fallback):
     source, ops = _source(tmp_path, encrypted)
     original_bytes = source.read_bytes()
     original = RunIndex._parse_page
