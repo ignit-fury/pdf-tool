@@ -39,6 +39,10 @@ test('a lost original address requires an index refresh instead of treating the 
   await assert.rejects(previewReplacement({buildCandidate:candidate,key:'x',requestPreview:async()=>({ok:false,resolved:[{run_id:'new-a',ok:false,reason:'run_id_not_found'}]})}),error=>error.code==='SOURCE_MISMATCH');
 });
 
+test('the engine source hash mismatch requires refreshing the document index',async()=>{
+  await assert.rejects(previewReplacement({buildCandidate:candidate,key:'x',requestPreview:async()=>({ok:false,resolved:[{run_id:'new-a',ok:false,reason:'source_hash_mismatch'}]})}),error=>error.code==='SOURCE_MISMATCH');
+});
+
 test('batch errors and nonprogressing reports cannot publish ready reviews',async()=>{
   await assert.rejects(previewReplacement({buildCandidate:candidate,key:'x',requestPreview:async()=>({error:'WORKER_FAILED'})}),/WORKER_FAILED/);
   await assert.rejects(previewReplacement({buildCandidate:candidate,key:'x',requestPreview:async()=>({ok:false,resolved:[{run_id:'new-a',ok:true}]})}),/preview/i);
