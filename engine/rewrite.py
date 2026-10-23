@@ -145,7 +145,7 @@ from engine.fonts import (
 )
 from engine.index import RunIndex
 from engine.records import GlyphRecord, RunRecord
-from engine.run_id import decode_run_id
+from engine.run_id import decode_run_id, encode_run_id
 
 TEXT_SHOWING_OPERATORS = frozenset({"Tj", "TJ", "'", '"'})
 
@@ -488,9 +488,58 @@ def _current_page_snapshot(pdf: pikepdf.Pdf, page_index: int) -> PageSnapshot:
     """
     with tempfile.TemporaryDirectory() as scratch:
         path = Path(scratch) / "rewalk.pdf"
-        pdf.save(path)
+        # Pages without secondary text-bearing streams can be re-read in a
+        # one-page scratch PDF. Content part indices, decoded bytes, inherited
+        # page geometry and font dictionaries are copied intact by pikepdf.
+        # Object IDs may change: never use this route for Forms, patterns,
+        # annotations or Type3 glyph programs, whose provenance embeds IDs.
+        projected = page_index < 256 and _can_project_page(pdf.pages[page_index])
+        if projected:
+            with pikepdf.Pdf.new() as single:
+                # Preserve the logical page address without copying unrelated
+                # source pages. Empty predecessors have no content to classify.
+                for _ in range(page_index):
+                    single.add_blank_page()
+                single.pages.append(pdf.pages[page_index])
+                # Non-appearance annotations contribute no glyphs to the
+                # interpreter. Drop only their scratch copies so link targets
+                # cannot pull unrelated pages into this disposable projection.
+                if "/Annots" in single.pages[-1].obj:
+                    del single.pages[-1].obj["/Annots"]
+                single.save(path, compress_streams=False,
+                            object_stream_mode=pikepdf.ObjectStreamMode.disable)
+        else:
+            pdf.save(path, compress_streams=False,
+                     object_stream_mode=pikepdf.ObjectStreamMode.disable)
         with RunIndex(path) as index:
-            return PageSnapshot(page_index, tuple(index.page(page_index).runs))
+            classified = index.page(page_index).runs
+            if projected:
+                remapped = []
+                for run, verdict in classified:
+                    parts = decode_run_id(run.run_id)
+                    # Fail closed if a future walker adds another ID-bearing
+                    # source to the projected-page route.
+                    if parts["xobj_path"] or parts["annot"] is not None or parts["pattern"] is not None or parts["charproc"] is not None:
+                        raise ValueError("unexpected projected provenance")
+                    remapped.append((replace(run, page=page_index, run_id=encode_run_id(
+                        parts["source_hash"], page_index, parts["part"],
+                        byte_offset=parts["byte_offset"], subrange=parts["subrange"])), verdict))
+                classified = remapped
+            return PageSnapshot(page_index, tuple(classified))
+
+
+def _can_project_page(page: pikepdf.Page) -> bool:
+    """Conservative scratch optimization; ID-bearing sources use the full PDF."""
+    if any(annotation.get("/AP") is not None for annotation in page.obj.get("/Annots", [])):
+        return False
+    resources = page.Resources
+    if resources.get("/Pattern"):
+        return False
+    xobjects = resources.get("/XObject", pikepdf.Dictionary())
+    if any(str(obj.get("/Subtype")) != "/Image" for _, obj in xobjects.items()):
+        return False
+    fonts = resources.get("/Font", pikepdf.Dictionary())
+    return not any(str(font.get("/Subtype")) == "/Type3" for _, font in fonts.items())
 
 
 def _current_page_runs(pdf: pikepdf.Pdf, page_index: int) -> list[RunRecord]:
@@ -554,25 +603,32 @@ def _matrix_after_run(
     longer describes a part with that much content -- `None` again, which (paired with a
     non-`None` "before") makes the guard REFUSE rather than pass.
     """
-    last = max(_stream_position(glyph) for glyph in run.glyphs)
-    if not any(_stream_position(glyph) > last
-               for glyph in _part_glyphs_in_stream_order(all_page_runs, _part_key(run))):
+    tail_count, _before = _following_reference(run, all_page_runs)
+    if tail_count == 0:
         return None
-    return _matrix_from_runs(run, all_page_runs, _current_page_runs(pdf, page_index))
+    return _matrix_for_tail(run, _current_page_runs(pdf, page_index), tail_count)
 
 
-def _matrix_from_runs(
-    run: RunRecord, all_page_runs: list[RunRecord], current_runs: list[RunRecord]
-) -> tuple[float, float] | None:
-    """The same invariant tail-count lookup, using explicitly current records."""
+def _following_reference(
+    run: RunRecord, all_page_runs: list[RunRecord]
+) -> tuple[int, tuple[float, float] | None]:
+    """Count the invariant suffix and capture its first current coordinate once."""
     part_key = _part_key(run)
     last_position = max(_stream_position(glyph) for glyph in run.glyphs)
     recorded = _part_glyphs_in_stream_order(all_page_runs, part_key)
     tail_count = sum(1 for g in recorded if _stream_position(g) > last_position)
     if tail_count == 0:
-        return None
+        return 0, None
+    following = recorded[len(recorded) - tail_count]
+    return tail_count, (following.x, following.y)
 
-    current = _part_glyphs_in_stream_order(current_runs, part_key)
+
+def _matrix_for_tail(
+    run: RunRecord, current_runs: list[RunRecord], tail_count: int
+) -> tuple[float, float] | None:
+    if tail_count == 0:
+        return None
+    current = _part_glyphs_in_stream_order(current_runs, _part_key(run))
     if tail_count > len(current):
         return None
     following = current[len(current) - tail_count]
@@ -1188,8 +1244,7 @@ def rewrite_run(
         if current_snapshot is not None:
             if current_snapshot.page != page_index:
                 return RewriteOutcome(ok=False, reason="correlation_failed")
-            matrix_before = _matrix_from_runs(
-                run, all_page_runs, [r for r, _ in current_snapshot.runs])
+            tail_count, matrix_before = _following_reference(run, all_page_runs)
         else:
             matrix_before = _matrix_after_run(pdf, page_index, run, all_page_runs)
     except Exception:
@@ -1255,8 +1310,8 @@ def rewrite_run(
         snapshot = None
         if current_snapshot is not None:
             snapshot = _current_page_snapshot(pdf, page_index)
-            matrix_after = _matrix_from_runs(
-                run, all_page_runs, [r for r, _ in snapshot.runs])
+            matrix_after = _matrix_for_tail(
+                run, [r for r, _ in snapshot.runs], tail_count)
         else:
             matrix_after = _matrix_after_run(pdf, page_index, run, all_page_runs)
     except Exception:

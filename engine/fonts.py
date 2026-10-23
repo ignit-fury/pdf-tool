@@ -376,6 +376,22 @@ def subset_tag(description: str) -> str:
     return "".join(chr(65 + b % 26) for b in digest)
 
 
+@functools.lru_cache(maxsize=12)
+def _bundled_shaping_metadata(
+    family: BundledFamily, variant: BundledVariant
+) -> tuple[hb.Face, tuple[str, ...]]:
+    """Only immutable installed-face metadata; never document text or PDF fonts.
+
+    Fonts and buffers remain per-call, so scale/font-function changes cannot
+    pollute another shaping operation. There are exactly twelve bundled faces.
+    """
+    path = liberation_font_path(family, variant)
+    face = hb.Face(hb.Blob.from_file_path(str(path)))
+    with TTFont(str(path)) as font:
+        names = tuple(font.getGlyphOrder())
+    return face, names
+
+
 def shape_glyph_names(
     family: BundledFamily, variant: BundledVariant, text: str
 ) -> tuple[str, ...]:
@@ -387,15 +403,14 @@ def shape_glyph_names(
     function's return type is `str`, not `int`.
     """
     try:
-        path = liberation_font_path(family, variant)
-        hb_font = hb.Font(hb.Face(hb.Blob.from_file_path(str(path))))
+        face, glyph_names = _bundled_shaping_metadata(family, variant)
+        hb_font = hb.Font(face)
         buf = hb.Buffer()
         buf.add_str(text)
         buf.guess_segment_properties()
         hb.shape(hb_font, buf)
 
-        ft_font = TTFont(str(path))
-        return tuple(ft_font.getGlyphName(info.codepoint) for info in buf.glyph_infos)
+        return tuple(glyph_names[info.codepoint] for info in buf.glyph_infos)
     except Exception as exc:
         raise RuntimeError(
             f"cannot shape text for {family}/{variant}: {len(text)} chars"

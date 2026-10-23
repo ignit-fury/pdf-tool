@@ -84,6 +84,26 @@ def test_snapshot_fresh_classification_refusal_is_atomic(tmp_path, monkeypatch, 
     assert not output.exists()
 
 
+def test_snapshot_guard_refuses_real_following_glyph_shift(tmp_path, monkeypatch):
+    source = tmp_path / "relative.pdf"
+    with pikepdf.open(io.BytesIO(text_pdf(b"Hello"))) as pdf:
+        pdf.pages[0].Contents = pdf.make_stream(
+            b"BT /F1 12 Tf 72 700 Td (Hello) Tj 1 0 0 rg (world) Tj ET")
+        pdf.save(source)
+    with RunIndex(source) as index:
+        runs = index.page(0).runs
+        assert len(runs) == 2
+        operation = RecipeOp(runs[0][0].run_id, "Hallo")
+    original = rewrite_module._show_instruction
+    monkeypatch.setattr(rewrite_module, "_show_instruction",
+                        lambda units, fit: original(units + units, fit))
+    output = tmp_path / "bad.pdf"
+    report = apply_recipe(source, (operation,), output)
+    assert not report.ok
+    assert report.resolved[0].reason == "text_matrix_shifted_after_edit"
+    assert not output.exists()
+
+
 def test_snapshot_projection_preserves_geometry_and_unedited_pages(tmp_path):
     source, _ = _source(tmp_path)
     with pikepdf.open(source) as pdf:
