@@ -13,7 +13,7 @@ export function chooseFontFamily(style, family) {
   return next;
 }
 export function needsFontChoice(run, style) {
-  return run?.state==='editable_substitution'&&!run.suggested_font_family&&!style.font_family;
+  return run?.state!=='not_editable'&&(run?.state==='editable_substitution'||run?.suggested_font_family===null)&&!run?.suggested_font_family&&!style.font_family;
 }
 export async function withSourceRetry(session, operation, upload) {
   try {return await operation(session.jobId);}
@@ -36,6 +36,7 @@ export async function disposeDocument(document) {
   try {await document?.loadingTask?.destroy();} catch {}
 }
 export function explainReason(reason) {
+  if(reason==='normalization_boundary_unreplaceable')return 'This match covers only part of a character or combined character. Search for the complete character to replace it safely.';
   const widthError=/^delta (-?\d+(?:\.\d+)?)pt exceeds/.exec(reason||'');
   if(widthError)return Number(widthError[1])>0?'The replacement is too wide for this text area. Try shorter text or another replacement font.':'The replacement is shorter than the original text. Preview again with the updated editor.';
   if(reason?.startsWith('no mapping table entry for BaseFont'))return 'No automatic match for this font. Choose a replacement font, then preview again.';
@@ -47,7 +48,7 @@ export function explainReason(reason) {
   if(reason==='matrix_shift_detected'||reason==='text_matrix_shifted_after_edit')return 'This edit would move nearby text, so it was refused. Try another replacement or text run.';
   if(reason==='multi_character_shaping_unsupported'||reason==='ambiguous_glyph_unicode_mapping')return 'This replacement cannot preserve exact searchable text with the available font. Try a simpler spelling or a different text run.';
   const explanations={overflow:'The replacement does not fit. Try shorter text.',fit_overflow:'The replacement does not fit. Try shorter text.',font_size_change_unsupported:'Font-size changes are not supported. Edits must fit the original width.',font_size_unsupported:'Font-size changes are not supported. Edits must fit the original width.',run_id_not_found:'The original text address could not be resolved.','right-to-left text':'Right-to-left text cannot be safely rewritten yet.',Type3:'This Type 3 font cannot be safely rewritten.'};
-  return explanations[reason] || reason || 'This text cannot be safely rewritten.';
+  return explanations[reason] || 'This text cannot be safely rewritten.';
 }
 export function refusalCode(reason) {
   return /^[a-z][a-z0-9_]*$/.test(reason||'')&&explainReason(reason)!==reason?reason:null;
