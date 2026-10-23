@@ -27,7 +27,7 @@ export async function previewReplacement({buildCandidate,requestPreview,isCurren
       return immutable(structuredClone({...candidate,recipe,key,refusals,result}));
     }
     const failures=(result.resolved||[]).filter(row=>row.ok===false);
-    if(failures.some(row=>['run_id_not_found','source_mismatch'].includes(row.reason))){
+    if(failures.some(row=>['run_id_not_found','source_hash_mismatch','source_mismatch'].includes(row.reason))){
       const error=new Error('This preview no longer matches the document. Refresh the index and preview again.');
       error.code='SOURCE_MISMATCH';throw error;
     }
