@@ -35,6 +35,10 @@ test('a refusal in a prior operation blocks instead of deleting that edit',async
   await assert.rejects(previewReplacement({buildCandidate:candidate,key:'x',requestPreview:async()=>({ok:false,resolved:[{run_id:'prior',ok:false,reason:'fit_overflow'}]})}),/previous edit/i);
 });
 
+test('a lost original address requires an index refresh instead of treating the row as a fit refusal',async()=>{
+  await assert.rejects(previewReplacement({buildCandidate:candidate,key:'x',requestPreview:async()=>({ok:false,resolved:[{run_id:'new-a',ok:false,reason:'run_id_not_found'}]})}),error=>error.code==='SOURCE_MISMATCH');
+});
+
 test('batch errors and nonprogressing reports cannot publish ready reviews',async()=>{
   await assert.rejects(previewReplacement({buildCandidate:candidate,key:'x',requestPreview:async()=>({error:'WORKER_FAILED'})}),/WORKER_FAILED/);
   await assert.rejects(previewReplacement({buildCandidate:candidate,key:'x',requestPreview:async()=>({ok:false,resolved:[{run_id:'new-a',ok:true}]})}),/preview/i);
