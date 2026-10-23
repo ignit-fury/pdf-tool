@@ -13,7 +13,19 @@ from harness.masked_diff import masked_pixel_diff
 
 
 def _union_diff(before: Path, after: Path, masks: list[tuple[int, int, int, int]], scratch: Path) -> int:
-    return masked_pixel_diff(before, after)
+    if not masks:
+        return masked_pixel_diff(before, after)
+    scratch.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for number, source in enumerate((before, after)):
+        with Image.open(source) as image:
+            rgb = image.convert('RGB')
+            for mask in masks:
+                rgb.paste((0, 0, 0), mask)
+            target = scratch / f'{number}.png'
+            rgb.save(target)
+            paths.append(target)
+    return masked_pixel_diff(*paths)
 
 
 def _assert_page_pixels(before: Path, after: Path, masks: list[tuple[int, int, int, int]], scratch: Path, *, changed: bool) -> tuple[int, int]:
