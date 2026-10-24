@@ -49,14 +49,14 @@ Fixture: `govdocs1_013_013050.pdf`, SHA-256 `d0a3b06606378733a2ec96cfa01e3b12c11
 
 The test indexes all 40 pages and 3,000 source runs: 1,029 case-insensitive substring occurrences of the fixed common query produce 772 candidate run operations. Actual unfiltered preview reports the same 97 refusals: 75 shared operators and 22 unmapped Univers variants. Only these proposed refused operations are removed, retaining **all 675 accepted operations**. No page or operation sampling, recipe splitting, font override or raised timeout was used.
 
-Final command after the G4 correction: `.venv/bin/python -m pytest -q -s -m corpus tests/test_find_replace_performance.py -x` — **2 passed in61.39s**.
+Final command on engine revision `630ca28` after both fit corrections: `.venv/bin/python -m pytest -q -s -m corpus tests/test_find_replace_performance.py -x` — **2 passed in59.93s**.
 
 | Actual isolated-worker call | Operations | Child CPU seconds | Wall seconds | Outcome |
 |---|---:|---:|---:|---|
-| Unfiltered actual preview | 772 | 3.525 | 3.562 | 97 expected named refusals, no PDF |
-| Exact filtered actual preview | 675 | 18.802 | 18.855 | Successful, PDF null |
-| Independent exact preview before apply | 675 | 18.871 | 18.977 | Successful, PDF null |
-| Actual apply of that same complete recipe | 675 | 18.607 | 18.695 | Successful, PDF returned |
+| Unfiltered actual preview | 772 | 3.374 | 3.403 | 97 expected named refusals, no PDF |
+| Exact filtered actual preview | 675 | 18.302 | 18.388 | Successful, PDF null |
+| Independent exact preview before apply | 675 | 18.319 | 18.396 | Successful, PDF null |
+| Actual apply of that same complete recipe | 675 | 18.467 | 18.528 | Successful, PDF returned |
 
 The successful preview/apply resolved reports are equal. The output starts with a valid PDF header, and the original bytes/digest remain unchanged. The unchanged constants are CPU20, worker default wall30, memory target1GiB, recipe50,000 operations and 10,000 characters per replacement; the complete recipe body is 107,593 bytes, below1MiB. No intermediate PDF is returned on preview or refusal.
 
@@ -77,7 +77,7 @@ These are **macOS local CPU/wall results**. They do not prove Linux address-spac
 - Helper/snapshot/recipe/rewrite/page-scope suite after memory projection: **98 passed in7.67s**.
 - Helper/snapshot/Playa-probe/license checks, including rotated multipart path/bytes parity: **34 passed in1.16s**.
 - Latest strict typing: `.venv/bin/python -m mypy engine/ server/` — **30 source files clean**.
-- Final focused fit/recipe/rewrite/snapshot suite after source-TJ correction: **132 passed in11.49s**. Eleven new regression cases include three real compressed lines; rotation and nonuniform1Tf/Tm scaling;85Tz;Tc/Tw; initial/final TJ numbers; single/multioperator runs; short and condensed replacement followers; and corrupted-emission negative controls on both fast and fallback paths.
+- Final focused fit/recipe/rewrite/snapshot suite after source-TJ and actual-space corrections: **133 passed in11.12s**. Twelve new regression cases include three real compressed lines; rotation and nonuniform1Tf/Tm scaling;85Tz;Tc/Tw; initial/final TJ numbers; single/multioperator runs; short and condensed replacement followers; corrupted-emission negative controls on both fast and fallback paths; and a real editable-original font with dictionary spaces narrower than its program metrics.
 - Full675 actual isolated preview/apply corpus tests: **2 passed**, exact timings above.
 - `git diff --check`: passed before the integration commit. The orchestrator owns the final full-suite and phase review.
 
@@ -93,13 +93,15 @@ Negative controls include every-splice validation, real following-glyph movement
 6. Scratch mmap RED `0d32029`; fresh memory projection GREEN `805eff2`.
 7. Guarded recipe/rewrite integration and complete-workload report checks `f4670cb`.
 8. Source-TJ visible-overflow RED `fd8484d`; separate envelope/pen GREEN `a49976a`.
+9. Narrow-dictionary-space RED `68b9911`; actual-space-budget GREEN `630ca28`.
 
 ## Deviations from Plan
 
 1. **[Rule3 — Blocking issue] Full classification per splice did not meet the measured budget.** The orchestrator explicitly amended the internal strategy on23October after the42.630-CPU diagnostic. Fresh interpretation, target reclassification and every individual fidelity guard remain mandatory; only unrelated glyph construction/clustering is avoided.
 2. **[Rule2 — Performance correctness] Extended narrow ownership to bundled metadata, `engine/fit.py` per-call CID lookup sharing and `engine/playa_boundary.py`'s existing bytes-parser alias.** Each extension was approved by the orchestrator, profiled, tested and committed separately. No dependency, public API, external service or security limit changed.
 3. **[Rule1 — Bug] G4 exposed visible source-TJ overflow despite a zero fit delta.** On page6 the source spans386.964/387.000pt while nominal dictionary sums are394.248/398.580pt. Inter-word widening targeted those larger sums and produced6.48/10.105pt overhang; an absolute following line hid it from D04. A full accepted-set check also found64 natural-width overflows, ruling out merely disabling widening. The corrected fit uses actual projected source extent, actual written widths, and a separate terminal-pen target, with an independent fresh anchor/envelope guard. An old direct-refusal expectation now reconstructs actual dictionary widths (283.50pt rather than program-derived283.53pt); no threshold was relaxed. Narrow engine/test extensions were explicitly approved. RED `fd8484d`, GREEN `a49976a`.
-4. **Metadata coordination:** STATE, ROADMAP and REQUIREMENTS are reserved to the orchestrator to avoid concurrent updates. This executor supplies the committed plan summary and exact evidence for those updates.
+4. **[Rule1 — Bug] Actual-width fitting exposed an unchecked space-budget mismatch.** A valid editable-original Arial dictionary declares4pt letters and0.1pt spaces while its embedded program declares3.334pt spaces. A36.9pt source and40.9pt replacement incorrectly accepted0.444pt tightening per gap, reversing actual word spaces. The total-width correction made this previously refused case reachable. Both total and space metrics now come from the written PDF font; the real fixture selects90.22%Tz and retains positive gaps. No classification, spacing threshold, or Tz floor was weakened. RED `68b9911`, GREEN `630ca28`.
+5. **Metadata coordination:** STATE, ROADMAP and REQUIREMENTS are reserved to the orchestrator to avoid concurrent updates. This executor supplies the committed plan summary and exact evidence for those updates.
 
 ## Known Stubs and Threat Flags
 
