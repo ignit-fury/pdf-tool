@@ -46,10 +46,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict, cast
 
 import pikepdf
+from fontTools.agl import UV2AGL
 
 from engine.classify_run import RunVerdict, stream_bytes_and_resources
 from engine.encoding_table import embedded_font_bytes, resolve_font
-from engine.fit import FitResult, advance_pt_for_codes, fit_run, load_font
+from engine.fit import TZ_FLOOR_PERCENT, FitResult, advance_pt_for_codes, fit_run, load_font, shape_advance_pt
 from engine.fonts import (
     BundledFamily,
     BundledVariant,
@@ -64,10 +65,11 @@ from engine.fonts import (
     subset_cid_widths,
     subset_font_for_family,
     substitution_unicode_reason,
+    reverse_encoding_map,
 )
 from engine.index import RunIndex
 from engine.records import RunRecord
-from engine.rewrite import PageSnapshot, RewriteOutcome, rewrite_run, rewrite_preflight_refusal
+from engine.rewrite import PageSnapshot, ParsedInstruction, RewriteOutcome, rewrite_run, rewrite_preflight_refusal, source_fit_geometry
 from engine.run_id import decode_run_id
 
 if TYPE_CHECKING:
@@ -338,7 +340,8 @@ def _resolve_op(
     if verdict.state == "not_editable":
         return ResolvedOp(op, ok=False, reason=verdict.reason, run=run, verdict=verdict)
 
-    stateful_reason = rewrite_preflight_refusal(pdf, run.page, run, list(all_page_runs), part_context)
+    proof: list[tuple[list[ParsedInstruction], list[int]]] = []
+    stateful_reason = rewrite_preflight_refusal(pdf, run.page, run, list(all_page_runs), part_context, proof)
     if stateful_reason is not None:
         return ResolvedOp(op, ok=False, reason=stateful_reason, run=run, verdict=verdict)
 
@@ -423,40 +426,40 @@ def _resolve_op(
         else:
             font_bytes = program.data
 
-        # BOTH SIDES OF THE COMPARISON MUST LIVE IN THE SAME SPACE. `fit_run` measures the
-        # replacement purely in text space scaled by the `Tf` size, so the original must be
-        # measured the same way -- from the font DICTIONARY's own `/Widths`//`W`, which is
-        # what the viewer actually advances by (Pitfall 5: "the dictionary is what the
-        # viewer uses").
-        #
-        # `sum(glyph.advance[0] for glyph in run.glyphs)` was used here first and is WRONG
-        # for this purpose: playa's advances are DEVICE space, with `Tm` already applied. On
-        # the very common producer idiom of `1 Tf` plus a scaling `Tm`, the two differ by the
-        # whole `Tm` scale -- measured 437.26 vs 36.44 on `govdocs1_012_012156.pdf`, a 12x
-        # gap that refused every run on the page, including a no-op replacement of a run's
-        # own text with itself. On rotated text the x-component collapses toward 0 instead.
-        # Neither is a rounding error, and a `Tm`-free document hid it because there the two
-        # agree.
-        #
-        # Measured with each glyph's own `.code` -- the PDF CHARACTER CODE, which is what
-        # `/Widths` is indexed by -- never its decoded `.unicode`. That was the second bug
-        # here, and `engine/types.py` exists to name it: `/ToUnicode` "decides nothing".
-        # Under `/WinAnsiEncoding` the byte range 0x80-0x9F is smart quotes, en/em dashes and
-        # bullets, whose `ord()` values (U+2018, U+2014, ...) fall far outside any real
-        # `FirstChar..LastChar` -- so every run of ordinary typographic prose was
-        # bounds-checked against the wrong number and refused as `resolution_failed`.
-        # Measured on the same document: exactly the 5 runs carrying a codepoint above 255
-        # failed, 182 passed.
-        #
-        # Codes come from `run.glyphs`, never from `run.display_text`, whose synthetic
-        # clusterer-inserted spaces (D-03) are not glyphs the original run ever advanced by.
-        original_advance_pt = advance_pt_for_codes(
-            font_obj, [glyph.code for glyph in run.glyphs], font_size
-        )
+        # Validate PDF character codes against the owning dictionary, never ord(decoded
+        # Unicode) or synthetic cluster spaces. Nominal widths alone omit source TJ
+        # positioning. Geometry supplies the actual envelope and pen, projected back
+        # into the same unscaled text-point space as the replacement metrics.
+        advance_pt_for_codes(font_obj, [glyph.code for glyph in run.glyphs], font_size)
+        original_advance_pt, pen, leading, charspace, wordspace, horizontal_scale = source_fit_geometry(
+            pdf, run, list(all_page_runs), font_size, part_context, proof[0])
 
-        fit_result = fit_run(
-            original_advance_pt, op.new_text, load_font(font_bytes), font_size
-        )
+        loaded_font = load_font(font_bytes)
+        if substitution_key is not None:
+            written_advance = shape_advance_pt(op.new_text, loaded_font, font_size, serialized_widths=True)
+        else:
+            reverse_codes = reverse_encoding_map(font_obj)
+            written_advance = advance_pt_for_codes(
+                font_obj, [reverse_codes[UV2AGL[ord(ch)]] for ch in op.new_text], font_size)
+        fit_result = fit_run(original_advance_pt, op.new_text, loaded_font, font_size,
+                             replacement_advance_pt=written_advance)
+        # A terminal kern cannot shrink painted glyphs. Such overflow must use the
+        # bounded compression ladder even when it fits the old one-space pen budget.
+        if fit_result.strategy == 'trailing_kern' and fit_result.replacement_shaped_advance_pt > original_advance_pt + 1e-9:
+            ratio = original_advance_pt / fit_result.replacement_shaped_advance_pt * 100
+            if ratio >= TZ_FLOOR_PERCENT:
+                fit_result = replace(fit_result, strategy='tz', kerns=[], condensed_scale=ratio,
+                                     original_scale_to_restore=100.0)
+            else:
+                fit_result = replace(fit_result, strategy='refused', refused=True,
+                                     refusal_reason='replacement_exceeds_visible_extent')
+        fit_result = replace(fit_result, source_pen_advance_pt=pen, source_leading_kern=leading,
+                             source_charspace=charspace, source_wordspace=wordspace)
+        if fit_result.strategy == 'tz' and fit_result.condensed_scale is not None:
+            # Serialize a downward-rounded absolute Tz, then derive its exact ratio
+            # for the terminal pen adjustment. Never round painted text outward.
+            absolute_scale = math.floor(horizontal_scale * fit_result.condensed_scale / 100 * 1e6) / 1e6
+            fit_result = replace(fit_result, condensed_scale=absolute_scale / horizontal_scale * 100)
     except Exception:  # noqa: BLE001 - classify-never-crash, see plan_recipe's docstring
         return ResolvedOp(op, ok=False, reason="resolution_failed")
 

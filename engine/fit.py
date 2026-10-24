@@ -12,14 +12,11 @@ widths"):
      `pos.x_advance`, which folds in the font's GPOS kerning. See `shape_advance_pt` for why
      the kerned number is the wrong basis for a PDF text-showing operator.
   2. Compute delta_pt = shaped_advance_pt - original_advance_pt.
-  3. If |delta_pt| fits within roughly one space-glyph width, absorb it entirely in a single
-     trailing TJ kern number. Cheapest, invisible, and exactly correct for what follows on the
-     line.
-  4. Otherwise, distribute the delta evenly across the inter-word kerns already present in the
-     run (bounded absorption range -- see `_INTER_WORD_ABSORB_MULTIPLIER` below).
-     If a shorter replacement exceeds that range, leave the unused space after its last
-     glyph with a trailing TJ kern. This preserves the following text's position without
-     stretching the replacement's glyphs or word spaces.
+  3. Leave all underflow after the last glyph with a terminal TJ adjustment, preserving
+     natural word spacing. Legacy pen-only callers also absorb positive deltas within
+     one space width here; recipe callers require actual visible compression instead.
+  4. Otherwise tighten inter-word gaps within half a space width each. Trailing spaces
+     are excluded because their terminal kern cannot shrink the glyph envelope.
   5. Otherwise, if the replacement is longer than the original (delta > 0), try condensing it
      with `Tz` horizontal scaling down to `TZ_FLOOR_PERCENT`. This is priority 3 of the ladder:
      `trailing_kern` -> `inter_word_kern` -> `tz` -> refuse.
@@ -55,7 +52,6 @@ from engine.playa_boundary import core_font_widths
 
 # "Roughly one space width" per Pitfall 5's priority-ordered absorption strategy -- the natural
 # threshold below which a single trailing TJ kern looks invisible rather than like a gap.
-_INTER_WORD_ABSORB_MULTIPLIER = 2.0
 # Tightening must leave a visible, positive word space. The former symmetric
 # 2-space budget let positive kerns reverse a gap and reorder decoded words.
 # Larger compression goes through bounded Tz or is refused instead.
@@ -88,6 +84,11 @@ class FitResult:
     # module has no content-stream context to look one up.
     condensed_scale: float | None = None
     original_scale_to_restore: float | None = None
+    # Visible extent and final pen are distinct when source TJ numbers kern text.
+    source_pen_advance_pt: float | None = None
+    source_leading_kern: float = 0.0
+    source_charspace: float = 0.0
+    source_wordspace: float = 0.0
 
 
 # Every shaping entry point below accepts EITHER a bundled font's own path OR an
@@ -157,7 +158,8 @@ def _load_font(font_path: str | Path) -> tuple[hb.Font, TTFont]:
 
 
 def shape_advance_pt(
-    text: str, font: str | Path | tuple[hb.Font, TTFont], font_size_pt: float
+    text: str, font: str | Path | tuple[hb.Font, TTFont], font_size_pt: float,
+    *, serialized_widths: bool = False,
 ) -> float:
     """Shape `text` with uharfbuzz and return the total *UNKERNED* advance of the resulting
     glyph sequence, in points.
@@ -197,7 +199,8 @@ def shape_advance_pt(
         # `engine.fonts.shape_glyph_names`. uharfbuzz ships no py.typed marker
         # (pyproject.toml's mypy override), so `info.codepoint` types as Any.
         glyph_name = ttfont.getGlyphName(info.codepoint)
-        total_thousandths += hmtx[glyph_name][0] * 1000.0 / units_per_em
+        width = hmtx[glyph_name][0] * 1000.0 / units_per_em
+        total_thousandths += round(width) if serialized_widths else width
     return total_thousandths / 1000.0 * font_size_pt
 
 
@@ -336,16 +339,18 @@ def fit_run(
     replacement_text: str,
     font: str | Path | tuple[hb.Font, TTFont],
     font_size_pt: float,
+    *, replacement_advance_pt: float | None = None,
 ) -> FitResult:
     # Normalised ONCE here rather than twice below: an already-loaded pair passes through
     # untouched, and a path is resolved through `_load_font`'s cache exactly as before.
     resolved_font = _as_font(font)
-    shaped = shape_advance_pt(replacement_text, resolved_font, font_size_pt)
+    shaped = (shape_advance_pt(replacement_text, resolved_font, font_size_pt)
+              if replacement_advance_pt is None else replacement_advance_pt)
     delta = shaped - original_advance_pt
     space_w = space_width_pt(resolved_font, font_size_pt)
 
     # Priority 1: a single trailing TJ kern absorbs everything within ~1 space width.
-    if abs(delta) <= space_w:
+    if delta <= 0 or abs(delta) <= space_w:
         kern = delta / font_size_pt * 1000.0
         kerns = [kern]
         final_advance = total_advance_with_kerns(shaped, kerns, font_size_pt)
@@ -358,9 +363,9 @@ def fit_run(
         )
 
     # Priority 2: distribute across inter-word kerns already present in the run.
-    gap_count = replacement_text.count(" ")
-    multiplier = _INTER_WORD_TIGHTEN_MULTIPLIER if delta > 0 else _INTER_WORD_ABSORB_MULTIPLIER
-    max_inter_word_absorb = gap_count * space_w * multiplier
+    # A kern after the final space changes only the pen, not the painted envelope.
+    gap_count = replacement_text.rstrip(" ").count(" ")
+    max_inter_word_absorb = gap_count * space_w * _INTER_WORD_TIGHTEN_MULTIPLIER
     if gap_count > 0 and abs(delta) <= max_inter_word_absorb:
         per_gap_kern = (delta / gap_count) / font_size_pt * 1000.0
         kerns = [per_gap_kern] * gap_count

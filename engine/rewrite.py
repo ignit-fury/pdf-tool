@@ -102,13 +102,11 @@ are followed by advance-dependent text; the other 99.6% -- including every edita
 `irs_form_1040.pdf` page 0 -- pass this guard unconditionally.** So the guard is a genuine
 backstop for the case where a width error propagates, and it is NOT a width check.
 
-The stronger measure (the pen position after the run's own last glyph -- origin + advance,
-which detects every width change) was considered and deliberately not used here: it would
-refuse the Pitfall-1 consolidation this module is built around, since collapsing a run's N
-individually-`Td`-positioned operators into one `Tj` legitimately changes where the pen
-ends up. Width correctness is `engine/fit.py`'s job (and, at the corpus level, Gate G2a's);
-recorded here rather than left implicit, per this project's standing "a check that reports
-green while measuring the wrong thing" discipline.
+Recipe edits additionally check the freshly decoded replacement's first-glyph anchor
+and forward glyph envelope against the source. This independent guard catches visible
+overflow even with an absolute follower. Source TJ geometry supplies separate visible
+and terminal-pen targets; a terminal adjustment preserves what follows without being
+mistaken for compression of already painted text.
 
 ## Refusal does NOT roll back (D-11)
 
@@ -129,6 +127,7 @@ import tempfile
 import warnings
 from dataclasses import dataclass, replace
 from pathlib import Path
+import math
 from typing import TYPE_CHECKING, cast
 
 import pikepdf
@@ -392,6 +391,7 @@ def _correlate_current(
 def rewrite_preflight_refusal(
     pdf: pikepdf.Pdf, page_index: int, run: RunRecord, all_page_runs: list[RunRecord],
     part_context: PartSnapshot | None = None,
+    proof: list[tuple[list[ParsedInstruction], list[int]]] | None = None,
 ) -> str | None:
     """Disclose detectable splice refusals before presenting a successful preview."""
     try:
@@ -403,9 +403,101 @@ def rewrite_preflight_refusal(
     if isinstance(correlated, RewriteOutcome):
         return correlated.reason
     instructions, touched = correlated
+    if proof is not None:
+        proof.append(correlated)
     if any(str(instructions[i].operator) in ("'", '"') for i in touched):
         return "stateful_text_showing_unsupported"
     return None
+
+
+def run_extent(run: RunRecord) -> float:
+    """Forward glyph-advance envelope in device space, including source TJ spacing."""
+    dx, dy = run.direction or (1.0, 0.0)
+    scale = math.hypot(dx, dy)
+    if not run.glyphs or scale == 0:
+        return 0.0
+    first = run.glyphs[0]
+    return max(((g.x + g.advance[0] - first.x) * dx
+                + (g.y + g.advance[1] - first.y) * dy) / scale for g in run.glyphs)
+
+
+def replacement_geometry_reason(source: RunRecord, glyphs: list[GlyphRecord]) -> str | None:
+    """Fresh replacement glyphs must retain the anchor and fit the source envelope."""
+    if not glyphs:
+        return None
+    if not _positions_match((source.glyphs[0].x, source.glyphs[0].y), (glyphs[0].x, glyphs[0].y)):
+        return 'replacement_anchor_shifted'
+    written = replace(source, glyphs=glyphs)
+    if run_extent(written) > run_extent(source) + _POSITION_EPSILON:
+        return 'replacement_exceeds_visible_extent'
+    return None
+
+
+def source_fit_geometry(
+    pdf: pikepdf.Pdf, run: RunRecord, all_page_runs: list[RunRecord], font_size: float,
+    part_context: PartSnapshot | None = None,
+    correlated: tuple[list[ParsedInstruction], list[int]] | RewriteOutcome | None = None,
+) -> tuple[float, float, float, float, float, float]:
+    """Measure visible extent and terminal pen separately in unscaled text points.
+
+    The source glyphs already include TJ/Tc/Tw and the full page transform. Project
+    onto the actual baseline and remove its horizontal scale, never the vertical em.
+    Initial/final TJ numbers lie outside the glyph envelope and are retained separately.
+    """
+    if correlated is None:
+        correlated = _correlate_current(pdf, run.page, run, all_page_runs, part_context)
+    if isinstance(correlated, RewriteOutcome):
+        raise ValueError('uncorrelated source geometry')
+    instructions, touched = correlated
+    dx, dy = run.direction or (font_size, 0.0)
+    scale = math.hypot(dx, dy) / font_size
+    if scale <= 0:
+        raise ValueError('invalid horizontal scale')
+    first, last = run.glyphs[0], run.glyphs[-1]
+    pen = ((last.x + last.advance[0] - first.x) * dx
+           + (last.y + last.advance[1] - first.y) * dy) / math.hypot(dx, dy) / scale
+
+    def edge_kern(instruction: ParsedInstruction, reverse: bool = False) -> float:
+        if str(instruction.operator) != 'TJ':
+            return 0.0
+        values = list(instruction.operands[0])
+        total = 0.0
+        for value in reversed(values) if reverse else values:
+            if isinstance(value, pikepdf.String):
+                if bytes(value):
+                    break
+            else:
+                total += float(value)
+        return total
+
+    leading = edge_kern(instructions[touched[0]])
+    pen -= edge_kern(instructions[touched[-1]], True) / 1000 * font_size
+    # Text state persists across BT/ET and ordinary Contents array parts.
+    prefix = []
+    part, path = _part_key(run)
+    if not path:
+        contents = pdf.pages[run.page].obj.get('/Contents')
+        if isinstance(contents, pikepdf.Array):
+            for previous in list(contents)[:part]:
+                prefix.extend(pikepdf.parse_content_stream(pdf.make_stream(previous.read_bytes())))
+    charspace = wordspace = 0.0
+    horizontal_scale = 100.0
+    stack = []
+    for instruction in [*prefix, *instructions[:touched[0]]]:
+        operator = str(instruction.operator)
+        if operator == 'q':
+            stack.append((charspace, wordspace, horizontal_scale))
+        elif operator == 'Q' and stack:
+            charspace, wordspace, horizontal_scale = stack.pop()
+        elif operator == 'Tc':
+            charspace = float(instruction.operands[0])
+        elif operator == 'Tw':
+            wordspace = float(instruction.operands[0])
+        elif operator == 'Tz':
+            horizontal_scale = float(instruction.operands[0])
+        elif operator == '"':
+            wordspace, charspace = map(float, instruction.operands[:2])
+    return run_extent(run) / scale, pen, leading, charspace, wordspace, horizontal_scale
 
 
 def rewrite_instructions(
@@ -924,6 +1016,18 @@ def _trailing_fit_for_written_font(
     A terminal adjustment must cancel that difference too, particularly when the
     next showing operator relies on this run's pen position. Do not relax the guard.
     """
+    if fit.source_pen_advance_pt is not None:
+        actual = advance_pt_for_codes(font, codes, font_size)
+        ratio = (fit.condensed_scale or 100.0) / 100.0 if fit.strategy == 'tz' else 1.0
+        interior = list(fit.kerns) if fit.strategy == 'inter_word_kern' else []
+        if interior:
+            # Reconcile program/serialized width rounding before distributing spacing.
+            total = (actual - fit.original_advance_pt) / font_size * 1000.0
+            interior = [total / len(interior)] * len(interior)
+        pen = actual - sum(interior) / 1000 * font_size
+        terminal = (pen - fit.source_pen_advance_pt / ratio) / font_size * 1000.0
+        return replace(fit, replacement_shaped_advance_pt=actual,
+                       kerns=[*interior, terminal])
     if fit.strategy != "trailing_kern" or not fit.kerns:
         return fit
     actual = advance_pt_for_codes(font, codes, font_size)
@@ -979,23 +1083,27 @@ def _show_instruction(
     literal. There is deliberately no byte formatting anywhere on this path.
     """
     all_bytes = b"".join(encoded for encoded, _source_char in units)
-    kerns = list(fit_result.kerns)
+    # pikepdf writes six decimal places: avoid a -0 signature that reparses as 0.
+    kerns = [0.0 if abs(kern) < 1e-9 else kern for kern in fit_result.kerns]
+    ratio = (fit_result.condensed_scale or 100.0) / 100.0 if fit_result.strategy == 'tz' else 1.0
+    leading = fit_result.source_leading_kern / ratio
     if not kerns:
         return pikepdf.ContentStreamInstruction(
             [pikepdf.String(all_bytes)], pikepdf.Operator("Tj")
         )
-    if fit_result.strategy == "trailing_kern":
+    if fit_result.strategy in ("trailing_kern", "tz"):
         return pikepdf.ContentStreamInstruction(
-            [pikepdf.Array([pikepdf.String(all_bytes), *kerns])],
+            [pikepdf.Array([*([leading] if leading else []), pikepdf.String(all_bytes), *kerns])],
             pikepdf.Operator("TJ"),
         )
 
-    elements: list[pikepdf.Object | float] = []
+    elements: list[pikepdf.Object | float] = [leading] if leading else []
+    gap_kerns = len(kerns) - (1 if fit_result.source_pen_advance_pt is not None else 0)
     segment = b""
     used = 0
     for encoded, source_char in units:
         segment += encoded
-        if source_char == " " and used < len(kerns):
+        if source_char == " " and used < gap_kerns:
             elements.append(pikepdf.String(segment))
             elements.append(kerns[used])
             used += 1
@@ -1270,6 +1378,11 @@ def rewrite_run(
     # correspondence" -- `"correlation_failed"`, the same reason `_correlate` gives, rather
     # than a new name for the same condition or a silent skip of the guard.
     try:
+        if part_context is None:
+            source_glyphs = _part_glyphs_in_stream_order(all_page_runs, _part_key(run))
+            first_position = min(_stream_position(g) for g in run.glyphs)
+            prefix_count = sum(_stream_position(g) < first_position for g in source_glyphs)
+            tail_count, _ = _following_reference(run, all_page_runs)
         if _operator_shared_with_another_run(run, all_page_runs):
             return RewriteOutcome(ok=False, reason="operator_shared_by_multiple_runs")
         # Only the `tz` rung needs the part's bytes; every other rung emits no Tz at all,
@@ -1330,6 +1443,17 @@ def rewrite_run(
             return resolved
         new_instructions = _bracket_for_fit(fit_result, resolved, active_scale)
 
+    if fit_result.source_pen_advance_pt is not None and (fit_result.source_charspace or fit_result.source_wordspace):
+        # Fit glyph widths without inherited spacing, then restore both text-state
+        # parameters before any untouched instruction can observe them.
+        new_instructions = [
+            pikepdf.ContentStreamInstruction([0], pikepdf.Operator('Tc')),
+            pikepdf.ContentStreamInstruction([0], pikepdf.Operator('Tw')),
+            *new_instructions,
+            pikepdf.ContentStreamInstruction([fit_result.source_charspace], pikepdf.Operator('Tc')),
+            pikepdf.ContentStreamInstruction([fit_result.source_wordspace], pikepdf.Operator('Tw')),
+        ]
+
     if color is not None:
         # q/Q preserves the complete graphics state, including inherited DeviceGray,
         # DeviceCMYK and pattern colors, but does NOT restore the text matrix. The
@@ -1361,11 +1485,21 @@ def rewrite_run(
             matrix_after = _matrix_for_tail(
                 run, [r for r, _ in snapshot.runs], tail_count)
         else:
-            matrix_after = _matrix_after_run(pdf, page_index, run, all_page_runs)
+            if fit_result.source_pen_advance_pt is None:
+                matrix_after = _matrix_after_run(pdf, page_index, run, all_page_runs)
+            else:
+                snapshot = _current_page_snapshot(pdf, page_index)
+                matrix_after = _matrix_for_tail(run, [r for r, _ in snapshot.runs], tail_count)
     except Exception:
         return RewriteOutcome(ok=False, reason="correlation_failed")
     if not _positions_match(matrix_before, matrix_after):
         return RewriteOutcome(ok=False, reason="text_matrix_shifted_after_edit")
+    if fit_result.source_pen_advance_pt is not None and snapshot is not None:
+        after_glyphs = _part_glyphs_in_stream_order([r for r, _ in snapshot.runs], _part_key(run))
+        written_count = len(after_glyphs) - len(source_glyphs) + len(run.glyphs)
+        reason = replacement_geometry_reason(run, after_glyphs[prefix_count:prefix_count + written_count])
+        if reason is not None:
+            return RewriteOutcome(ok=False, reason=reason)
     return RewriteOutcome(ok=True, snapshot=snapshot)
 
 

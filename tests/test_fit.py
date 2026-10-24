@@ -87,14 +87,14 @@ def test_sign_convention_positive_kern_tightens_advance() -> None:
     assert kern_to_displacement_pt(-50.0, FONT_SIZE_PT) == pytest.approx(0.7)
 
 
-def test_inter_word_kern_distribution_for_larger_delta() -> None:
-    # Widening across several gaps is safe; it cannot consume a word space.
+def test_underflow_preserves_natural_word_spacing() -> None:
+    # Source TJ spacing can make nominal-width widening overflow the source ink.
     text = 'Request for Taxpayer Info '
     original = shape_advance_pt(text, FONT, FONT_SIZE_PT) + 1.5 * space_width_pt(FONT, FONT_SIZE_PT)
     result = fit_run(original, text, FONT, FONT_SIZE_PT)
     assert not result.refused
-    assert result.strategy == "inter_word_kern"
-    assert len(result.kerns) > 1
+    assert result.strategy == "trailing_kern"
+    assert len(result.kerns) == 1
     assert abs(result.delta_pt) < 0.5
 
 

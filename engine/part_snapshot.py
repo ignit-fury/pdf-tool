@@ -390,6 +390,13 @@ class PartSnapshot:
             self._glyph_count += len(records) - removed_glyphs
             if self._glyph_count > MAX_DOCUMENT_GLYPHS:
                 return "correlation_failed"
+            from engine.rewrite import replacement_geometry_reason
+            geometry_reason = replacement_geometry_reason(
+                self._original[source_id], sorted((glyph for glyph, _ in records.values()),
+                    key=lambda g: (g.operator_byte_offset, -1 if g.item_index_within_tj is None else g.item_index_within_tj,
+                                   g.byte_offset_within_string)))
+            if geometry_reason is not None:
+                return geometry_reason
             located = [(StreamPath(self.page), glyph, attrs) for glyph, attrs in records.values()]
             if located:
                 address = decode_run_id(self._original[source_id].run_id)
