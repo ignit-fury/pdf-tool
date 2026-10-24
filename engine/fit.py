@@ -254,8 +254,13 @@ def advance_pt_for_codes(
         if not descendants or len(descendants) == 0:
             raise ValueError("Type0 font has no usable /DescendantFonts entry")
         descendant_font = descendants[0]
+        # /W and /DW cannot change within this measurement. Repeated characters
+        # need one lookup each, rather than rescanning the same nested PDF arrays
+        # for every glyph. Keep the sum in source-code order and discard the
+        # cache at return, so later measurements observe any dictionary change.
+        cid_widths = {code: cid_width(descendant_font, code) for code in set(codes)}
         return (
-            sum(cid_width(descendant_font, code) for code in codes)
+            sum(cid_widths[code] for code in codes)
             / 1000.0
             * font_size_pt
         )
