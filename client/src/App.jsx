@@ -10,6 +10,7 @@ import {findMatches} from './find/search.mjs';
 import {buildReplacementRecipe} from './find/buildRecipe.mjs';
 import {createIndexingController} from './find/indexing.mjs';
 import {previewReplacement} from './find/preview.mjs';
+import {applyReviewedReplacement} from './find/replaceAll.mjs';
 
 pdfjs.GlobalWorkerOptions.workerSrc=workerUrl;
 const API=import.meta.env.VITE_API_URL||'';
@@ -37,6 +38,7 @@ export default function App(){
   const [indexProgress,setIndexProgress]=useState(EMPTY_PROGRESS),[batchReview,setBatchReview]=useState(null),[batchError,setBatchError]=useState('');
   const [activeMatch,setActiveMatch]=useState(null),[resultPage,setResultPage]=useState(1),[navigationStatus,setNavigationStatus]=useState('');
   const [sourceMismatch,setSourceMismatch]=useState(false),[indexRevision,setIndexRevision]=useState(0);
+  const [historyKinds,setHistoryKinds]=useState([]);
   const beginWork=(kind,label)=>{if(busyOwnerRef.current)return null;const owner={kind};busyOwnerRef.current=owner;setBusy(label);return owner;};
   const finishWork=owner=>{if(busyOwnerRef.current===owner){busyOwnerRef.current=null;setBusy('');}};
   const invalidateBatch=()=>{editVersion.current++;setBatchReview(null);setBatchError('');};
@@ -48,6 +50,7 @@ export default function App(){
     setSession(null);setPdf(null);setMeta(null);setIndex({});setSelection(null);setRecipeState(EMPTY);setPreview(null);setOutput(null);setMessage('');setBusy('');setPage(1);setAcknowledged(false);setPasswordPrompt(null);setPasswordInput('');
     setPanel('inspector');setQuery('');setReplacement('');setFontFamily('');setMatchCase(false);setWholeWords(false);setExcludedIds(new Set());setIndexProgress(EMPTY_PROGRESS);setBatchReview(null);setBatchError('');setActiveMatch(null);setResultPage(1);setNavigationStatus('');rowRefs.current.clear();
     setSourceMismatch(false);setIndexRevision(0);
+    setHistoryKinds([]);
   },[]);
   useEffect(()=>{
     if(!passwordPrompt)return;
@@ -69,14 +72,28 @@ export default function App(){
   },[]);
   const upload=useCallback((target,bytes=target.original,password=target.password)=>request('/upload',{method:'POST',body:bytes,signal:target.controller.signal,headers:{'Content-Type':'application/pdf',...passwordHeaders(password)}}),[]);
   const documentRequest=useCallback((target,suffix,options={},priority=0)=>target.queue.run(()=>retryWorkerBusy(()=>withSourceRetry(target,jobId=>request(`/jobs/${encodeURIComponent(jobId)}${suffix}`,{...options,signal:target.controller.signal,headers:{...passwordHeaders(target.password),...options.headers}}),(bytes,password)=>upload(target,bytes,password)),{signal:target.controller.signal}),priority),[upload]);
-  const loadViewer=useCallback(async(target,bytes)=>{
+  const prepareViewer=useCallback(async(target,bytes,isCurrent=()=>current(target))=>{
+    if(!isCurrent())throw new DOMException('Document changed','AbortError');
     const assetRoot=`${import.meta.env.BASE_URL}assets/pdfjs/`;
     const task=pdfjs.getDocument({data:bytes.slice(),password:target.password||undefined,isOffscreenCanvasSupported:false,cMapUrl:`${assetRoot}cmaps/`,cMapPacked:true,standardFontDataUrl:`${assetRoot}standard_fonts/`,wasmUrl:`${assetRoot}wasm/`});
     loadingRef.current?.destroy();loadingRef.current=task;
     task.onPassword=async(update,reason)=>{const password=await askPassword(target,reason===pdfjs.PasswordResponses.INCORRECT_PASSWORD);if(password!==null&&current(target))update(password);else task.destroy();};
-    const document=await task.promise;if(loadingRef.current===task)loadingRef.current=null;if(!current(target)){disposeDocument(document);return;}
-    const old=pdfRef.current;pdfRef.current=document;setPdf(document);if(old&&old!==document)disposeDocument(old);
+    try{
+      const document=await task.promise;
+      if(!isCurrent()){disposeDocument(document);throw new DOMException('Document changed','AbortError');}
+      return {document,bytes,dispose:()=>disposeDocument(document)};
+    }catch(error){try{await task.destroy();}catch{}throw error;}
+    finally{if(loadingRef.current===task)loadingRef.current=null;}
   },[askPassword]);
+  const publishViewer=useCallback((prepared,isCurrent)=>{
+    if(!isCurrent())throw new DOMException('Document changed','AbortError');
+    const old=pdfRef.current;pdfRef.current=prepared.document;setPdf(prepared.document);if(old&&old!==prepared.document)disposeDocument(old);
+  },[]);
+  const loadViewer=useCallback(async(target,bytes)=>{
+    const valid=()=>current(target)&&sessionRef.current===target,prepared=await prepareViewer(target,bytes,valid);
+    if(!valid()){prepared.dispose();return;}
+    publishViewer(prepared,valid);
+  },[prepareViewer,publishViewer]);
   const openFile=useCallback(async file=>{
     if(!file)return;clear();const owner=beginWork('open','Opening document…');
     const target={name:file.name,password:'',original:null,controller:new AbortController(),jobId:null,pages:new Map()};target.queue=createRequestQueue({limit:2,signal:target.controller.signal});sessionRef.current=target;
@@ -142,16 +159,73 @@ export default function App(){
     catch(error){if(current(target)&&!ignored(error))setMessage(error.message);}finally{finishWork(owner);}
   };
   const apply=async()=>{
-    const target=sessionRef.current;if(!selection||!preview?.result.ok||preview.key!==JSON.stringify(candidate())||(meta.signed&&!acknowledged))return;
-    const owner=beginWork('apply','Applying edit…');if(!owner)return;editVersion.current++;setBatchReview(null);setMessage('');
-    try{const result=await documentRequest(target,`/edit?dry_run=false&acknowledge_signature=${acknowledged}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(preview.recipe)});if(!current(target))return;if(!result.ok||!result.pdf){setPreview({...preview,result});return;}const bytes=decodePdf(result.pdf);await loadViewer(target,bytes);if(!current(target))return;setRecipeState(previous=>commitRecipe(previous,preview.recipe));setOutput(bytes);setPreview(null);setMessage('Edit applied. Download the PDF or undo this change.');}
-    catch(error){if(current(target)&&!ignored(error))setMessage(error.message);}finally{finishWork(owner);}
+    const target=sessionRef.current,accepted=preview;
+    if(!selection||!accepted?.result.ok||accepted.key!==JSON.stringify(candidate())||(meta.signed&&!acknowledged))return;
+    const owner=beginWork('apply','Applying edit…');if(!owner)return;
+    const version=++editVersion.current,prior=recipeState;
+    const valid=()=>current(target)&&sessionRef.current===target&&busyOwnerRef.current===owner&&editVersion.current===version;
+    setBatchReview(null);setMessage('');
+    let prepared;
+    try{
+      const result=await documentRequest(target,`/edit?dry_run=false&acknowledge_signature=${acknowledged}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(accepted.recipe)});
+      if(!valid())return;
+      if(!result.ok||!result.pdf){setPreview({...accepted,result:{...result,ok:false}});return;}
+      const bytes=decodePdf(result.pdf);prepared=await prepareViewer(target,bytes,valid);
+      if(!valid()){prepared.dispose();return;}
+      publishViewer(prepared,valid);setRecipeState(commitRecipe(prior,accepted.recipe));setHistoryKinds(previous=>[...previous,'single']);setOutput(bytes);
+      editVersion.current++;setPreview(null);setBatchReview(null);setActiveMatch(null);setMessage('Edit applied. Download the PDF or undo this change.');
+    }catch(error){if(prepared)prepared.dispose();if(valid()&&!ignored(error))setMessage('The edit could not be applied. Your current document is unchanged. Preview again, then retry.');}
+    finally{finishWork(owner);}
+  };
+  const applyBatch=async()=>{
+    const accepted=batchReview,target=sessionRef.current;
+    if(indexProgress.status!=='complete'||accepted?.key!==batchKey||!accepted?.result.ok||(meta.signed&&!acknowledged))return;
+    const owner=beginWork('batch-apply',`Replacing ${accepted.selectedCount} matches on the server…`);if(!owner)return;
+    const version=++editVersion.current,prior=recipeState;
+    const valid=()=>current(target)&&sessionRef.current===target&&busyOwnerRef.current===owner&&editVersion.current===version;
+    setMessage('');setBatchError('');setPreview(null);
+    try{
+      const result=await applyReviewedReplacement({review:accepted,currentKey:()=>batchKeyRef.current,isCurrent:valid,signed:meta.signed,acknowledged,
+        requestApply:recipe=>documentRequest(target,`/edit?dry_run=false&acknowledge_signature=${acknowledged}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(recipe)}),
+        loadOutput:encoded=>prepareViewer(target,decodePdf(encoded),()=>valid()&&batchKeyRef.current===accepted.key),
+        commit:(prepared,recipe)=>{
+          publishViewer(prepared,()=>valid()&&batchKeyRef.current===accepted.key);
+          setRecipeState(commitRecipe(prior,recipe));setHistoryKinds(previous=>[...previous,'batch']);setOutput(prepared.bytes);
+          editVersion.current++;setPreview(null);setBatchReview(null);setBatchError('');setActiveMatch(null);setNavigationStatus('');
+          setMessage(`Replaced ${accepted.selectedCount} ${accepted.selectedCount===1?'match':'matches'} on ${accepted.changedPages.length} ${accepted.changedPages.length===1?'page':'pages'}. Undo restores the whole batch.`);
+        }});
+      if(['failed','refused'].includes(result.status)&&valid()){
+        setBatchReview(null);
+        const reasons=result.result?.resolved?.filter(row=>!row.ok).map(row=>row.reason)||[];
+        if(reasons.some(reason=>['source_hash_mismatch','run_id_not_found','source_mismatch'].includes(reason))||result.error?.code==='SOURCE_MISMATCH'){
+          indexingRef.current?.dispose();target.pages.clear();setIndex({});setIndexProgress({...EMPTY_PROGRESS,total:meta.page_count,status:'stale'});setSourceMismatch(true);setActiveMatch(null);
+        }else setBatchError('Could not apply replacements. Your PDF is unchanged. Preview again, then retry.');
+      }
+    }finally{finishWork(owner);}
   };
   const undo=useCallback(async()=>{
-    if(busyOwnerRef.current||!recipeState.history.length)return;const target=sessionRef.current,restored=previousRecipe(recipeState),owner=beginWork('undo','Undoing edit…');if(!owner)return;editVersion.current++;setBatchReview(null);setMessage('');
-    try{let bytes=target.original;if(operationLocation(restored.recipe)==='server'){const result=await documentRequest(target,`/edit?dry_run=false&acknowledge_signature=${acknowledged}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(restored.recipe)});if(!result.ok||!result.pdf)throw new Error('The previous edit could not be restored. Your current document is unchanged.');bytes=decodePdf(result.pdf);}if(!current(target))return;await loadViewer(target,bytes);if(!current(target))return;setRecipeState(restored);setOutput(restored.recipe.length?bytes:null);setSelection(null);setPreview(null);setMessage('Previous edit restored.');}
-    catch(error){if(current(target)&&!ignored(error))setMessage(error.message);}finally{finishWork(owner);}
-  },[busy,recipeState,documentRequest,loadViewer,acknowledged]);
+    if(busyOwnerRef.current||!recipeState.history.length)return;
+    const target=sessionRef.current,restored=previousRecipe(recipeState),batch=historyKinds.at(-1)==='batch',owner=beginWork('undo','Undoing edit…');if(!owner)return;
+    const version=++editVersion.current;
+    const valid=()=>current(target)&&sessionRef.current===target&&busyOwnerRef.current===owner&&editVersion.current===version;
+    setBatchReview(null);setPreview(null);setMessage('');let prepared;
+    try{
+      let bytes=target.original;
+      if(operationLocation(restored.recipe)==='server'){
+        const result=await documentRequest(target,`/edit?dry_run=false&acknowledge_signature=${acknowledged}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(restored.recipe)});
+        if(!valid())return;
+        if(!result.ok||!result.pdf)throw new Error('Previous edit refused');
+        bytes=decodePdf(result.pdf);
+      }
+      if(!valid())return;
+      prepared=await prepareViewer(target,bytes,valid);
+      if(!valid()){prepared.dispose();return;}
+      publishViewer(prepared,valid);setRecipeState(restored);setHistoryKinds(previous=>previous.slice(0,-1));setOutput(restored.recipe.length?bytes:null);
+      editVersion.current++;setSelection(null);setPreview(null);setBatchReview(null);setActiveMatch(null);setNavigationStatus('');
+      setMessage(batch?'Replacement batch undone.':'Previous edit restored.');
+    }catch(error){if(prepared)prepared.dispose();if(valid()&&!ignored(error))setMessage('The previous edit could not be restored. Your current document is unchanged. Try Undo again.');}
+    finally{finishWork(owner);}
+  },[recipeState,historyKinds,documentRequest,prepareViewer,publishViewer,acknowledged]);
   useEffect(()=>{const handler=event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'&&!event.shiftKey&&!event.target.closest('input,textarea,[contenteditable=true]')){event.preventDefault();undo();}};window.addEventListener('keydown',handler);return()=>window.removeEventListener('keydown',handler);},[undo]);
   const download=()=>{const url=URL.createObjectURL(new Blob([output||session.original],{type:'application/pdf'})),anchor=document.createElement('a');anchor.href=url;anchor.download=output?`edited-${session.name.replace(/\.pdf$/i,'')}.pdf`:session.name;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
   const pageData=index[page],runs=pageData?.runs||[],noEditable=pageData&&!runs.some(run=>run.state!=='not_editable');
@@ -163,7 +237,7 @@ export default function App(){
     <input ref={inputRef} type="file" accept="application/pdf,.pdf" className="visually-hidden" aria-label="Open PDF file" onChange={event=>{const file=event.target.files[0];event.target.value='';openFile(file);}}/>
     {dragging&&<div className="drop-overlay">Drop your PDF to open it</div>}
     {!session?<main className="welcome"><div className="welcome-copy"><p className="edition">A focused place for precise changes</p><h1>Your document.<br/>A few words better.</h1><p>Open a PDF, select a text run, and make the change. Keep the page around it intact.</p><button className="primary large" onClick={()=>inputRef.current.click()}>Choose a PDF</button><span className="drop-hint">or drop a file anywhere on this page</span></div><div className="welcome-sheet" aria-hidden="true"><div className="sheet-rule"/><span className="sheet-title">A working document</span><div className="ink-line long"/><div className="ink-line"/><div className="ink-line medium"/><div className="sample-edit">Make room for a better word.</div><div className="ink-line long"/><div className="ink-line"/><div className="ink-line medium"/><span className="sheet-page">1</span></div><div className="privacy-intro"><strong>Know where your document goes.</strong><p>Viewing, selecting text, and downloading happen in your browser. Opening uploads the PDF for analysis; text and style edits run on the server. Your browser keeps the original for recovery.</p></div></main>:<>
-      <section className="document-bar"><div className="document-title"><strong title={session.name}>{session.name}</strong><span>{meta?`${meta.page_count} ${meta.page_count===1?'page':'pages'}`:'Opening PDF'}{session.original&&` · ${(session.original.length/1024).toFixed(0)} KB`}{recipeState.recipe.length?` · ${recipeState.recipe.length} edited text ${recipeState.recipe.length===1?'run':'runs'}`:''}</span></div><div className="document-actions"><button onClick={undo} disabled={!!busy||!recipeState.history.length} title={`Undo last edit (Ctrl/Cmd+Z): ${operationLocation(previousRecipe(recipeState).recipe)==='server'?'server replay':'browser'}`}>Undo <span className="action-location">{operationLocation(previousRecipe(recipeState).recipe)==='server'?'Server':'Browser'}</span></button><button className="primary" disabled={!!busy||!pdf} onClick={download}>{output?'Download edited PDF':'Download original'} <span className="action-location">Browser</span></button><button onClick={clear}>Close</button></div></section>
+      <section className="document-bar"><div className="document-title"><strong title={session.name}>{session.name}</strong><span>{meta?`${meta.page_count} ${meta.page_count===1?'page':'pages'}`:'Opening PDF'}{session.original&&` · ${(session.original.length/1024).toFixed(0)} KB`}{recipeState.recipe.length?` · ${recipeState.recipe.length} edited text ${recipeState.recipe.length===1?'run':'runs'}`:''}</span></div><div className="document-actions"><button onClick={undo} disabled={!!busy||!recipeState.history.length} title={`Undo last edit (Ctrl/Cmd+Z): ${operationLocation(previousRecipe(recipeState).recipe)==='server'?'server replay':'browser'}`}>{historyKinds.at(-1)==='batch'?'Undo replacements':'Undo'} <span className="action-location">{operationLocation(previousRecipe(recipeState).recipe)==='server'?'Server':'Browser'}</span></button><button className="primary" disabled={!!busy||!pdf} onClick={download}>{output?'Download edited PDF':'Download original'} <span className="action-location">Browser</span></button><button onClick={clear}>Close</button></div></section>
       {meta?.signed&&<div className="signature-notice"><strong>Digitally signed document.</strong> Any edit invalidates its signature. Downloading the untouched original preserves its bytes.<label><input type="checkbox" checked={acknowledged} onChange={event=>setAcknowledged(event.target.checked)} disabled={!!output}/> I understand that editing invalidates the signature.</label></div>}
       {meta?.encrypted&&<div className="notice">Password-protected PDF. The original download retains its encryption. An edited copy may use different encryption settings.</div>}
       <main className="workspace"><aside className="page-rail" aria-label="Document pages"><h2>Pages <span className="location">Browser</span></h2>{pdf&&Array.from({length:pdf.numPages},(_,i)=><Thumbnail key={`${pdf.fingerprints[0]}-${i}`} pdf={pdf} number={i+1} current={page===i+1} badge={index[i+1]?.bucket} onSelect={number=>{setPage(number);fetchRuns(number,0);}} onVisible={fetchRuns}/>)}</aside>
@@ -174,7 +248,7 @@ export default function App(){
         progress={indexProgress} matches={matches} excludedIds={excludedIds} onToggle={id=>{invalidateBatch();setExcludedIds(previous=>{const next=new Set(previous);if(next.has(id))next.delete(id);else next.add(id);return next;});}}
         onStop={()=>indexingRef.current?.stop()} onResume={()=>indexingRef.current?.resume()} review={currentReview} previewing={batchPreviewing} locked={findLocked}
         onPreview={checkReplacements} onCancelPreview={cancelBatchPreview} error={batchError} activeId={activeMatch?.id} onNavigate={navigateMatch}
-        resultPage={resultPage} onResultPage={setResultPage} queryRef={queryRef} rowRefs={rowRefs} recipe={recipeState.recipe} runsById={runsById} sourceMismatch={sourceMismatch} onRefresh={refreshIndex}/>:<><h2>Text inspector <span className="location server">Server edits</span></h2>{!meta?<p>Preparing document analysis…</p>:!pageData?<p>Classifying this page…</p>:<><div className="page-verdict"><strong title={pageData.bucket}>{explainBucket(pageData.bucket)}</strong><span>{runs.length} text {runs.length===1?'run':'runs'}</span></div>{noEditable&&<div className="refusal"><h3>{runs.length?'This page cannot be safely edited':'No editable text was found'}</h3><p>{runs.length?[...new Set(runs.map(run=>explainReason(run.reason)))].join(' '):'This may be a scanned page. Run OCR first, then open the searchable PDF here.'}</p><a href="https://ocrmypdf.readthedocs.io/" target="_blank" rel="noopener noreferrer" >Read the OCRmyPDF guide</a><small>External guide. Your PDF is not sent to this site.</small><button className="ocr-interest" onClick={()=>{const target=sessionRef.current;request('/ocr-notify',{method:'POST'}).then(()=>{if(current(target))setMessage('Interest recorded. This counts demand for built-in OCR; no contact details or PDF were sent.');}).catch(()=>{if(current(target))setMessage('Could not record interest. Try again later.');});}}>Register interest in built-in OCR <span>Server</span></button></div>}
+        resultPage={resultPage} onResultPage={setResultPage} queryRef={queryRef} rowRefs={rowRefs} recipe={recipeState.recipe} runsById={runsById} sourceMismatch={sourceMismatch} onRefresh={refreshIndex} onApply={applyBatch} applyAllowed={!!currentReview?.result.ok&&indexProgress.status==='complete'&&(!meta?.signed||acknowledged)}/>:<><h2>Text inspector <span className="location server">Server edits</span></h2>{!meta?<p>Preparing document analysis…</p>:!pageData?<p>Classifying this page…</p>:<><div className="page-verdict"><strong title={pageData.bucket}>{explainBucket(pageData.bucket)}</strong><span>{runs.length} text {runs.length===1?'run':'runs'}</span></div>{noEditable&&<div className="refusal"><h3>{runs.length?'This page cannot be safely edited':'No editable text was found'}</h3><p>{runs.length?[...new Set(runs.map(run=>explainReason(run.reason)))].join(' '):'This may be a scanned page. Run OCR first, then open the searchable PDF here.'}</p><a href="https://ocrmypdf.readthedocs.io/" target="_blank" rel="noopener noreferrer" >Read the OCRmyPDF guide</a><small>External guide. Your PDF is not sent to this site.</small><button className="ocr-interest" onClick={()=>{const target=sessionRef.current;request('/ocr-notify',{method:'POST'}).then(()=>{if(current(target))setMessage('Interest recorded. This counts demand for built-in OCR; no contact details or PDF were sent.');}).catch(()=>{if(current(target))setMessage('Could not record interest. Try again later.');});}}>Register interest in built-in OCR <span>Server</span></button></div>}
       {selection?<div className="edit-form"><div className="selected-heading"><h3>Selected text</h3><span className={`state-badge ${selection.state==='not_editable'?'blocked':''}`}>{selection.state==='editable_original'?'Original font':selection.state==='editable_substitution'?'Font substitution':'Cannot edit'}</span></div><p className="original-text">{selection.text}</p>{selection.state==='not_editable'?<p className="refusal-reason">{explainReason(selection.reason)}{refusalCode(selection.reason)&&<code>{refusalCode(selection.reason)}</code>}</p>:<><label>Replacement text<textarea value={draft} onChange={event=>{editVersion.current++;setPreview(null);setDraft(event.target.value);}} disabled={!!busy} rows={4}/></label><fieldset disabled={!!busy}><legend>Text style</legend><p className="source-font">Detected font: <strong>{selection.source_font||'Unknown'}</strong></p><label className="font-choice">Replacement font<select value={style.font_family||''} onChange={event=>setStyle(chooseFontFamily(style,event.target.value))}><option value="">Automatic — preserve or match original</option><option value="Serif">Serif — Liberation Serif</option><option value="Sans">Sans-serif — Liberation Sans</option><option value="Mono">Monospace — Liberation Mono</option></select></label>{needsFontChoice(selection,style)&&<p className="font-guidance">No automatic font match. Choose a replacement above to edit this text.</p>}<div className="style-controls"><label><input type="checkbox" checked={style.bold||false} onChange={event=>setStyle({...style,bold:event.target.checked})}/> Bold</label><label><input type="checkbox" checked={style.italic||false} onChange={event=>setStyle({...style,italic:event.target.checked})}/> Italic</label><label className="color-control">Color<input aria-label="Text color" type="color" value={style.color?`#${style.color.map(value=>Math.round(value*255).toString(16).padStart(2,'0')).join('')}`:'#000000'} onChange={event=>setStyle({...style,color:event.target.value.slice(1).match(/../g).map(value=>parseInt(value,16)/255)})}/></label></div><p className="size-refusal">Font-size changes are not supported. Edits must fit the original width.</p></fieldset>{(selection.state==='editable_substitution'||'font_family' in style||'bold' in style||'italic' in style)&&<p className="substitution-note">A bundled substitute font will be used. Preview checks its fit before applying.</p>}<button onClick={checkFit} disabled={!!busy||!meta}>Preview fit <span>Server</span></button>{preview&&<div className={`fit-result ${preview.result.ok?'fits':'does-not-fit'}`} role="status"><strong>{preview.result.ok?'Ready to apply':'Edit refused'}</strong>{preview.result.resolved?.map(item=><p key={item.run_id}>{item.ok?explainFit(item.strategy):explainReason(item.reason)}{!item.ok&&refusalCode(item.reason)&&<code>{refusalCode(item.reason)}</code>}</p>)}</div>}<button className="primary" onClick={apply} disabled={!!busy||!preview?.result.ok||(meta.signed&&!acknowledged)}>Apply edit <span>Server</span></button><p className="edit-disclosure">Preview and apply send the recipe to the server. Edits replay against the original PDF. Undo restores the previous recipe.</p></>}<button className="text-button" onClick={()=>setSelection(null)}>Back to page text</button></div>:!noEditable&&<><p className="inspector-hint">Switch to Edit text and choose a run on the page, or select one below.</p><div className="run-list">{runs.map(run=><button key={run.run_id} onClick={()=>{setMode('edit');choose(run);}}><span>{run.text||'(Empty text)'}</span><small>{run.state==='not_editable'?explainReason(run.reason):run.state==='editable_substitution'?'Substitute font':'Editable'}</small></button>)}</div></>}</>}</>}</aside></main>
     </>}
     {(busy||message)&&<div className="status-bar" role="status" aria-live="polite"><span>{busy||message}</span>{message&&!busy&&<button onClick={()=>setMessage('')} aria-label="Dismiss message">×</button>}</div>}
