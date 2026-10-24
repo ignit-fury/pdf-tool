@@ -45,3 +45,22 @@ test('long literal matches avoid argument-count limits and preserve astral conte
   const context=findMatches(page('😀'.repeat(60)+'cat'+'😀'.repeat(60)),'cat')[0];
   assert.equal(context.before,'…'+'😀'.repeat(48));assert.equal(context.after,'😀'.repeat(48)+'…');
 });
+
+test('shared source addresses retain distinct locked fragments and do not block safe replacements',async()=>{
+  const {findMatches,sourceRunForMatch}=await api();
+  const {buildReplacementRecipe}=await import('./buildRecipe.mjs');
+  const first={run_id:'shared',text:'cat',state:'editable_original',box:[0,0,20,10]};
+  const second={...first,box:[30,0,50,10]};
+  const safe={...first,run_id:'safe',box:[0,20,20,30]};
+  const pages={1:{runs:[first,second,safe]}};
+  const hits=findMatches(pages,'cat');
+  assert.equal(hits.length,3);
+  assert.equal(new Set(hits.map(hit=>hit.id)).size,3);
+  assert.deepEqual(hits.map(hit=>hit.replaceable),[false,false,true]);
+  assert.ok(hits.slice(0,2).every(hit=>hit.reason==='operator_shared_by_multiple_runs'));
+  assert.equal(sourceRunForMatch(pages,hits[0]),first);
+  assert.equal(sourceRunForMatch(pages,hits[1]),second);
+  assert.equal(sourceRunForMatch(pages,{...hits[1],runId:'stale'}),null);
+  assert.deepEqual(buildReplacementRecipe({pages,matches:hits,replacement:'a'}).recipe,[{run_id:'safe',new_text:'a'}]);
+  assert.equal(findMatches({1:{runs:[first,{...second,text:'dog'}]}},'cat')[0].replaceable,false);
+});
