@@ -11,8 +11,7 @@ from __future__ import annotations
 
 from copy import copy
 from dataclasses import replace
-from pathlib import Path
-import tempfile
+from io import BytesIO
 from typing import Any
 
 import pikepdf
@@ -23,7 +22,7 @@ from engine.classify_run import (
 from engine.clusterer import cluster_page
 from engine.encoding_table import glyph_verdict
 from engine.index import MAX_DOCUMENT_GLYPHS
-from engine.playa_boundary import open_document, walk_page
+from engine.playa_boundary import parse_document, walk_page
 from engine.records import GlyphRecord, RunRecord
 from engine.run_id import decode_run_id, encode_run_id
 from engine.walker import StreamPath, _FontIds, _op_records
@@ -94,7 +93,6 @@ class PartSnapshot:
         self.page = page
         self.runs = runs
         self._pdf = pdf
-        self._scratch: Any = None
         self._doc: Any = None
         self._pending: Any = None
         self._next_token = 0
@@ -165,21 +163,22 @@ class PartSnapshot:
         if self._doc is not None:
             self._doc.close()
             self._doc = None
-        if self._scratch is not None:
-            self._scratch.cleanup()
-            self._scratch = None
 
     def _capture(self, pdf: pikepdf.Pdf) -> None:
-        """Open one disposable page; consume the full zip and its trailing assertion."""
+        """Parse one disposable page afresh; consume the full zip and end assertion.
+
+        The worker already bounds the source and this projection contains only
+        its current page. An in-memory parse avoids hundreds of scratch mmap
+        operations without retaining an old parser or changing the interpreter.
+        """
         self.close()
-        self._scratch = tempfile.TemporaryDirectory()
-        path = Path(self._scratch.name) / "page.pdf"
+        buffer = BytesIO()
         with pikepdf.Pdf.new() as single:
             single.pages.append(pdf.pages[self.page])
             if "/Annots" in single.pages[0].obj:
                 del single.pages[0].obj["/Annots"]
-            single.save(path, compress_streams=False, object_stream_mode=pikepdf.ObjectStreamMode.disable)
-        self._doc = open_document(path)
+            single.save(buffer, compress_streams=False, object_stream_mode=pikepdf.ObjectStreamMode.disable)
+        self._doc = parse_document(buffer.getvalue(), max_workers=1)
         expected = [
             (part, token, instruction)
             for part in sorted(self._instructions)

@@ -9,7 +9,7 @@ from engine.index import RunIndex
 from tools.build_security_fixtures import text_pdf
 
 
-def _context(tmp_path, content=None, extra_font=False):
+def _context(tmp_path, content=None, extra_font=False, rotation=0):
     from engine.part_snapshot import PartSnapshot
     source = tmp_path / "source.pdf"
     with pikepdf.open(io.BytesIO(text_pdf(b"Hello"))) as pdf:
@@ -24,6 +24,8 @@ def _context(tmp_path, content=None, extra_font=False):
             b"BT /F1 12 Tf 72 620 Td (Third) Tj ET")
         pdf.pages[0].Contents = (pikepdf.Array([pdf.make_stream(part) for part in actual])
                                 if isinstance(actual, list) else pdf.make_stream(actual))
+        if rotation:
+            pdf.pages[0].Rotate = rotation
         pdf.save(source)
     with RunIndex(source) as index:
         runs = tuple(index.page(0).runs)
@@ -85,6 +87,36 @@ def test_post_splice_interpretation_avoids_reopening_scratch_files(tmp_path, mon
         assert context.check_after(pdf) is None
         assert context.resolve(original[1][0])[0].display_text == "Second"
         assert not opened
+    finally:
+        context.close()
+        pdf.close()
+
+
+def test_memory_snapshot_matches_path_font_geometry_and_addresses_on_rotated_parts(tmp_path):
+    from engine.run_id import decode_run_id
+    pdf, context, original = _context(tmp_path, [
+        b"BT /F1 12 Tf 72 700 Td (Hello) Tj ET\n",
+        b"BT /F2 12 Tf 72 660 Td (Other) Tj ET"], extra_font=True, rotation=90)
+    try:
+        # RunIndex above decoded the actual path; the context decoded fresh bytes.
+        for source, verdict in original:
+            current, current_verdict = context.resolve(source)
+            assert current_verdict == verdict
+            assert current.run_id == source.run_id
+            assert [(g.code, g.unicode, g.x, g.y, g.advance, g.stream_id,
+                     g.operator_byte_offset, g.item_index_within_tj, g.byte_offset_within_string)
+                    for g in current.glyphs] == [
+                        (g.code, g.unicode, g.x, g.y, g.advance, g.stream_id,
+                         g.operator_byte_offset, g.item_index_within_tj, g.byte_offset_within_string)
+                        for g in source.glyphs]
+        first, _ = context.resolve(original[0][0])
+        _splice(pdf, context, first, b"(Hello) Tj")
+        assert context.check_after(pdf) is None
+        other, _ = context.resolve(original[1][0])
+        assert other.glyphs[0].x == original[1][0].glyphs[0].x
+        assert other.glyphs[0].y == original[1][0].glyphs[0].y
+        assert decode_run_id(other.run_id)["source_hash"] == decode_run_id(original[1][0].run_id)["source_hash"]
+        assert decode_run_id(other.run_id)["part"] == 1
     finally:
         context.close()
         pdf.close()

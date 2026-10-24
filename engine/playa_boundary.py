@@ -119,6 +119,7 @@ import logging
 from typing import Iterator
 
 from playa import open as open_document
+from playa import parse as parse_document
 from playa.content import GlyphObject, GraphicState, ImageObject, TextObject, XObjectObject
 from playa.document import Document
 from playa.exceptions import PDFSyntaxError
@@ -168,6 +169,7 @@ __all__ = [
     "glyph_byte_offsets",
     "image_bboxes",
     "open_document",
+    "parse_document",
     "operator_table",
     "stream_key",
     "tiling_patterns",
