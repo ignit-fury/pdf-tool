@@ -92,3 +92,29 @@ def test_visible_guard_refuses_corrupted_emission_with_absolute_follower(tmp_pat
     assert not report.ok
     assert report.resolved[0].reason == 'replacement_exceeds_visible_extent'
     assert not output.exists()
+
+
+def test_original_pdf_space_width_bounds_positive_tightening(tmp_path):
+    source, output = tmp_path / 'source.pdf', tmp_path / 'edited.pdf'
+    _build_apply_fixture(source)
+    with pikepdf.open(source, allow_overwriting_input=True) as pdf:
+        font = pdf.pages[0].Resources.Font['/F1']
+        font.Widths[97 - int(font.FirstChar)] = 333.333333
+        font.Widths[32 - int(font.FirstChar)] = 8.333333
+        pdf.pages[0].Contents = pdf.make_stream(
+            b'BT /F1 12 Tf 72 700 Td (a a a a a a a a a ) Tj '
+            b'1 0 0 1 72 650 Tm (FOLLOWER) Tj ET')
+        pdf.save(source)
+    original, verdict = next((r, v) for r, v in classify_document(source).runs
+                             if r.display_text.startswith('a '))
+    assert verdict.state == 'editable_original'
+    replacement = 'a a a a a a a a a a'
+    report = apply_recipe(source, (RecipeOp(original.run_id, replacement),), output)
+    assert report.ok, report
+    assert report.resolved[0].strategy == 'tz'
+    assert report.resolved[0].fit_result.condensed_scale >= 90
+    current = next(r for r, _ in classify_document(output).runs if r.display_text == replacement)
+    assert _extent(current) <= _extent(original) + 1e-6
+    for previous, following in zip(current.glyphs, current.glyphs[1:]):
+        if previous.unicode == ' ':
+            assert following.x > previous.x
