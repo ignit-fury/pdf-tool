@@ -1269,12 +1269,16 @@ def test_refusal_reasons_are_named_not_generic(
         replacement_advance_pt = advance_pt_for_codes(
             pdf.pages[0].Resources.Font["/F1"], [ord(ch) for ch in overlong], 12.0
         )
+        replacement_space_width_pt = advance_pt_for_codes(
+            pdf.pages[0].Resources.Font["/F1"], [32], 12.0
+        )
     direct_fit = fit_run(
         original_advance_pt,
         overlong,
         load_font(liberation_font_path("Sans", "Regular").read_bytes()),
         12.0,
         replacement_advance_pt=replacement_advance_pt,
+        replacement_space_width_pt=replacement_space_width_pt,
     )
     assert direct_fit.refused is True, "this op must actually refuse for the check to bind"
 

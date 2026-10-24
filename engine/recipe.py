@@ -437,12 +437,16 @@ def _resolve_op(
         loaded_font = load_font(font_bytes)
         if substitution_key is not None:
             written_advance = shape_advance_pt(op.new_text, loaded_font, font_size, serialized_widths=True)
+            written_space = shape_advance_pt(' ', loaded_font, font_size, serialized_widths=True)
         else:
             reverse_codes = reverse_encoding_map(font_obj)
             written_advance = advance_pt_for_codes(
                 font_obj, [reverse_codes[UV2AGL[ord(ch)]] for ch in op.new_text], font_size)
+            written_space = (advance_pt_for_codes(font_obj, [reverse_codes['space']], font_size)
+                             if 'space' in reverse_codes else 0.0)
         fit_result = fit_run(original_advance_pt, op.new_text, loaded_font, font_size,
-                             replacement_advance_pt=written_advance)
+                             replacement_advance_pt=written_advance,
+                             replacement_space_width_pt=written_space)
         # A terminal kern cannot shrink painted glyphs. Such overflow must use the
         # bounded compression ladder even when it fits the old one-space pen budget.
         if fit_result.strategy == 'trailing_kern' and fit_result.replacement_shaped_advance_pt > original_advance_pt + 1e-9:

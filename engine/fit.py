@@ -340,6 +340,7 @@ def fit_run(
     font: str | Path | tuple[hb.Font, TTFont],
     font_size_pt: float,
     *, replacement_advance_pt: float | None = None,
+    replacement_space_width_pt: float | None = None,
 ) -> FitResult:
     # Normalised ONCE here rather than twice below: an already-loaded pair passes through
     # untouched, and a path is resolved through `_load_font`'s cache exactly as before.
@@ -347,7 +348,8 @@ def fit_run(
     shaped = (shape_advance_pt(replacement_text, resolved_font, font_size_pt)
               if replacement_advance_pt is None else replacement_advance_pt)
     delta = shaped - original_advance_pt
-    space_w = space_width_pt(resolved_font, font_size_pt)
+    space_w = (space_width_pt(resolved_font, font_size_pt) if replacement_space_width_pt is None
+               else replacement_space_width_pt)
 
     # Priority 1: a single trailing TJ kern absorbs everything within ~1 space width.
     if delta <= 0 or abs(delta) <= space_w:
