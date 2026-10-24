@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
 status: executing
-stopped_at: Phase 5 plans checked; starting engine and search implementation, deployment remains on hold
-last_updated: "2026-10-22"
+stopped_at: Find/preview delivered; completing bounded full-batch proof and atomic apply verification, no deployment
+last_updated: "2026-10-24"
 last_activity: Executing Phase 5 find and replace across all pages locally
 progress:
   total_phases: 8
@@ -33,10 +33,19 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
 ## Current work
 
 - Phase 5 reviewed plans are committed in `e23512b`; local implementation is active.
-- Resumable indexing and exact full-recipe preview controllers are implemented;
-  their 9 tests plus 12 existing session tests pass. UI integration is pending.
-- Engine snapshot reuse and canonical Unicode search/builder implementation are
-  being verified. Full-batch timing and Phase 5 renderer/browser evidence remain pending.
+- Plans 05-02 and 05-03 are delivered with committed summaries. Canonical Unicode
+  projection, current-recipe matching, per-occurrence exclusions, resumable indexing,
+  exact preview, panel and page/run navigation are implemented.
+- Local Firefox observations: 40/40 pages indexed; `the` gives 1,029 default
+  matches, 851 whole-word matches and 723 whole-word case-sensitive matches.
+  Excluding one of two instances in a run preserves the other; the actual page/run
+  highlight follows navigation at 115% and 200% zoom. Native browser find remains available.
+- 34 Node tests passed after the source-hash refresh regression fix. Batch apply
+  transaction work is being finalized separately; full browser apply/undo remains pending.
+- The measured 675-operation batch still exceeds CPU20 in the latest actual worker
+  run. Fresh instruction/state validation now avoids full-page glyph reconstruction;
+  further measured width-lookup optimization is in progress. Caps and fidelity guards
+  remain unchanged. Full renderer proof and final regression/review remain pending.
 
 ### Earlier Phase 4 baseline
 

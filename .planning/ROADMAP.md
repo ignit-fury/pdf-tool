@@ -198,8 +198,8 @@ Plans:
 
 Plans:
 - [ ] 05-01-PLAN.md — Reuse verified rewrite snapshots and prove full-batch worker performance
-- [ ] 05-02-PLAN.md — Canonical Unicode search/provenance and per-instance full-recipe builder
-- [ ] 05-03-PLAN.md — Complete-document find, opt-outs, navigation and exact replacement preview
+- [x] 05-02-PLAN.md — Canonical Unicode search/provenance and per-instance full-recipe builder
+- [x] 05-03-PLAN.md — Complete-document find, opt-outs, navigation and exact replacement preview
 - [ ] 05-04-PLAN.md — Atomic replace-all, one undo and local 40-page fidelity/browser proof
 
 **Research**: no — a client-side query over the cached index producing N ordinary overrides through the ordinary apply path. There is no `POST /find-replace`; a separate bulk endpoint means two rewrite implementations within six months.
@@ -332,7 +332,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → (5 ∥ 6 ∥ 7) → 8
 | 2. Text Model | 10/10 | Complete   | 2026-08-17 |
 | 3. Rewrite Engine + Font Pipeline | 9/9 | Complete   | 2026-08-28 |
 | 4. Web Tier Walking Skeleton + Hardening | Consolidated execution | Implemented locally; release verification pending | - |
-| 5. Find and Replace Across All Pages | 0/TBD | Planning | - |
+| 5. Find and Replace Across All Pages | 2/4 | Executing locally | - |
 | 6. Page Ops and Merge | 0/TBD | Planning | - |
 | 7. Exports | 0/TBD | Planning | - |
 | 8. PDF/A, then DOCX | 0/TBD | Planning | - |
