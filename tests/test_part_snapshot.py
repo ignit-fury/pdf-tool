@@ -68,6 +68,28 @@ def test_rebases_untouched_targets_and_retains_actual_text(tmp_path):
         pdf.close()
 
 
+def test_post_splice_interpretation_avoids_reopening_scratch_files(tmp_path, monkeypatch):
+    import engine.part_snapshot as snapshot_module
+    pdf, context, original = _context(tmp_path)
+    try:
+        opened = []
+        real_open = getattr(snapshot_module, "open_document", None)
+
+        def counted_open(*args, **kwargs):
+            opened.append(1)
+            return real_open(*args, **kwargs)
+
+        monkeypatch.setattr(snapshot_module, "open_document", counted_open, raising=False)
+        run, _ = context.resolve(original[0][0])
+        _splice(pdf, context, run, b"(Hello) Tj")
+        assert context.check_after(pdf) is None
+        assert context.resolve(original[1][0])[0].display_text == "Second"
+        assert not opened
+    finally:
+        context.close()
+        pdf.close()
+
+
 def test_freezes_each_operator_font_before_later_Tf_changes(tmp_path):
     pdf, context, original = _context(tmp_path, (
         b"BT /F1 12 Tf 72 700 Td (Hello) Tj ET\n"
