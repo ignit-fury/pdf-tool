@@ -29,7 +29,9 @@ def _measure(source, recipe, dry_run):
     cpu = after.ru_utime + after.ru_stime - before.ru_utime - before.ru_stime
     print(json.dumps({"dry_run": dry_run, "ops": len(recipe), "wall_seconds": round(elapsed, 3),
                       "child_cpu_seconds": round(cpu, 3), "ok": result.get("ok"),
-                      "error": result.get("error")}))
+                      "error": result.get("error"),
+                      "refusals": dict(Counter(row["reason"] for row in result.get("resolved", [])
+                                               if not row["ok"]))}))
     assert "error" not in result, result
     assert cpu < CPU_LIMIT_SECONDS
     assert elapsed < 30
@@ -76,7 +78,7 @@ def batch():
 def test_40page_batch_worker_preview(batch):
     source, recipe = batch
     result = _measure(source, recipe, True)
-    assert result["ok"] is True, result
+    assert result["ok"] is True, [row["reason"] for row in result["resolved"] if not row["ok"]]
     assert len(result["resolved"]) == 675
     assert result["pdf"] is None
     assert SOURCE.read_bytes() == source
@@ -86,9 +88,9 @@ def test_40page_batch_worker_preview(batch):
 def test_40page_batch_worker_apply(batch):
     source, recipe = batch
     preview = _measure(source, recipe, True)
-    assert preview["ok"] is True, preview
+    assert preview["ok"] is True, [row["reason"] for row in preview["resolved"] if not row["ok"]]
     result = _measure(source, recipe, False)
-    assert result["ok"] is True, result
+    assert result["ok"] is True, [row["reason"] for row in result["resolved"] if not row["ok"]]
     assert result["resolved"] == preview["resolved"]
     assert base64.b64decode(result["pdf"]).startswith(b"%PDF-")
     assert SOURCE.read_bytes() == source

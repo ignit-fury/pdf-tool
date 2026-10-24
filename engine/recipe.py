@@ -43,7 +43,7 @@ import tempfile
 from collections import defaultdict
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import TYPE_CHECKING, TypedDict, cast
 
 import pikepdf
 
@@ -69,6 +69,9 @@ from engine.index import RunIndex
 from engine.records import RunRecord
 from engine.rewrite import PageSnapshot, RewriteOutcome, rewrite_run, rewrite_preflight_refusal
 from engine.run_id import decode_run_id
+
+if TYPE_CHECKING:
+    from engine.part_snapshot import PartSnapshot
 
 # 03-RESEARCH.md Security Domain, Known Threat Patterns table: "Recipe JSON with an
 # implausibly large op count ... used to exhaust memory or CPU in a single `pdftool
@@ -317,6 +320,7 @@ def _resolve_op(
     run: RunRecord,
     verdict: RunVerdict,
     all_page_runs: tuple[RunRecord, ...],
+    part_context: PartSnapshot | None = None,
 ) -> ResolvedOp:
     """Everything `apply_recipe` needs to rewrite ONE already-located run, or the single
     named reason it will not be rewritten -- see `plan_recipe`'s docstring for the ordered
@@ -334,7 +338,7 @@ def _resolve_op(
     if verdict.state == "not_editable":
         return ResolvedOp(op, ok=False, reason=verdict.reason, run=run, verdict=verdict)
 
-    stateful_reason = rewrite_preflight_refusal(pdf, run.page, run, list(all_page_runs))
+    stateful_reason = rewrite_preflight_refusal(pdf, run.page, run, list(all_page_runs), part_context)
     if stateful_reason is not None:
         return ResolvedOp(op, ok=False, reason=stateful_reason, run=run, verdict=verdict)
 
@@ -670,17 +674,16 @@ def _match_run(
 
 
 def _rederive_op(
-    pdf: pikepdf.Pdf, planned: ResolvedOp, snapshot: PageSnapshot | None = None
+    pdf: pikepdf.Pdf, planned: ResolvedOp, snapshot: PageSnapshot | None = None,
+    part_context: PartSnapshot | None = None,
 ) -> ResolvedOp | str:
     """`planned` re-resolved against `pdf`'s CURRENT bytes, or the named reason it cannot
     be -- see `apply_recipe`'s "Two ops on ONE part" section for why this exists.
 
-    The page is re-classified through `engine.index.RunIndex` over a scratch save of the
-    handle as it now stands, which is the same mechanism `engine.rewrite._current_page_runs`
-    already uses for D-04's guard; it is called here for the FULL classification (records
-    AND verdicts), which that helper discards. A run whose fresh verdict is `not_editable`,
-    or whose re-resolution refuses for any other reason, comes back as that resolution's own
-    named reason rather than as a fallback to the stale plan.
+    The owner may supply its verified current classified snapshot. Otherwise the page is
+    re-classified through `RunIndex` over a scratch save. Both paths retain records AND
+    verdicts. A current `not_editable` verdict or any current font/encoding/fit refusal
+    comes back by name, never as a fallback to the stale plan.
     """
     if planned.run is None:
         return "resolution_failed"
@@ -704,7 +707,8 @@ def _rederive_op(
 
     run, verdict = found
     redone = _resolve_op(
-        pdf, planned.op, run, verdict, tuple(r for r, _v in current if r.page == page_index)
+        pdf, planned.op, run, verdict, tuple(r for r, _v in current if r.page == page_index),
+        part_context,
     )
     if not redone.ok:
         return redone.reason or "resolution_failed"
@@ -772,13 +776,14 @@ def apply_recipe(
     `ok=True`. This is not an exotic recipe shape: "replace this phrase everywhere" hits one
     page, and one part, repeatedly.
 
-    So: `_part_key` identifies the ONE part each op edits, and once an op has mutated a
-    part, any LATER op targeting that same part is re-derived before it is applied --
-    the page is re-classified from the handle's CURRENT bytes (`_current_page_runs`, the
-    same scratch-save + `RunIndex` re-walk `rewrite_run`'s own D-04 guard already performs),
-    the op's run is re-located in that fresh map by `_match_run`, and `_resolve_op` runs
-    again against the mutated document. Bounded cost: one re-walk per edit that is actually
-    followed by another op on the same part, not one per op.
+    Every later op on an edited page is re-derived before application. Ordinary page
+    content uses a request-owned PartSnapshot: exact retained instruction identity and a
+    complete fresh interpreter pass prove current byte offsets and unchanged state, and
+    the next target's glyphs/verdict are freshly materialized. Complex content instead
+    uses a fresh full classified-page snapshot after each mutation. In both paths the op
+    is uniquely re-located by `_match_run`, then `_resolve_op` reads the CURRENT font,
+    encoding, widths and fit. Each individual splice still gets its own fresh D-04 check;
+    no mutations are batched ahead of their guards.
 
     Re-derivation refuses by NAME rather than falling back to the stale records:
     `"run_lost_after_earlier_edit"` when the fresh map has no unambiguous match, and
@@ -787,6 +792,8 @@ def apply_recipe(
     from the planned keys, so honouring a changed one would reference glyphs no embedded
     subset contains). D-11 still applies to both: nothing is written.
     """
+    from engine.part_snapshot import PartSnapshot
+
     report = plan_recipe(pdf_path, recipe, password=password)
     if not report.ok:
         return report
@@ -801,6 +808,7 @@ def apply_recipe(
             )
 
     pdf = pikepdf.open(pdf_path, password=password)
+    contexts: dict[int, PartSnapshot] = {}
     try:
         font_map: dict[
             tuple[BundledFamily, BundledVariant], tuple[SubsetFont, pikepdf.Object]
@@ -819,8 +827,8 @@ def apply_recipe(
                     cid_to_unicode.update(dict(shape_cids(subset, r.op.new_text)))
             font_map[key] = (subset, embed_type0_font(pdf, subset, cid_widths, cid_to_unicode))
 
-        # Parts this call has already mutated, and therefore whose byte offsets every
-        # not-yet-applied op's records are now stale against.
+        # Any mutation invalidates planned offsets on that page. Contexts retain
+        # only provenance whose freshness their post-splice proof established.
         edited_pages: set[int] = set()
         current_snapshot: PageSnapshot | None = None
         for index, r in enumerate(report.resolved):
@@ -838,10 +846,31 @@ def apply_recipe(
                 return _refuse_at(report, index, r, "resolution_failed")
 
             applied = r
+            context = contexts.get(r.run.page)
+            if context is None and r.run.page not in edited_pages and r.page_snapshot is not None:
+                try:
+                    context = PartSnapshot.create(pdf, r.run.page, r.page_snapshot.runs)
+                except Exception:
+                    return _refuse_at(report, index, r, "resolution_failed")
+                if context is not None:
+                    contexts[r.run.page] = context
+            if context is not None:
+                try:
+                    found = context.resolve(r.run)
+                except Exception:
+                    return _refuse_at(report, index, r, "resolution_failed")
+                if found is None:
+                    return _refuse_at(report, index, r, "run_lost_after_earlier_edit")
+                if found[1].state == "not_editable":
+                    return _refuse_at(report, index, r, found[1].reason)
+                current_snapshot = PageSnapshot(r.run.page, tuple(context.runs))
+                applied = replace(r, run=found[0], verdict=found[1],
+                                  all_page_runs=tuple(run for run, _ in context.runs),
+                                  page_snapshot=current_snapshot)
             if r.run.page in edited_pages:
                 redone = _rederive_op(pdf, r, current_snapshot
                                      if current_snapshot is not None and current_snapshot.page == r.run.page
-                                     else None)
+                                     else None, context)
                 if isinstance(redone, str):
                     return _refuse_at(report, index, r, redone)
                 applied = redone
@@ -871,6 +900,7 @@ def apply_recipe(
                 color=tuple(applied.op.style["color"]) if applied.op.style is not None and "color" in applied.op.style else None,
                 force_substitution=applied.substitution_key is not None,
                 current_snapshot=applied.page_snapshot,
+                part_context=context,
             )
             if not outcome.ok:
                 # Return WITHOUT saving; the `finally` closes the mutated handle and it is
@@ -882,6 +912,8 @@ def apply_recipe(
 
         pdf.save(Path(output_path))
     finally:
+        for context in contexts.values():
+            context.close()
         pdf.close()
 
     return report

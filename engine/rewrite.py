@@ -129,6 +129,7 @@ import tempfile
 import warnings
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 import pikepdf
 from fontTools.agl import UV2AGL
@@ -146,6 +147,9 @@ from engine.fonts import (
 from engine.index import RunIndex
 from engine.records import GlyphRecord, RunRecord
 from engine.run_id import decode_run_id, encode_run_id
+
+if TYPE_CHECKING:
+    from engine.part_snapshot import PartSnapshot
 
 TEXT_SHOWING_OPERATORS = frozenset({"Tj", "TJ", "'", '"'})
 
@@ -357,8 +361,37 @@ def _correlate(
         return RewriteOutcome(ok=False, reason="correlation_failed")
 
 
+def _correlate_current(
+    pdf: pikepdf.Pdf, page_index: int, run: RunRecord, all_page_runs: list[RunRecord],
+    part_context: PartSnapshot | None = None,
+) -> tuple[list[ParsedInstruction], list[int]] | RewriteOutcome:
+    """Reuse a proof only for the exact current bytes and owned record objects.
+
+    Resolve, preflight and splice consult the same immutable mutation state. The
+    request-owned context retains strong record references, preventing identity
+    recycling; any splice or freshly resolved target changes this key. Standalone
+    calls always perform the ordinary correlation.
+    """
+    if part_context is None:
+        return _correlate(pdf, page_index, run, all_page_runs)
+    try:
+        part, xobj_path = _part_key(run)
+        current_bytes = _read_part_bytes(pdf, page_index, part, xobj_path)
+        key = (id(pdf), page_index, part, xobj_path, run.run_id, id(run),
+               tuple(id(record) for record in all_page_runs), current_bytes)
+        cached = getattr(part_context, "_rewrite_correlation", None)
+        if cached is not None and cached[0] == key:
+            return cast(tuple[list[ParsedInstruction], list[int]] | RewriteOutcome, cached[1])
+        result = _correlate(pdf, page_index, run, all_page_runs)
+        setattr(part_context, "_rewrite_correlation", (key, result, run, tuple(all_page_runs)))
+        return result
+    except Exception:
+        return RewriteOutcome(ok=False, reason="correlation_failed")
+
+
 def rewrite_preflight_refusal(
-    pdf: pikepdf.Pdf, page_index: int, run: RunRecord, all_page_runs: list[RunRecord]
+    pdf: pikepdf.Pdf, page_index: int, run: RunRecord, all_page_runs: list[RunRecord],
+    part_context: PartSnapshot | None = None,
 ) -> str | None:
     """Disclose detectable splice refusals before presenting a successful preview."""
     try:
@@ -366,7 +399,7 @@ def rewrite_preflight_refusal(
             return "operator_shared_by_multiple_runs"
     except Exception:
         return "correlation_failed"
-    correlated = _correlate(pdf, page_index, run, all_page_runs)
+    correlated = _correlate_current(pdf, page_index, run, all_page_runs, part_context)
     if isinstance(correlated, RewriteOutcome):
         return correlated.reason
     instructions, touched = correlated
@@ -381,6 +414,7 @@ def rewrite_instructions(
     run: RunRecord,
     all_page_runs: list[RunRecord],
     new_instructions: list[pikepdf.ContentStreamInstruction],
+    part_context: PartSnapshot | None = None,
 ) -> RewriteOutcome:
     """Install `new_instructions` in place of `run`'s own instructions, touching nothing
     else in the part and nothing at all outside it.
@@ -415,7 +449,7 @@ def rewrite_instructions(
     the `:o1391` run): 62 touched instructions, one replacement instruction, so the part's
     instruction count drops by exactly 61.
     """
-    correlated = _correlate(pdf, page_index, run, all_page_runs)
+    correlated = _correlate_current(pdf, page_index, run, all_page_runs, part_context)
     if isinstance(correlated, RewriteOutcome):
         return correlated
     instructions, touched = correlated
@@ -432,6 +466,11 @@ def rewrite_instructions(
 
     parts = decode_run_id(run.run_id)
     _write_part_bytes(pdf, page_index, parts["part"], parts["xobj_path"], new_bytes)
+    if part_context is not None:
+        try:
+            part_context.splice(run, instructions, touched, new_instructions)
+        except Exception:
+            return RewriteOutcome(ok=False, reason="correlation_failed")
     return RewriteOutcome(ok=True)
 
 
@@ -1199,6 +1238,7 @@ def rewrite_run(
     color: tuple[float, ...] | None = None,
     force_substitution: bool = False,
     current_snapshot: PageSnapshot | None = None,
+    part_context: PartSnapshot | None = None,
 ) -> RewriteOutcome:
     """EDIT-02/EDIT-03/EDIT-04: the module's public entry point. Builds the replacement
     instruction for `run` (substituted or not), brackets it per the fit ladder's chosen
@@ -1221,7 +1261,7 @@ def rewrite_run(
         # `RewriteOutcome(ok=False, reason=None)` is the unnamed failure EDIT-04 forbids.
         return RewriteOutcome(ok=False, reason=fit_result.refusal_reason or "fit_refused")
 
-    stateful_reason = rewrite_preflight_refusal(pdf, page_index, run, all_page_runs)
+    stateful_reason = rewrite_preflight_refusal(pdf, page_index, run, all_page_runs, part_context)
     if stateful_reason is not None:
         return RewriteOutcome(ok=False, reason=stateful_reason)
 
@@ -1241,7 +1281,9 @@ def rewrite_run(
                 _read_part_bytes(pdf, page_index, part, xobj_path),
                 min(glyph.operator_byte_offset for glyph in run.glyphs),
             )
-        if current_snapshot is not None:
+        if part_context is not None:
+            matrix_before = part_context.before_witness(run)
+        elif current_snapshot is not None:
             if current_snapshot.page != page_index:
                 return RewriteOutcome(ok=False, reason="correlation_failed")
             tail_count, matrix_before = _following_reference(run, all_page_runs)
@@ -1302,13 +1344,19 @@ def rewrite_run(
             *new_instructions,
             pikepdf.ContentStreamInstruction([], pikepdf.Operator("Q")),
         ]
-    outcome = rewrite_instructions(pdf, page_index, run, all_page_runs, new_instructions)
+    outcome = rewrite_instructions(pdf, page_index, run, all_page_runs, new_instructions,
+                                   part_context=part_context)
     if not outcome.ok:
         return outcome
 
     try:
         snapshot = None
-        if current_snapshot is not None:
+        if part_context is not None:
+            reason = part_context.check_after(pdf)
+            if reason is not None:
+                return RewriteOutcome(ok=False, reason=reason)
+            return RewriteOutcome(ok=True)
+        elif current_snapshot is not None:
             snapshot = _current_page_snapshot(pdf, page_index)
             matrix_after = _matrix_for_tail(
                 run, [r for r, _ in snapshot.runs], tail_count)
