@@ -107,6 +107,12 @@ Negative controls include every-splice validation, real following-glyph movement
 
 No blocking stubs, new network endpoint, authentication flow, persistent document cache or external dependency was introduced. Temporary/current document state is owned by the disposable recipe worker; every context/document is closed on success and refusal.
 
+## Historical Preview Expectation Correction
+
+The orchestrator's final broad run exposed one outdated refusal expectation in `tests/test_preview_layout_guard.py`: shortening `govdocs1_002_002154.pdf:p0:c0:o198` to its first three characters with Sans now succeeds because the actual-width terminal adjustment fixes its former pen shift. Before adapting the test, actual isolated preview/apply agreed; all663 following page0 glyph positions/advances changed by at most1.14e-13pt; independent PDFium150dpi rendering changed15,055 pixels inside the source-run envelope and zero outside its existing3pt tolerance; the full-page character counter matched exactly the intended replacement; and source bytes remained unchanged.
+
+The corpus test now proves that safe result. A separate deterministic test corrupts a real terminal TJ operand inside the disposable worker after an earlier operation succeeds. Actual preview and apply both detect the resulting advance-dependent follower shift, agree on `text_matrix_shifted_after_edit`, and return no PDF. No production code, mask tolerance or guard was changed. The corrected file passes3 tests in2.40s; its adjacent fresh-guard/snapshot suite passes43 tests in6.58s. Scoped test commit: `1f9af02`.
+
 ## Self-Check: PASSED
 
 All listed implementation/test files exist, all listed commit hashes are present, the complete675-operation acceptance tests pass, and the original corpus source remains unchanged. Phase completion, G4 fidelity and public-release gates are not claimed here.
