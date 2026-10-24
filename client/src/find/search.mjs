@@ -1,6 +1,12 @@
 import data from '../../../engine/data/search-unicode-15.1.json' with {type:'json'};
 
 export const SEARCH_VERSION=data.version;
+const pageRuns=value=>Array.isArray(value)?value:value?.runs||[];
+export function sourceRunForMatch(pages,match){
+  const value=pages instanceof Map?(pages.get(match.page)??pages.get(String(match.page))):pages?.[match.page];
+  const run=pageRuns(value)[match.runOrder];
+  return run?.run_id===match.runId?run:null;
+}
 const ccc=char=>data.combining[char.codePointAt(0)]||0;
 function decompose(items){
   const ordered=[];
@@ -53,8 +59,10 @@ export function findMatches(pages,query,{matchCase=false,wholeWords=false,recipe
   const overrides=new Map(recipe.map(op=>[op.run_id,op])),results=[];
   const entries=pages instanceof Map?[...pages.entries()]:Object.entries(pages);
   entries.sort((a,b)=>Number(a[0])-Number(b[0]));
+  const addresses=new Map();
+  for(const [,value] of entries)for(const run of pageRuns(value))addresses.set(run.run_id,(addresses.get(run.run_id)||0)+1);
   for(const [pageKey,value] of entries){
-    const runs=Array.isArray(value)?value:value?.runs||[];
+    const runs=pageRuns(value);
     runs.forEach((run,runOrder)=>{
       const effective=overrides.get(run.run_id)?.new_text??run.text;
       const cached=effective===run.text&&run.search?.version===SEARCH_VERSION?run.search:null;
@@ -67,10 +75,10 @@ export function findMatches(pages,query,{matchCase=false,wholeWords=false,recipe
         if(wholeWords&&!(words.has(normalizedStart)&&words.has(normalizedEnd)))continue;
         const {start,end,safe}=sourceSpan(projection,normalizedStart,normalizedEnd,graphemes,inverse);
         const editable=run.state==='editable_original'||run.state==='editable_substitution';
-        const reason=!safe?'normalization_boundary_unreplaceable':editable?null:run.reason||'uneditable';
+        const reason=!safe?'normalization_boundary_unreplaceable':!editable?run.reason||'uneditable':addresses.get(run.run_id)>1?'operator_shared_by_multiple_runs':null;
         const left=Array.from(effective.slice(Math.max(0,start-98),start)).slice(-48).join('');
         const right=Array.from(effective.slice(end,end+98)).slice(0,48).join('');
-        results.push({id:JSON.stringify([query,matchCase,wholeWords,run.run_id,effective,normalizedStart,normalizedEnd]),
+        results.push({id:JSON.stringify([query,matchCase,wholeWords,Number(pageKey),runOrder,run.run_id,effective,normalizedStart,normalizedEnd]),
           runId:run.run_id,page:Number(pageKey),runOrder,start,end,normalizedStart,normalizedEnd,
           text:effective.slice(start,end),before:(left.length<start?'…':'')+left,
           after:right+(end+right.length<effective.length?'…':''),state:run.state,reason,replaceable:!reason});

@@ -1,10 +1,11 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {explainReason,refusalCode,needsFontChoice} from '../session.mjs';
+import {sourceRunForMatch} from './search.mjs';
 
 const plural=(count,word)=>`${count} ${word}${count===1?'':word.endsWith('match')?'es':'s'}`;
 export default function FindPanel({query,replacement,fontFamily,matchCase,wholeWords,onQuery,onReplacement,onFont,onMatchCase,onWholeWords,
   progress,matches,excludedIds,onToggle,onStop,onResume,review,previewing,locked,onPreview,onCancelPreview,error,
-  activeId,onNavigate,resultPage,onResultPage,queryRef,rowRefs,recipe=[],runsById,sourceMismatch=false,onRefresh,applyAllowed=false,onApply}){
+  activeId,onNavigate,resultPage,onResultPage,queryRef,rowRefs,recipe=[],pages:sourcePages,sourceMismatch=false,onRefresh,applyAllowed=false,onApply}){
   const complete=progress.status==='complete',segmenter=typeof Intl.Segmenter==='function';
   const refused=match=>match.reason||review?.refusals[match.runId];
   const blocked=matches.filter(refused).length,excluded=matches.filter(match=>!refused(match)&&excludedIds.has(match.id)).length;
@@ -48,7 +49,7 @@ export default function FindPanel({query,replacement,fontFamily,matchCase,wholeW
       {!matches.length&&<p>{!query?'Enter a word or phrase. Matches appear as pages are indexed.':complete?'Try another spelling or turn off Match case or Whole words only.':''}</p>}
       <ol start={start+1}>{visible.map((match,index)=>{
         const ordinal=start+index+1,reason=refused(match),isExcluded=excludedIds.has(match.id),unchanged=match.text===replacement;
-        const run=runsById.get(match.runId),prior=recipe.find(op=>op.run_id===match.runId),fontNeeded=!fontFamily&&needsFontChoice(run,prior?.style||{});
+        const run=sourceRunForMatch(sourcePages,match),prior=recipe.find(op=>op.run_id===match.runId),fontNeeded=!fontFamily&&needsFontChoice(run,prior?.style||{});
         const reasonId=`match-reason-${ordinal}`,code=refusalCode(reason);
         return <li key={match.id} className={activeId===match.id?'find-active':''}>
           <div className="find-row-controls"><label className="find-checkbox"><input type="checkbox" checked={!reason&&!isExcluded&&!unchanged} disabled={!!reason||locked||unchanged} onChange={()=>onToggle(match.id)} aria-label={`Include match ${ordinal} on page ${match.page}`} aria-describedby={reason?reasonId:undefined}/><span className="visually-hidden">Include match {ordinal}</span></label>
