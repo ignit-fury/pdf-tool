@@ -2,19 +2,20 @@
 phase: 05-find-and-replace-across-all-pages
 plan: 04
 subsystem: testing
-status: in_progress
+status: passed
 tags: [batch, fidelity, corpus, renderers]
 key-files:
   created: [tests/test_find_replace_recipe.py]
   modified: [tests/test_gate_g4.py]
-completed: null
+completed: 2026-10-24
 ---
 
 # Phase 5 Plan 4: Server Integration and G4 Evidence
 
-The real client recipe builder and ordinary HTTP edit endpoint pass batch integration;
-the complete 675-operation corpus gate currently exposes a visible width-fit defect.
-This is a continuation record, not a completed G4 or Phase 5 sign-off.
+The real client recipe builder and ordinary HTTP edit endpoint pass batch integration,
+and the complete 675-operation corpus gate passes all 120 original/output page pairs
+across three renderers: 28 changed pages and 12 fully unmasked unchanged pages.
+This completes the delegated automated integration/G4 slice, not overall Phase 5 sign-off.
 
 ## Completed Server Integration
 
@@ -29,11 +30,19 @@ and real worker/API mutation rather than mocking rewrite success:
 - Explicit replacement font recovers both an unmapped substitution font and a real
   embedded original CFF source (`govdocs1_000_000013.pdf`).
 
-Verification: four non-corpus integration cases plus the corpus CFF case passed.
-The combined focused command with G4 helper controls passed **9 tests in 5.14s**.
-After adding outward-rounding/rotated-device-space geometry coverage, the G4 fast
-helper command passed **6 tests**. The existing Starlette/httpx deprecation warning
+Verification: the final combined integration, helper-control and full corpus command
+passed **12 tests in 101.38s**. The full G4 case took **95.467s**. After the report-only
+changed-page correction, focused helper controls passed **6 tests in 0.33s**
+(one expensive case deselected). The existing Starlette/httpx deprecation warning
 is unchanged; no package was installed.
+
+Final full command:
+
+```sh
+.venv/bin/python -m pytest -q -s tests/test_find_replace_recipe.py tests/test_gate_g4.py -x
+```
+
+Full GREEN log: `/private/tmp/pdf-tool-phase5-g4-20261024.log`.
 
 The generated subset alias names its family without a weight suffix. The integration
 test verifies the embedded font program's actual OS/2 weight (≥700), rather than
@@ -59,24 +68,38 @@ Actual unchanged-limit worker evidence from the 2026-10-24 G4 run:
 
 | Stage | Operations | Child CPU | Wall | Result |
 |---|---:|---:|---:|---|
-| Initial preview | 703 | 3.306s | 3.339s | Expected refusal report, no PDF |
-| Earlier style preview | 1 | 0.376s | 0.404s | Passed, no PDF |
-| Earlier style apply | 1 | 0.391s | 0.422s | Passed |
-| Exact final preview | 675 | 18.137s | 18.312s | Passed, no PDF |
-| Exact final apply | 675 | 18.285s | 18.439s | Passed, matching report |
+| Initial preview | 703 | 3.381s | 3.411s | Expected refusal report, no PDF |
+| Earlier style preview | 1 | 0.371s | 0.399s | Passed, no PDF |
+| Earlier style apply | 1 | 0.389s | 0.421s | Passed |
+| Exact final preview | 675 | 18.893s | 18.935s | Passed, no PDF |
+| Exact final apply | 675 | 18.520s | 18.576s | Passed, matching report |
 
-The full output passed qpdf validation. Before the renderer failure, the gate verified:
+CPU 20s, memory 1GiB and default wall 30s limits remain unchanged. The full output
+passed qpdf validation. The successful gate verified:
 
 - Every requested run's exact newly written Unicode at its original physical part/anchor.
 - Independent PDFium full-page character deltas on all 40 pages, without assuming
   engine and PDFium reading orders match.
-- Every untouched instruction retained in its original part and relative order.
+- All 25,972 untouched instructions retained in their original part and relative order.
 - The individual opt-out retained and the earlier RGB style still present at its anchor.
 - Original source bytes unchanged.
 
 These checks are complementary: a character counter alone is not a proof of correct placement.
 
-## G4 RED — Width-Fit Defect Under Repair
+The final candidate contains **910 selected changing matches**, one individual opt-out
+and all 97 refused runs. All 40 pages pass independent text-delta checks and all three
+same-engine renderer comparisons. Changed pages use unions of individual run regions;
+the 12 unchanged pages use no mask. All **120 pairs have zero outside changed pixels**.
+All output cross-engine pairs pass the existing measured antialiasing tolerance.
+
+The original GREEN run's aggregate logger incorrectly counted 40 changed pages because
+reading a defaultdict inserted empty entries for unchanged pages. Its 120 per-page rows
+independently establish **84 masked pairs / 36 fully unmasked pairs**, hence **28 changed /
+12 unchanged pages**. The report-only correction captures the changed-page set before
+those reads and asserts it matches the actual client candidate's `changedPages`.
+Masks, checks and successful artifacts were unaffected; no full rerun was needed.
+
+## Regression Caught and Fixed — Source TJ Ink Envelope
 
 Commit `7491ec5` records the full all-page gate and its passing fast controls. The gate
 compares every original/output page in PDFium, Poppler and MuPDF, requiring zero
@@ -85,7 +108,7 @@ unmasked changes on unchanged pages. Cross-engine comparisons alone use the exis
 measured antialiasing tolerance. A control proves a changed pixel between disjoint
 masks cannot be hidden by an enclosing rectangle; another rejects unchanged output.
 
-The actual run stopped on **page 6 / PDFium**, with **76 changed pixels outside**
+The earlier RED run stopped on **page 6 / PDFium**, with **76 changed pixels outside**
 the original-run bounds plus 3pt padding. Pages 1–5 passed all three engines first.
 The mask was not widened and the gate was not marked passed.
 
@@ -99,9 +122,11 @@ Two concrete original addresses (page index 5, part 0):
 Both planning rows claimed `inter_word_kern` with zero remaining width delta. An
 independent PDFium crop confirmed the actual ink edge moves from device x=912 to
 x=926 on the first affected row, so this is not only an advance-box estimate.
-The engine owner has the exact two-operation recipe and is correcting actual written
-width fitting. D-04 alone does not catch this case because following lines are absolutely
-positioned. No renderer tolerance, mask, worker cap or accepted workload was relaxed.
+The engine owner reproduced this in `fd8484d` and fixed source TJ-envelope fitting
+independently of the final pen position in `a49976a`. D-04 alone did not catch this case
+because following lines were absolutely positioned. The unchanged complete gate now
+passes after that correction. No renderer tolerance, mask, worker cap or accepted
+workload was relaxed.
 
 Private local diagnostic artifacts:
 
@@ -113,18 +138,17 @@ Private local diagnostic artifacts:
 
 ## Remaining Work
 
-1. Finish the engine fit correction with its focused regression.
-2. Rerun the full unchanged-limit 675-operation preview/apply proof.
-3. Rerun `pytest -q -s -m corpus tests/test_gate_g4.py -x`, completing all 40 pages
-   and all 120 same-engine original/output comparisons. Preserve the current zero threshold.
-4. Root combines these results with actual browser apply/undo evidence and final review.
+Root combines this completed automated proof with actual browser apply/undo evidence,
+final review and the overall regression run. Root owns final plan/phase completion.
 
 No deployment occurred. Literal contract-specimen coverage and Phase 4 Linux/container/CDN
 release gates remain unproven. Root owns STATE, ROADMAP, REQUIREMENTS and the final
 05-G4-RESULTS/05-04-SUMMARY; this executor has not marked them complete.
 
-## Self-Check
+## Self-Check: PASSED
 
 Both owned test files and commits `456f3ca`, `7491ec5` exist. Server integration is
-verified; the complete G4 criterion remains RED until the reproduced defect is fixed
-and the all-page run finishes.
+verified and the complete G4 automated corpus criterion is GREEN. The original RED
+evidence is retained, the engine correction is committed, and the full successful
+12-test command is recorded above. No production source or phase state was changed
+by this delegated executor.

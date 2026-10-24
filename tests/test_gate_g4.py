@@ -313,7 +313,11 @@ def test_g4_full_40page_batch_text_and_all_renderer_pages(tmp_path):
     changes_by_page = defaultdict(list)
     for change in candidate['changes']:
         changes_by_page[change['page'] - 1].append(change)
-    assert len(changes_by_page) > 1
+    # Later lookups intentionally add empty lists for unchanged pages. Capture
+    # the real changed set before visiting all 40 pages so reporting stays honest.
+    changed_pages = frozenset(changes_by_page)
+    assert sorted(number + 1 for number in changed_pages) == candidate['changedPages']
+    assert len(changed_pages) > 1
     excluded_match = next(match for match in final['matches'] if match['id'] == excluded)
     opted_run = operations[excluded_match['runId']]['new_text']
     assert opted_run.casefold().count('the') == 1
@@ -357,7 +361,8 @@ def test_g4_full_40page_batch_text_and_all_renderer_pages(tmp_path):
             assert ok, detail
     assert render_counts == {'pdfium': 40, 'poppler': 40, 'mupdf': 40}
     assert SOURCE.read_bytes() == source
-    print(json.dumps({'gate': 'G4-technical-proxy', 'pages': 40, 'changed_pages': len(changes_by_page),
+    print(json.dumps({'gate': 'G4-technical-proxy', 'pages': 40, 'changed_pages': len(changed_pages),
+                      'unchanged_pages': 40 - len(changed_pages),
                       'matches': 1029, 'selected_matches': candidate['selectedCount'], 'ops': 675,
                       'refused_runs': 97, 'excluded_matches': 1, 'untouched_instructions': structural,
                       'same_engine_page_pairs': 120, 'seconds': round(time.monotonic() - started, 3)}), flush=True)
