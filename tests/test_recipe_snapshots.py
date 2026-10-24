@@ -8,10 +8,32 @@ import pytest
 
 import engine.rewrite as rewrite_module
 import engine.fonts as fonts_module
+import engine.fit as fit_module
 from engine.classify_run import RunVerdict
 from engine.index import RunIndex
 from engine.recipe import RecipeOp, apply_recipe
 from tools.build_security_fixtures import text_pdf
+
+
+def test_cid_advance_resolves_each_distinct_code_once_without_stale_widths(monkeypatch):
+    font = pikepdf.Dictionary(Subtype=pikepdf.Name.Type0, DescendantFonts=pikepdf.Array([
+        pikepdf.Dictionary(W=pikepdf.Array([1, pikepdf.Array([500, 600]), 10, 12, 700]), DW=1000)
+    ]))
+    calls = []
+    original = fit_module.cid_width
+
+    def counted(descendant, code):
+        calls.append(code)
+        return original(descendant, code)
+
+    monkeypatch.setattr(fit_module, "cid_width", counted)
+    assert fit_module.advance_pt_for_codes(font, [1, 1, 2, 10, 99], 12) == pytest.approx(39.6)
+    assert sorted(calls) == [1, 2, 10, 99]
+    calls.clear()
+    font.DescendantFonts[0].W = pikepdf.Array([1, pikepdf.Array([800]), 9])
+    # The next call sees changed /W; its truncated tail still falls through to /DW.
+    assert fit_module.advance_pt_for_codes(font, [1, 1, 99], 10) == 26
+    assert sorted(calls) == [1, 99]
 
 
 @pytest.fixture
