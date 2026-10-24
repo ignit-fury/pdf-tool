@@ -12,8 +12,11 @@ It is a real product for other people, used anonymously — no signup to edit a 
 
 ## Current State
 
-Phase 4 is implemented and verified locally, including the full corpus suite. Linux/container/CDN
-release checks remain open in `STATE.md` and the Phase 4 verification report. No deployment was published.
+Phases 4 and 5 are implemented locally. All-page find/replace now supports exact review,
+individual opt-outs, font fallback, atomic apply and one whole-batch undo. The 40-page
+technical-document proof, browser journeys and final regression verification are complete.
+Literal contract-specimen coverage and Linux/container/CDN release checks remain open in
+`STATE.md` and the phase verification reports. No deployment was published.
 
 ## Core Value
 
@@ -24,21 +27,24 @@ happened.** If everything else on this list fails, this one capability must work
 
 ### Validated
 
-Validated locally in Phases 1–4 (public release remains gated):
+Validated locally in Phases 1–5 (public release remains gated):
 
 - Open and render PDFs in the browser, including password-protected files.
 - Classify text and select server-issued text boxes before editing.
 - Replace a single run through the atomic content-stream recipe engine.
 - Subset/embed bundled fonts; change colour, bold and italic with explicit fitting/refusal.
 - Download and undo text/style edits; recover after losing the server cache.
+- Find across all pages with canonical Unicode/case/word options, context/navigation,
+  per-occurrence exclusions and visible refusals; review then apply one whole recipe
+  and undo the batch once, preserving prior text and style.
 
-Evidence: `phases/04-web-tier-walking-skeleton-hardening/04-VERIFICATION.md`.
+Evidence: `phases/04-web-tier-walking-skeleton-hardening/04-VERIFICATION.md` and
+`phases/05-find-and-replace-across-all-pages/05-G4-RESULTS.md`.
 Font-size changes are explicitly unsupported; later-phase features remain active.
 
 ### Active
 
 - [ ] Open a PDF in the browser and see its pages rendered faithfully
-- [ ] Find and replace text across all pages, editing the real content stream
 - [ ] Edit text on a single page directly (select a text run, change it)
 - [ ] Insert a blank page at any position
 - [ ] Merge another PDF into the document

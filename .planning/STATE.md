@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
-status: executing
-stopped_at: Find/preview delivered; completing bounded full-batch proof and atomic apply verification, no deployment
+status: verifying
+stopped_at: Phase 5 implemented/verified locally; literal contract-specimen G4 item pending, no deployment
 last_updated: "2026-10-24"
-last_activity: Executing Phase 5 find and replace across all pages locally
+last_activity: Delivered all six Phase 5 FIND requirements with recorded local proof and explicit specimen/release debt
 progress:
   total_phases: 8
   completed_phases: 3
@@ -14,7 +14,7 @@ progress:
 # Project State
 
 **Core value:** Replace existing PDF text while preserving the surrounding document.
-**Current focus:** Phase 05 — find and replace across all pages.
+**Current focus:** Phase 05 local work delivered; literal contract-specimen coverage pending.
 
 Phases 1–3 are complete. The Phase 3 engine and its fonts, CLI and regression gates are
 now present in this checkout; the original source worktree and local edits are preserved.
@@ -32,20 +32,33 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
 
 ## Current work
 
-- Phase 5 reviewed plans are committed in `e23512b`; local implementation is active.
-- Plans 05-02 and 05-03 are delivered with committed summaries. Canonical Unicode
-  projection, current-recipe matching, per-occurrence exclusions, resumable indexing,
-  exact preview, panel and page/run navigation are implemented.
+- Phase 5 implementation is delivered: canonical Unicode projection, current-recipe
+  matching, individual exclusions, resumable indexing, exact preview, source-box
+  navigation, one atomic full-recipe apply and one whole-batch undo.
+- All four plans have implementation summaries. All six FIND requirements are
+  complete locally; formal phase G4 retains one literal-specimen verification item.
 - Local Firefox observations: 40/40 pages indexed; `the` gives 1,029 default
   matches, 851 whole-word matches and 723 whole-word case-sensitive matches.
   Excluding one of two instances in a run preserves the other; the actual page/run
   highlight follows navigation at 115% and 200% zoom. Native browser find remains available.
-- 34 Node tests passed after the source-hash refresh regression fix. Batch apply
-  transaction work is being finalized separately; full browser apply/undo remains pending.
-- The measured 675-operation batch still exceeds CPU20 in the latest actual worker
-  run. Fresh instruction/state validation now avoids full-page glyph reconstruction;
-  further measured width-lookup optimization is in progress. Caps and fidelity guards
-  remain unchanged. Full renderer proof and final regression/review remain pending.
+- Current Chromium browser: one action changed 910 selected occurrences on 28 pages;
+  one Cmd+Z restored original text/download and all 1,029 matches. Earlier bold/color
+  survived batch undo. Font recovery, signature acknowledgement, Unicode-password
+  cache-loss recovery, failed-page retry and stale/closed-preview guards were exercised.
+- Final engine `630ca28` previews all 675 accepted operations in 18.302/18.319 CPU
+  seconds and applies them in 18.467 CPU / 18.528 wall. CPU20/default wall30 and all
+  recipe/security/fidelity limits remain unchanged. Three review blockers are resolved.
+- Complete technical-proxy G4 passed all 120 renderer pairs (28 changed pages,
+  12 unchanged); final full regression passed G4 again after the last space-width fix.
+  Client: 41 tests; build, strict typing (30 files) and Unicode data check passed.
+- Broad local regression: 556 passed, one obsolete refusal expectation failed,
+  five Linux/CDN checks deselected. Test-only correction independently proves the
+  now-safe edit and real late-layout atomic refusal; all three corrected tests pass.
+  The raw run is retained, not relabeled zero-failure. No unresolved failure remains.
+- Literal legal-contract specimen coverage remains unproven. The all-page source is
+  explicitly a public technical-document proxy; G3 release checks remain open.
+  Pending item: `phases/05-find-and-replace-across-all-pages/05-HUMAN-UAT.md`.
+  Phase 6 page operations/merge is the next independent local phase; not started here.
 
 ### Earlier Phase 4 baseline
 
@@ -61,8 +74,9 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
 
 Server-issued run addresses; one atomic recipe against immutable original bytes; no overlay
 editing; no runtime AGPL; no persistent server document/session history; browser-held
-originals recover evicted memory cache. Phase 5 full-document find/replace is the active
-local phase. Phase 6 page operations and later exports remain future work.
+originals recover evicted memory cache. Phase 5 full-document find/replace is
+delivered locally; its literal contract-specimen gate remains open. Phase 6 page
+operations and later exports remain future work.
 
 ## Decisions made during execution
 

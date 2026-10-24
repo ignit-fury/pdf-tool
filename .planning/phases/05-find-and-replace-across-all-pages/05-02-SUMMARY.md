@@ -70,7 +70,12 @@ completed: 2026-10-22
 
 ## Issues Encountered
 
-Concurrent engine page-scope regression above remains assigned to its owner. Entire suite execution and final browser/build verification belong to the orchestrator after all wave changes settle. No deployment occurred; Phase 4 Linux/container/CDN release gates remain open.
+The concurrent engine page-scope regression above was historical and is resolved
+by the completed 05-01 integration. Both `test_planning_indexes_only_recipe_pages`
+parametrizations passed in the final applicable broad suite against `630ca28`.
+The orchestrator's final client suite passed 41 tests, with production build,
+strict typing and browser verification recorded in 05-G4-RESULTS. No deployment
+occurred; Phase 4 Linux/container/CDN release gates remain open.
 
 ## Self-Check: PASSED
 

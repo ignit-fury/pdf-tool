@@ -1,6 +1,6 @@
 # PDF Tool
 
-A browser-based PDF editor that edits the **actual existing content** of a PDF — replacing text inside the page's content stream rather than pasting annotations or white boxes on top. The current browser milestone supports opening a PDF, selecting existing text, replacing it, changing colour or font style, undoing changes and downloading the edited PDF. Full-document find/replace, page operations and format conversions are planned later milestones. It is aimed at people who need to change a document that already exists and want the result to look untouched.
+A browser-based PDF editor that edits the **actual existing content** of a PDF — replacing text inside the page's content stream rather than pasting annotations or white boxes on top. The current browser supports opening a PDF, editing individual text runs, finding and replacing text across all pages, changing colour or font style, undoing changes and downloading the edited PDF. Page operations and format conversions are planned later milestones. It is aimed at people who need to change a document that already exists and want the result to look untouched.
 
 It is a real product for other people, used anonymously — no signup to edit a file.
 
@@ -70,6 +70,8 @@ GPL/LGPL permitted only as a subprocess with a file-in/file-out interface (GPL t
 
 Phase 3's rewrite engine is integrated into this checkout. Phase 4 implements a browser
 viewer and single-run editor with text/style preview, PDF download and recipe-level undo.
+Phase 5 adds all-page search, per-occurrence exclusions, exact replacement review,
+one atomic batch apply and one-step undo through the same content-stream engine.
 The editor uses the actual content stream. Unsupported edits are refused explicitly.
 
 Implemented: password-protected PDFs, signature warnings, server-issued edit boxes,
@@ -81,7 +83,7 @@ following text's position; they do not need to be stretched to the original widt
 Edits using stateful quote operators or unsupported Unicode shaping are also refused to
 preserve layout and searchable text. Precomposed accents such as `é` remain supported.
 
-Full-document find/replace, page operations, format exports and built-in OCR are later
+Page operations, format exports and built-in OCR are later
 milestones. The current screen links to OCRmyPDF's external guide without uploading the
 PDF there. The OCR interest counter collects no document or contact data.
 
@@ -102,6 +104,19 @@ Open <http://127.0.0.1:8000>. The FastAPI service serves the built client and al
 assets on the same origin. Select a text run, preview its fit, then apply and download.
 Undo restores the previous whole recipe, including text and style. Repeated edits to
 one run replace that run's operation instead of creating duplicate addresses.
+
+Choose **Find and replace** to index every page. Search defaults to case-insensitive
+substring matching; Match case and Unicode whole-word options are available. Results
+show page/context and individual inclusion checkboxes. Unreplaceable occurrences stay
+visible with their reasons. Stop/resume and failed-page retry preserve honest partial
+counts; replacements require a complete index.
+
+Enter replacement text, optionally choose a fallback font, then select **Preview
+replacements**. The exact remaining full recipe must pass the server's fit checks
+before **Replace** becomes available. Empty replacement removes included matches and
+shows a warning. One Undo or Ctrl/Cmd+Z outside text inputs restores the entire batch,
+including earlier text/style choices. Search is local over the server-produced index;
+indexing, preview and text replacement use the server.
 
 For frontend development, run the API on port 8000 and `npm run dev` in `client/`;
 Vite proxies API routes. Opening a file uploads it for analysis; rendering and download
@@ -155,14 +170,20 @@ original bytes, and stale source hashes are refused.
 uv run --frozen pytest -q
 uv run --frozen mypy engine/ server/
 uv run --frozen python tools/license_gate.py
-node --test client/src/session.test.mjs
+npm --prefix client test
+npm --prefix client run build
+uv run --frozen python tools/build_search_unicode.py --check
 ```
 
 Full corpus checks require `qpdf`, `pdftoppm` and `mutool`; these test renderers belong
 only in CI/dev. The OpenType Sanitizer dev wheel supplies the font gate executable.
 `Dockerfile.ci` provides pinned renderer versions. Linux-only tests are explicit skips
 on macOS; live CDN tests require `PDF_TOOL_DEPLOYMENT_URL`. Browser journey evidence
-and remaining release checks are recorded in the Phase 4 verification report.
+and remaining release checks are recorded in the Phase 4 verification report. Phase 5
+local batch/browser evidence is in
+[05-G4-RESULTS.md](.planning/phases/05-find-and-replace-across-all-pages/05-G4-RESULTS.md).
+Its 40-page public technical-document proxy does not establish literal contract-source
+coverage. No deployment or public-release sign-off is implied.
 
 ## Corpus testing
 

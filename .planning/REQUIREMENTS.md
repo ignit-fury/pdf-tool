@@ -58,12 +58,17 @@ this one component.
 Two features, not one. Find needs the visible-text index; replace needs the inverse map back to
 operator byte-spans plus width recalculation.
 
-- [ ] **FIND-01**: User can search text across all pages, with the same normalization the interpreter used — intra-word TJ adjustments collapsed, ligatures normalized
-- [ ] **FIND-02**: Search defaults to case-insensitive substring, with "match case" and "whole words only" toggles
-- [ ] **FIND-03**: Matches are listed with page number, surrounding context, and a live count, and clicking a match jumps to it
-- [ ] **FIND-04**: User can opt out of individual matches before applying
-- [ ] **FIND-05**: Unreplaceable matches appear in the same list, disabled, with the reason shown — never silently filtered out
-- [ ] **FIND-06**: User can replace all remaining matches across every page in one action
+- [x] **FIND-01**: User can search text across all pages, with the same normalization the interpreter used — intra-word TJ adjustments collapsed, ligatures normalized
+- [x] **FIND-02**: Search defaults to case-insensitive substring, with "match case" and "whole words only" toggles
+- [x] **FIND-03**: Matches are listed with page number, surrounding context, and a live count, and clicking a match jumps to it
+- [x] **FIND-04**: User can opt out of individual matches before applying
+- [x] **FIND-05**: Unreplaceable matches appear in the same list, disabled, with the reason shown — never silently filtered out
+- [x] **FIND-06**: User can replace all remaining matches across every page in one action
+
+Validated locally in Phase 5. Literal 40-page legal-contract specimen coverage and
+the deferred Phase 4 public-release checks remain open; completed FIND requirements
+do not imply those broader gates passed. See `05-G4-RESULTS.md` and `05-VERIFICATION.md`
+in `phases/05-find-and-replace-across-all-pages/`.
 
 ### Fonts and Formatting
 
@@ -230,12 +235,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EDIT-01 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
 | EDIT-05 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
 | FONT-07 | Phase 4 — Web Tier Walking Skeleton + Hardening | Pending |
-| FIND-01 | Phase 5 — Find and Replace Across All Pages | Pending |
-| FIND-02 | Phase 5 — Find and Replace Across All Pages | Pending |
-| FIND-03 | Phase 5 — Find and Replace Across All Pages | Pending |
-| FIND-04 | Phase 5 — Find and Replace Across All Pages | Pending |
-| FIND-05 | Phase 5 — Find and Replace Across All Pages | Pending |
-| FIND-06 | Phase 5 — Find and Replace Across All Pages | Pending |
+| FIND-01 | Phase 5 — Find and Replace Across All Pages | Complete locally |
+| FIND-02 | Phase 5 — Find and Replace Across All Pages | Complete locally |
+| FIND-03 | Phase 5 — Find and Replace Across All Pages | Complete locally |
+| FIND-04 | Phase 5 — Find and Replace Across All Pages | Complete locally |
+| FIND-05 | Phase 5 — Find and Replace Across All Pages | Complete locally |
+| FIND-06 | Phase 5 — Find and Replace Across All Pages | Complete locally |
 | PAGE-01 | Phase 6 — Page Ops and Merge | Pending |
 | PAGE-02 | Phase 6 — Page Ops and Merge | Pending |
 | PAGE-03 | Phase 6 — Page Ops and Merge | Pending |

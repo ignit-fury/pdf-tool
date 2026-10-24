@@ -30,7 +30,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Text Model** - The keystone: content-stream interpreter with per-glyph provenance, plus per-page and per-run editability classification (completed 2026-08-17)
 - [x] **Phase 3: Rewrite Engine + Font Pipeline** - Replace text with correct widths AND subset/embed a bundled font in one phase — the project gate (completed 2026-08-28; Gate G2b GO, see `phases/03-rewrite-engine-font-pipeline/G2B-GATE-RESULTS.md`)
 - [ ] **Phase 4: Web Tier Walking Skeleton + Hardening** - Implemented and verified locally 2026-10-21; Linux/container/CDN public-release gates pending (see 04-VERIFICATION.md)
-- [ ] **Phase 5: Find and Replace Across All Pages** - The core value in its user-facing form: match list and preview first, apply second
+- [ ] **Phase 5: Find and Replace Across All Pages** - All six FIND requirements implemented and verified locally; literal contract-specimen G4 coverage pending (05-VERIFICATION.md)
 - [ ] **Phase 6: Page Ops and Merge** - Insert, reorder, rotate, delete, merge PDF and image — entirely in the browser, zero server round trips
 - [ ] **Phase 7: Exports** - Page images, compress, split, flatten, and text/Markdown/HTML — all consuming the one run index
 - [ ] **Phase 8: PDF/A, then DOCX** - Validator-gated PDF/A, then best-effort DOCX within a written ceiling, independently cuttable
@@ -197,16 +197,22 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Reuse verified rewrite snapshots and prove full-batch worker performance
+- [x] 05-01-PLAN.md — Reuse verified rewrite snapshots and prove full-batch worker performance
 - [x] 05-02-PLAN.md — Canonical Unicode search/provenance and per-instance full-recipe builder
 - [x] 05-03-PLAN.md — Complete-document find, opt-outs, navigation and exact replacement preview
-- [ ] 05-04-PLAN.md — Atomic replace-all, one undo and local 40-page fidelity/browser proof
+- [x] 05-04-PLAN.md — Atomic replace-all, one undo and local 40-page fidelity/browser proof
 
 **Research**: no — a client-side query over the cached index producing N ordinary overrides through the ordinary apply path. There is no `POST /find-replace`; a separate bulk endpoint means two rewrite implementations within six months.
 **Parallel**: yes — independent of Phases 6 and 7 after G3
 **UI hint**: yes
 
 *Gate G4. Find and replace are two features, not one: find needs the visible-text index, replace needs the inverse map back to operator byte-spans plus width recalculation. Build the match list and preview (FIND-01..05) before wiring apply (FIND-06) — it depends on the index, not the rewrite engine, so it demos early and de-risks the rewrite by making its inputs visible. Estimating them as one item is the most likely source of a blown estimate.*
+
+**Local execution boundary (2026-10-24):** The user deferred deployment and authorized
+Phase 5 over the delivered local Phase 4 interfaces. Full 40-page technical-document
+proof, browser apply/undo and final regression verification are delivered.
+The literal contract-specimen part of success criterion 4 remains unproven. This does
+not close G3 Linux/container/CDN release checks or authorize deployment.
 
 ### Phase 6: Page Ops and Merge
 
@@ -332,16 +338,17 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → (5 ∥ 6 ∥ 7) → 8
 | 2. Text Model | 10/10 | Complete   | 2026-08-17 |
 | 3. Rewrite Engine + Font Pipeline | 9/9 | Complete   | 2026-08-28 |
 | 4. Web Tier Walking Skeleton + Hardening | Consolidated execution | Implemented locally; release verification pending | - |
-| 5. Find and Replace Across All Pages | 2/4 | Executing locally | - |
+| 5. Find and Replace Across All Pages | 4/4 | Implemented/verified locally; contract-specimen G4 coverage pending | - |
 | 6. Page Ops and Merge | 0/TBD | Planning | - |
 | 7. Exports | 0/TBD | Planning | - |
 | 8. PDF/A, then DOCX | 0/TBD | Planning | - |
 
 **Table corrected 2026-08-30.** The rows for Phases 2 and 3 read "Not started" until this date
 while both were in fact complete — Phase 2 closed 2026-08-17 (Gate G1, `02-VERIFICATION.md`) and
-Phase 3 closed 2026-08-28 (Gate G2b, `G2B-GATE-RESULTS.md`). Phases 5–8 remain marked **Planning** (Phase 4 implementation updated 2026-10-21)
-because their `CONTEXT.md`, `RESEARCH.md`, and `VALIDATION.md` artifacts exist; plan counts stay
-`TBD` until each phase's planner runs.
+Phase 3 closed 2026-08-28 (Gate G2b, `G2B-GATE-RESULTS.md`). Phases 6–8 remain
+in planning because context/research/validation artifacts exist; their plan counts
+stay `TBD` until planning runs. Phase 5 now has four delivered local plans, with
+literal contract-specimen G4 verification retained separately.
 
 **Branch state updated 2026-10-21.** Phase 3 source/fonts/tests and Phase 4–8 planning artifacts
 are integrated into this checkout. The original worktree and local edits are preserved. Phase 4

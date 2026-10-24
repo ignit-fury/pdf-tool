@@ -1,140 +1,109 @@
 ---
 phase: 5
 slug: find-and-replace-across-all-pages
-status: draft
+status: local-validation-complete
 nyquist_compliant: false
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-08-31
-updated: 2026-10-22
+updated: 2026-10-24
 ---
 
-# Phase 5 — Validation Strategy
+# Phase 5 — Validation Record
 
-This refresh follows `05-RESEARCH-UPDATE.md` and the current delivered Phase 4 contracts. Planner must assign the proposed test files to tasks. Feature tests and G4 are pending; current baseline tests passing do not make this phase compliant. [VERIFIED: current tests and phase implementation state]
+Implementation, focused tests, code review and the complete technical-document G4
+proof are delivered. The final applicable regression against `630ca28` is complete;
+one obsolete test expectation was corrected with independent evidence and rerun.
+This record distinguishes automated proof, agent-operated browser
+observations and deferred release/specimen coverage.
+Formal whole-phase validation sign-off remains open for the literal contract
+specimen item; the local implementation and test coverage below are delivered.
 
-## Test Infrastructure
+## Requirement Coverage
 
-| Property | Value |
-|---|---|
-| Python | pytest 9.1.1, existing `pyproject.toml` configuration. [VERIFIED: installed version/config] |
-| Client | Node 22.23.2 built-in test runner; existing `client/src/session.test.mjs` has 12 passing tests. No Vitest/Jest install. [VERIFIED: node --test run] |
-| Existing focused baseline | `.venv/bin/python -m pytest -q tests/test_recipe_page_scope.py tests/test_preview_layout_guard.py tests/test_unicode_edit_refusal.py tests/test_shaping_safety.py tests/test_recipe.py` — 46 passed in 3.39s. [VERIFIED: research run] |
-| Current client baseline | `node --test client/src/session.test.mjs` — 12 passed. [VERIFIED: research run] |
-| Future quick Python | `.venv/bin/python -m pytest -q -m "not corpus" tests/test_find_normalize_parity.py tests/test_find_replace_recipe.py tests/test_recipe_page_scope.py tests/test_preview_layout_guard.py tests/test_recipe.py` |
-| Future quick client | `node --test client/src/session.test.mjs client/src/find/*.test.mjs` |
-| Build | `npm --prefix client run build`; prove shared JSON imported from engine outside client root works. |
-| Full phase | `.venv/bin/python -m pytest -q -m "not linux_only and not cdn"` + client tests + build + `.venv/bin/python -m mypy engine/ server/` |
-| Release gates | Existing Linux isolation/container and configured CDN checks remain pending; do not deploy during Phase 5. [VERIFIED: CONTEXT execution amendment] |
+| Requirement | Actual executable evidence | Browser/evidence link |
+|---|---|---|
+| FIND-01 | `tests/test_find_normalize_parity.py`; exhaustive generated Unicode 15.1 data check; `client/src/find/indexing.test.mjs` proves successful/empty pages, failed-page retry, stop/resume, disposal and late-result guards | 40/40 public-proxy pages; partial/stop/resume on 126-page IRS source |
+| FIND-02 | `client/src/find/search.test.mjs`: literal case-insensitive default, case option, Unicode words/CJK, full-fold expansion, grapheme and UTF-16 boundaries | Firefox default 1,029 / whole-word 851 / whole-word case-sensitive 723 |
+| FIND-03 | Search tests retain page/context, stable occurrence identities and exact source fragment navigation, including repeated shared operator IDs | Actual source-box highlight at 115%/200%; result pagination and focus recorded in G4 results |
+| FIND-04 | `client/src/find/buildRecipe.test.mjs`; real Node/API integration excludes one occurrence in an otherwise edited run, preserving prior recipe order/style | Three `l` matches in one run, one opt-out, two applied; complete G4 also retains one individual occurrence |
+| FIND-05 | Search tests retain partial normalization matches locked; preview tests retain classification/runtime failures and require another exact preview after filtering; real API fit/font/source refusals | Actual too-wide disabled row; automatic unknown-font refusal and successful explicit Serif recovery |
+| FIND-06 | `client/src/find/replaceAll.test.mjs`; real HTTP tests; strict 675-operation worker preview/apply; all-page G4 verifies requested Unicode, anchors, untouched instructions, style, opt-out, source immutability and renderers | One action/one Undo; prior bold/color retained; native input undo; signature and encrypted-source recovery |
 
-Future commands are implementation acceptance targets, not claims those files exist. Keep the fast tests under 30 seconds per targeted invocation; the real corpus renderer gate is deliberately separate. `uv run --frozen` currently fails on this sandbox's external cache; local `.venv` is available. [VERIFIED: tool probes]
+All referenced test files exist and are included in the shipped test discovery.
+Commands use the existing Python virtual environment and Node test runner; no
+runtime dependency or test framework was added.
 
-## Phase Requirements → Test Map
+## Final Commands and Current Results
 
-| Req ID | Required proof | Type / proposed file | Command | Exists? |
-|---|---|---|---|---|
-| FIND-01 | Shared versioned NFKD/fullfold, no second TJ gap rules; original text unchanged | Python + JS parity, `tests/test_find_normalize_parity.py` | `.venv/bin/python -m pytest -q tests/test_find_normalize_parity.py -x` | ❌ |
-| FIND-01 | All Unicode scalar mappings plus adversarial sequences; generated artifact fresh | Generator and parity | `.venv/bin/python tools/build_search_unicode.py --check` + parity row above | ❌ |
-| FIND-01 | All pages requested with queue limit 2; failed page retained/retryable; partial count never complete; abort/document replacement blocks late rows | Node, `client/src/find/search.test.mjs` / `replaceAll.test.mjs` | `node --test client/src/find/*.test.mjs` | ❌ |
-| FIND-02 | Insensitive substring default; match-case changes result; Unicode fullfold includes ß/SS, sigma variants; no accent stripping | Node, `search.test.mjs` | `node --test client/src/find/search.test.mjs` | ❌ |
-| FIND-02 | Whole words uses native Unicode boundaries for accented/Greek/combining/CJK text, underscore/apostrophe and astral prefix; unsupported Segmenter is explicit | Node + recorded browsers | `node --test client/src/find/search.test.mjs` | ❌ |
-| FIND-03 | Page/context/count data, effective current recipe text and stable match identity | Node, `search.test.mjs` | `node --test client/src/find/search.test.mjs` | ❌ |
-| FIND-03 | Click result goes to matching page/run and highlights correct source context after prior edit | Recorded browser journey | `05-G4-RESULTS.md` dated evidence | ❌ |
-| FIND-04 | Individual opt-out, including two matches in one run; unchanged instance preserved; one op per run; existing style/other ops preserved | Node, `buildRecipe.test.mjs` | `node --test client/src/find/buildRecipe.test.mjs` | ❌ |
-| FIND-05 | Full ligature/casefold expansion replaceable; partial expansion visible disabled; decomposed marks/surrogate halves not lost | Node + Python projection | Client search tests + parity command | ❌ |
-| FIND-05 | Classify, fit, mapping and actual-splice refusals stay visible with engine reason; unknown reason has safe copy | Integration + Node | `.venv/bin/python -m pytest -q tests/test_find_replace_recipe.py -x` + client tests | ❌ |
-| FIND-05 | Overall failed preview's other rows not treated as validated; worker failure retains all rows; refused prior committed op blocks batch | Integration + Node, `replaceAll.test.mjs` | Same Python command + `node --test client/src/find/replaceAll.test.mjs` | ❌ |
-| FIND-06 | Filter only new requested edits; exact filtered full recipe must pass actual preview before apply; one apply/one history entry; failure preserves bytes/history | Node + worker integration | Same integration and replaceAll test commands | ❌ |
-| FIND-06 | Stale query/replacement/toggle/opt-out/recipe/document preview cannot apply; signed acknowledgment and source cache retry preserved | Node + existing web tests | Client tests + `.venv/bin/python -m pytest -q tests/test_web_contract.py tests/test_ephemerality.py -x` | Existing base; new cases ❌ |
-| FIND-06 | Snapshot optimization preserves each D04 splice check, fresh match/resolve and subset-key refusal; unrelated-page work not added | Python engine regression | `.venv/bin/python -m pytest -q tests/test_recipe.py tests/test_recipe_page_scope.py tests/test_preview_layout_guard.py tests/test_find_replace_recipe.py -x` | Existing base; new cases ❌ |
-| G4 / FIND-06 | Real 40-page source, individual opt-out, all remaining safe instances changed, actual isolated preview/apply fit existing CPU/wall/body caps | Corpus gate, `tests/test_gate_g4.py` | `.venv/bin/python -m pytest -q -m corpus tests/test_gate_g4.py -x` | ❌ |
-| G4 criterion 4 | Each changed page in all 3 renderers; no differences outside union of edited-run masks; whole-page unchanged/opt-out comparisons | Same corpus gate | Same gate command | ❌ |
-| G4 criterion 5 | Ctrl/Cmd+Z restores prior whole recipe/output/style in one step, including prior nonempty recipe | Node + recorded browser | `node --test client/src/find/replaceAll.test.mjs`; results document | ❌ |
+| Check | Command | Result |
+|---|---|---|
+| Client suite | `npm --prefix client test` | 41 passed |
+| Production build | `npm --prefix client run build` | Passed; existing large-chunk advisory remains |
+| Strict types | `.venv/bin/python -m mypy engine/ server/` | 30 source files clean |
+| Canonical data | `.venv/bin/python tools/build_search_unicode.py --check` | Unicode 15.1.0 data current |
+| Engine/fit/snapshot focused | Owned executor command in 05-01 summary | 133 passed |
+| Complete bounded workload | `.venv/bin/python -m pytest -q -s -m corpus tests/test_find_replace_performance.py -x` | Final `630ca28`: 2 passed in 59.93s; 18.302/18.319 CPU previews, 18.467 CPU apply |
+| Real batch integration + G4 | `.venv/bin/python -m pytest -q -s tests/test_find_replace_recipe.py tests/test_gate_g4.py -x` | 12 passed in 101.38s after source-TJ correction; G4 passed again in the final full suite after the space-budget fix |
+| G4 mask/control checks | `.venv/bin/python -m pytest -q tests/test_gate_g4.py -k 'mask_union or outside_change or nonvacuous' -x` | 6 passed after report-only page-count correction |
+| Full applicable local suite | `.venv/bin/python -m pytest -q -m 'not linux_only and not cdn'` | 556 passed, one obsolete refusal expectation failed; 5 release checks deselected; 1,406.65s |
+| Corrected layout/atomicity file | `.venv/bin/python -m pytest -q tests/test_preview_layout_guard.py` | 3 passed in 2.41s after test-only `1f9af02`; no production change |
 
-Rows are derived from FIND-01..06 and roadmap G4; proposed test paths are the planner's task boundaries. Existing Python/Node tests are reusable infrastructure, not feature proof. [VERIFIED: REQUIREMENTS.md; ROADMAP.md; tests]
+Final logs are under `/private/tmp/pdf-tool-phase5-*-20261024.log`.
+An interrupted pre-space-fix run is separately labeled and is not counted as the
+final regression result. The final suite was temporarily suspended during the
+large browser batch to avoid competing CPU load, then resumed unchanged. Its raw
+one-failure outcome is retained: the actual-width fix made a formerly unsafe
+corpus edit safe, invalidating an old refusal expectation. Before changing it,
+all 663 following glyphs, independent text and outside-region pixels were checked.
+The corrected file proves that safe result and a real late corrupted-TJ refusal
+with no partial output. Its three tests pass independently. The other 555 cases
+and these three corrected cases cover the current 558 selected tests; this is
+aggregate verification, not a claim the raw broad run had zero failures.
 
-## Canonical Offset Acceptance Cases
+## Acceptance Invariants
 
-Pin `engine/search.py:project_text/project_search_text`, `client/src/find/search.mjs:projectText/projectSearchText`, shared `engine/data/search-unicode-15.1.json` and `tools/build_search_unicode.py --check`. Page run `search` shape is `{version,sensitive:{text,spans},folded:{text,spans}}`; every normalized UTF-16 unit has a half-open source UTF-16 interval. [VERIFIED: agreed research contract in 05-RESEARCH-UPDATE.md]
+- The shared generated data, engine projection and browser projection agree on
+  Unicode normalization and UTF-16 source provenance. Whole ligature/case-fold
+  expansions are editable; partial expansions remain visible and locked.
+- Original server addresses and source bytes remain authoritative. Shared physical
+  addresses are visible but independently unaddressable fragments are locked.
+- Each replacement recipe contains at most one operation per run, preserving prior
+  text/font/style operations. Filtering can remove only new proposals, never prior
+  committed edits, and the exact final full recipe must pass an actual dry run.
+- Apply captures the reviewed recipe, checks session/key/generation around awaits,
+  prepares the viewer before publication and commits exactly one undo entry.
+- Every splice retains fresh interpreter, font/state/address, following-glyph and
+  source-anchor/envelope checks. Complex provenance uses the classified fallback.
+  Source TJ geometry, terminal pen and actual serialized space widths are handled
+  separately; positive word gaps and the 90% horizontal-scale floor remain guarded.
+- Limits remain CPU20, default worker wall30, recipe body 1MiB, 50,000 operations
+  and 10,000 Unicode characters per replacement. No acceptance timeout was raised.
+- All 40 proxy pages are compared in all three engines: 28 changed pages use unions
+  of individual run masks; 12 unchanged pages use no masks. All 120 same-engine
+  pairs have zero outside changes. Cross-engine antialiasing tolerance is separate.
+  Negative controls catch changes in the gap between disjoint masks and vacuous output.
 
-- Whole query `fi` in source `ﬁ` spans source `[0,1)` and is eligible; partial `f` stays visible disabled with `normalization_boundary_unreplaceable`.
-- Whole insensitive `ss` in `ß` is eligible; single `s` cannot remove only half the expansion.
-- Precomposed/decomposed canonical text compares equally; a base-only match cannot delete its combining marks. Multiple combining classes exercise stable canonical reordering and provenance.
-- An astral prefix occupies two UTF-16 source units; no surrogate is split or miscounted.
-- Repeated matching in one run, neighboring ligatures and per-instance opt-outs do not duplicate source edits.
-- Current recipe override text is projected using the exact shared data; original source text/run ID remain available and untouched.
-- Exhaustively compare generated scalar mappings with Python and sample sequence normalization; include real corpus projections without logging decoded text.
+## Browser and Coverage Boundaries
 
-These are new contract tests, not claims the helper already exists. [VERIFIED: current normalization gap and recommended contract]
+Dated actual results, browser versions and untested items are in
+`05-G4-RESULTS.md`. Observations are agent-operated local UI checks, not claimed
+user acceptance. Controller tests prove failed-page retry and deferred response
+races without manufacturing HTTP errors in the live browser.
 
-## Engine Performance and Fidelity Gate
+The immutable 40-page source is a USGS technical-document proxy, not a legal
+contract. Literal contract-specimen coverage remains unproven. Linux resource
+limits, tmpfs/seccomp/container execution and live CDN/cache verification remain
+open Phase 4 release gates. No deployment occurred or is authorized by this phase.
 
-Baseline source SHA-256: `d0a3b06606378733a2ec96cfa01e3b12c111d13059d070e3e039b751347a4529`, `govdocs1_013_013050.pdf`, 40 pages / 3,000 runs. Fixed `the` → `a` insensitive substring gives 1,029 instances in 772 run ops on 38 pages. Full ordinary preview reports 97 refusals (75 shared-operator, 22 mapping); the 675 accepted ops occupy 107,593 JSON bytes yet actual preview/apply both fail around 23s with `WORKER_FAILED` under unchanged 20s CPU cap. A direct 100-op profile yields 296 page parses and 292 PDF saves. [VERIFIED: research measurement/profile artifacts]
+## Sign-Off
 
-Before G4:
-1. Implement verified fresh snapshot reuse across `rewrite.py` and `recipe.py`; preserve current standalone rewrite behavior.
-2. Assert each successful splice compares actual current before/after sentinel at `1e-6`; same-page next op uses fresh `_match_run`, `_resolve_op`, fresh offsets and verdicts; substitution-key changes still refuse.
-3. Count real page walks/saves to demonstrate avoided duplicate work. Inject a moving-tail failure and a stale/ambiguous next-op failure to prove no shortcut passes incorrectly.
-4. Run actual isolated worker `edit` preview and apply on the full accepted batch with source IDs, unchanged caps, successful reports and no PDF returned for preview.
-5. Include an individual opt-out, not merely an opted-out run; rebuild the candidate, preview the exact final recipe and commit once. Verify opt-out text remains.
-6. Reclassify rewritten output and prove remaining eligible instances changed; verify each changed page in PDFium, Poppler and MuPDF at existing harness settings.
-7. Use separate edited-run masks or their union. Never mask the bounding rectangle spanning unrelated runs or a whole edited page. Compare unchanged pages outside any mask.
-8. Confirm source hash/bytes unchanged, no partial output on refusal, and one client undo unit.
-
-Requirements follow existing recipe/rewrite invariants; test implementation remains pending. A successful 100-op direct profile or one-op worker edit is a positive control, not a G4 pass. [VERIFIED: recipe/rewrite contracts; measured blocker]
-
-The live successful ordinary source ID is `d0a3b06606378733a2ec96cfa01e3b12c111d13059d070e3e039b751347a4529:p5:c0:o1759` for this fixed replacement. Older research's refusal fixtures may now refuse earlier due to preflight; establish each fixture's live precondition rather than weakening guards to preserve old expectations. [VERIFIED: live preview/apply; current rewrite preflight]
-
-**Literal contract-document gap:** manifest tags this 40-page source `weight_class: other`. Label its evidence a 40-page public corpus proof proxy. Do not declare literal contract-source coverage established; record this distinction in `05-G4-RESULTS.md`. Preserve public corpus sources and manifest immutability. [VERIFIED: corpus/manifest.json; phase task constraints]
-
-**Limits to preserve:** recipe 50,000 ops; 10,000 characters per new_text; 1MiB API/worker recipe body; 20s worker CPU; 30s worker default wall; request middleware default 50s. Research used explicit 40s worker allowance only. Report the actual gate timeout, never relabel it as production default or raise any cap. [VERIFIED: engine/recipe.py; server/app.py/isolation.py/worker.py]
-
-## Sampling Rate
-
-- Per task: relevant focused Python file(s) and `node --test client/src/session.test.mjs client/src/find/*.test.mjs`.
-- Per wave: all phase Python tests except the expensive corpus renderer gate; client tests, client build, strict mypy.
-- Phase gate: focused suite green, actual bounded 40-page preview/apply, full three-renderer per-page gate and dated browser journey results.
-- Release: preserve outstanding Phase 4 Linux/container/CDN gates as separate pending work; no deployment.
-
-Commands and sampling are proposed execution requirements. [VERIFIED: current workflows and execution amendment]
-
-## Wave 0 Gaps
-
-- [ ] Generate canonical data and shared projection APIs; add `tests/test_find_normalize_parity.py`.
-- [ ] Add Node `client/src/find/{search,buildRecipe,replaceAll}.test.mjs`; reuse `node:test`.
-- [ ] Add complete/partial/failed-page loading and stale-preview tests.
-- [ ] Add `tests/test_find_replace_recipe.py` covering actual preview/filter/commit and snapshot regression invariants.
-- [ ] Add `tests/test_gate_g4.py` with actual worker budget and three-renderer union-mask proof.
-- [ ] Assign `05-G4-RESULTS.md` an owning task for dated browser/coverage evidence.
-- [ ] Treat recipe/rewrite batching optimization as required implementation work before G4.
-- [ ] Add `npm test` convenience script only if useful; a new framework is unnecessary.
-
-These gaps supersede the old Vitest installation requirement. [VERIFIED: existing Node infrastructure; current phase tests absent]
-
-## Manual Browser Evidence
-
-Record date, browser version, actual result, decision and “What was not tested” in `05-G4-RESULTS.md`. [VERIFIED: Phase 4 recorded-journey precedent]
-
-| Check | Required evidence |
-|---|---|
-| All-page search | Live partial count/progress, failed-page retry, completed search distinction. |
-| Match navigation | Page/context/count, click result jump/highlight, next/previous navigation and scroll behavior. |
-| Opt-outs/refusals | Individual opt-out, disabled rows readable, unchanged match text not lost. |
-| Stale preview | Edit query/replacement/options/selection while preview runs; stale response never enables Apply. |
-| One action/one undo | Apply full filtered batch once; Ctrl/Cmd+Z returns full prior recipe, including previous single-run edit/style. |
-| Session recovery | Close/reopen while indexing or previewing; source eviction reupload; old-document results never leak into new document. |
-| Privacy/location | Local search disclosure; server preview/apply disclosure; no decoded text in logs/artifacts. |
-
-## Validation Sign-Off
-
-- [ ] FIND-01..06 each have passing implementation tests.
-- [ ] No new runtime dependency or test framework.
-- [ ] Unicode partial expansions and UTF-16 provenance safety proven.
-- [ ] Full-document completeness/failure and current recipe search proven.
-- [ ] Per-op safety/atomicity regressions stay green after optimization.
-- [ ] Actual 40-page isolated preview and commit succeed without limit changes.
-- [ ] Every changed page passes all three renderers outside exact masks; unchanged/opted-out content verified.
-- [ ] One-step undo and stale-preview/browser journeys recorded.
-- [ ] Public proxy vs literal contract coverage stated honestly.
-- [ ] Phase 4 Linux/container/CDN status retained, no deployment performed.
-
-*Research refresh baseline: 46 focused Python tests and 12 Node tests passed. Phase 5 feature/G4 validation is pending.* [VERIFIED: 2026-10-22 research execution]
+- [x] FIND-01..06 have implementation and focused test evidence.
+- [x] Shared Unicode/provenance and partial-expansion safety are tested.
+- [x] Full-document and partial/stopped/failed indexing contracts are tested.
+- [x] Complete 675-operation worker proof succeeds with unchanged limits.
+- [x] All-page three-renderer G4 passes after the source-TJ correction.
+- [x] All three code review blockers are fixed with recorded RED/GREEN evidence.
+- [x] One-step undo, native input undo and prior style preservation observed.
+- [x] Proxy/specimen and platform/release coverage boundaries are explicit.
+- [x] Final applicable regression resolved: 556 broad-run passes plus the corrected three-test layout/atomicity file; no unresolved failure.
+- [x] Final phase goal verification recorded: 15/16 truths, all six FIND requirements satisfied locally; `human_needed` only for the literal contract specimen.
