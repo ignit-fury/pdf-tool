@@ -231,8 +231,8 @@ not close G3 Linux/container/CDN release checks or authorize deployment.
 
 - [x] 06-01-PLAN.md — Local PDF primitives, whole-document history and guarded worker transactions
 - [x] 06-02-PLAN.md — Bounded HEIC conversion and resolved client license gate
-- [ ] 06-03-PLAN.md — PDF merge with shared page/form/outline references and font isolation
-- [ ] 06-04-PLAN.md — Local image decoding, resource isolation and rotated/cropped placement
+- [x] 06-03-PLAN.md — PDF merge with shared page/form/outline references and font isolation
+- [x] 06-04-PLAN.md — Local image decoding, resource isolation and rotated/cropped placement
 - [ ] 06-05-PLAN.md — Local-first workstation, page controls, mixed text/page history and lazy analysis
 - [ ] 06-06-PLAN.md — Independent three-renderer fidelity, observed browser traffic and regression proof
 
@@ -347,7 +347,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → (5 ∥ 6 ∥ 7) → 8
 | 3. Rewrite Engine + Font Pipeline | 9/9 | Complete   | 2026-08-28 |
 | 4. Web Tier Walking Skeleton + Hardening | Consolidated execution | Implemented locally; release verification pending | - |
 | 5. Find and Replace Across All Pages | 4/4 | Implemented/verified locally; contract-specimen G4 coverage pending | - |
-| 6. Page Ops and Merge | 2/6 | Executing locally; merge and images | - |
+| 6. Page Ops and Merge | 4/6 | Executing locally; workstation integration and review fixes | - |
 | 7. Exports | 0/TBD | Planning | - |
 | 8. PDF/A, then DOCX | 0/TBD | Planning | - |
 

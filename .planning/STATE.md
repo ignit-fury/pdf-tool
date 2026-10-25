@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
 status: executing
-stopped_at: Phase 6 plans 01 and 02 delivered; merge/image implementation and core/server review active, no deployment
+stopped_at: Phase 6 primitives 01 through 04 delivered; workstation integration and reproduced review fixes active, G5 pending
 last_updated: "2026-10-25"
-last_activity: Delivered tested local PDF/history/worker and HEIC/license boundaries; continuing merge and image work
+last_activity: Started local-first workstation integration after tested merge/image handoffs; fixing independent review findings
 progress:
   total_phases: 8
   completed_phases: 3
@@ -44,10 +44,17 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
   25 HTTP/privacy tests, 15 license tests, both dependency gates and strict typing.
   Production conversion fails closed until separate Linux confinement is verified;
   this local proof does not close G3 or claim Linux execution.
-- Merge and local image primitives are active; independent review of completed
-  core/server slices runs alongside them. Workstation integration and actual G5
-  network/renderer/browser proof remain pending. No PAGE requirement is marked
-  complete from pure helper tests alone.
+- Plans 06-03 and 06-04 are delivered: 18 merge/graph tests and 21 image/geometry
+  tests pass, with build and targeted qpdf/pdfcpu/render proof. Historical parallel
+  RED module failures are recorded in their summaries, not treated as final results.
+- Workstation integration (06-05) is active. It owns local opening, explicit text
+  analysis, page/import/image controls, the concrete worker and one mixed undo stack.
+- Independent core/server review reproduced three blockers (nested bundled license
+  scanning, source-tail license scanning, stream-dictionary deletion references)
+  and one preflight privacy-header warning. Owners are applying RED/GREEN fixes.
+  Review scope will extend to merge/images/integration before final verification.
+- Actual G5 network/renderer/browser proof remains pending. No PAGE requirement is
+  marked complete from pure helper tests alone; no deployment is included.
 - Baseline: 527 Python tests passed (36 deselected), 41 client tests passed.
   Actual browser RED proof caught two API requests on opening; G5 must reach zero
   through local page operations/download, not merely inspect a boolean.
