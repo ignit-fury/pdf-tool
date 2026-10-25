@@ -105,3 +105,27 @@ test('bundled source license header is independently audited', async () => fixtu
   pkg('node_modules/wrapper', { notices: { 'vendor/hidden.js': '/* SPDX-License-Identifier: GPL-3.0-only */\nexport default 1;' } });
   assert.ok((await audit()).some(f => f.code === 'FORBIDDEN_BUNDLED_LICENSE'));
 }));
+
+test('reviewed QuickJS package and name do not allow changed artifact bytes', async () => fixture(async ({ pkg, audit }) => {
+  pkg('node_modules/wrapper');
+  pkg('node_modules/pdfjs-dist', { license: 'Apache-2.0', version: '6.2.108',
+    notices: { 'wasm/quickjs-eval.wasm': Buffer.from('\0asmchanged') } });
+  assert.ok((await audit()).some(f => f.code === 'WASM_PROVENANCE_MISSING'));
+}));
+
+test('permissive-specific WASM notice is accepted and unknown notice refuses', async () => fixture(async ({ pkg, audit }) => {
+  pkg('node_modules/wrapper', { notices: { 'codec.wasm': Buffer.from('\0asm'),
+    'wasm/LICENSE_CODEC': 'Permission is hereby granted, free of charge. MIT License' } });
+  assert.deepEqual(await audit(), []);
+  pkg('node_modules/wrapper', { notices: { 'LICENSE_VENDOR': 'All uses require the secret commercial agreement.' } });
+  assert.ok((await audit()).some(f => f.code === 'UNKNOWN_BUNDLED_LICENSE'));
+}));
+
+test('applicable missing optional package fails; foreign platform absent entry is excluded', async () => fixture(async ({ pkg, lock, root, audit }) => {
+  pkg('node_modules/wrapper');
+  pkg('node_modules/optional', { optional: true, os: [process.platform] });
+  rmSync(join(root, 'node_modules/optional'), { recursive: true });
+  assert.ok((await audit()).some(f => f.code === 'MISSING_METADATA'));
+  lock.packages['node_modules/optional'].os = ['definitely-not-this-platform'];
+  assert.deepEqual(await audit(), []);
+}));

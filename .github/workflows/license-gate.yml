@@ -20,3 +20,19 @@ jobs:
 
       - name: Run AGPL/Affero license gate
         run: uv run python tools/license_gate.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install locked client closure
+        working-directory: client
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Test client license policy with forbidden negative controls
+        run: node --test tools/client_license_gate.test.mjs
+
+      - name: Audit resolved browser dependencies and bundled notices
+        run: node tools/client_license_gate.mjs
