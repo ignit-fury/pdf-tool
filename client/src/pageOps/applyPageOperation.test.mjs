@@ -51,3 +51,10 @@ test('unknown signature metadata refuses before transform; acknowledgement survi
   }
   current=prior.pop();assert.equal(current.acknowledged,true);current=prior.pop();assert.equal(current,original);
 });
+test('new signed imports carry acknowledgement only when explicitly returned, including prepared metadata',async()=>{
+  for(const acknowledged of [true,false]) {
+    let next;
+    await applyPageOperation({snapshot:snapshot(),isCurrent:()=>true,admit:()=>({ok:true}),transform:async()=>({bytes:new Uint8Array([3]),acknowledged}),prepare:async()=>({localMetadata:{signed:true}}),commit:(_,value)=>next=value});
+    assert.equal(next.acknowledged,acknowledged);
+  }
+});

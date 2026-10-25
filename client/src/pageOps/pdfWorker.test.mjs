@@ -30,3 +30,10 @@ test('already aborted and excessive copy budget allocate no worker',async()=>{
   await assert.rejects(runPdfJob({workerFactory:()=>made++,command:'inspect',payload:{bytes:new Uint8Array(50*1024*1024+1)}}),{code:'LOCAL_PDF_TOO_LARGE'});
   assert.equal(made,0);
 });
+test('caller fixed error codes preserve import refusals while unknown or invalid codes stay generic',async()=>{
+  for(const [errorCodes,code,expected] of [[['MERGE_XFA_UNSUPPORTED'],'MERGE_XFA_UNSUPPORTED','MERGE_XFA_UNSUPPORTED'],[[],'MERGE_XFA_UNSUPPORTED','PDF_JOB_FAILED'],[['secret content'],'secret content','PDF_JOB_FAILED']]) {
+    const worker=fake(),promise=runPdfJob({workerFactory:()=>worker,command:'merge',payload:{},errorCodes});
+    worker.emit('message',{id:worker.message.id,ok:false,error:{code}});
+    await assert.rejects(promise,{code:expected});assert.equal(worker.terminated,1);assert.equal(worker.listeners.size,0);
+  }
+});

@@ -131,3 +131,10 @@ test('bounded signatures reject deep field ancestry and deletion refuses unrecog
   pdf.catalog.set(PDFName.of('UnrecognizedPageTarget'),ctx.obj([pdf.getPage(0).ref,'Fit']));
   await assert.rejects(transformPages(await pdf.save(),{type:'delete',index:0}),{code:'CATALOG_UNSAFE'});
 });
+test('physical dimensions reject excessive UserUnit and finite-value multiplication overflow',async()=>{
+  const pdf=await fixture(1),page=pdf.getPage(0);
+  page.node.set(PDFName.of('UserUnit'),PDFNumber.of(Number.MAX_VALUE));
+  assert.throws(()=>describePage(pdf,0),{code:'PAGE_GEOMETRY_INVALID'});
+  page.node.set(PDFName.of('UserUnit'),PDFNumber.of(75000));page.setMediaBox(0,0,Number.MAX_VALUE,400);
+  assert.throws(()=>describePage(pdf,0),{code:'PAGE_GEOMETRY_INVALID'});
+});
