@@ -2,7 +2,7 @@ import React, {useEffect,useRef,useState} from 'react';
 import * as pdfjs from 'pdfjs-dist';
 import {viewportBox,explainReason,explainBucket} from './session.mjs';
 
-export function PageCanvas({pdf,pageNumber,scale,mode,runs,selected,onSelect,findTarget,onFindRendered}) {
+export function PageCanvas({pdf,pageNumber,scale,mode,runs,selected,onSelect,findTarget,onFindRendered,imageDraft,geometry}) {
   const canvas=useRef(null),text=useRef(null),highlight=useRef(null);
   const [viewport,setViewport]=useState(null),[error,setError]=useState(''),[rendered,setRendered]=useState(null);
   useEffect(()=>{
@@ -31,6 +31,7 @@ export function PageCanvas({pdf,pageNumber,scale,mode,runs,selected,onSelect,fin
   return <div className="paper" style={viewport?{width:viewport.width,height:viewport.height,'--scale-factor':scale,'--total-scale-factor':viewport.scale}:undefined}>
     <canvas ref={canvas} aria-label={`PDF page ${pageNumber}`}/>
     <div ref={text} className={`textLayer ${mode==='edit'?'inactive':''}`}/>
+    {viewport&&geometry&&imageDraft?.preview&&imageDraft.rect&&<canvas className="placement-preview" aria-label="Temporary image placement preview" ref={element=>{if(element&&imageDraft.preview){element.width=imageDraft.width;element.height=imageDraft.height;element.getContext('2d').drawImage(imageDraft.preview,0,0);}}} style={{left:imageDraft.rect.left/geometry.visibleWidth*viewport.width,top:imageDraft.rect.top/geometry.visibleHeight*viewport.height,width:imageDraft.rect.width/geometry.visibleWidth*viewport.width,height:imageDraft.rect.height/geometry.visibleHeight*viewport.height}}/>}
     {viewport&&mode==='edit'&&<div className="edit-layer" aria-label="Text edit targets">{runs.map(run=><button key={run.run_id} type="button" className={`run-box ${selected===run.run_id?'selected':''} ${run.state==='not_editable'?'refused':''}`} style={viewportBox(run.box,viewport)} title={`${run.text}: ${run.state==='not_editable'?explainReason(run.reason):'Edit text'}`} aria-label={`Edit text: ${run.text}`} onClick={()=>onSelect(run)}/>)}</div>}
     {viewport&&findTarget?.page===pageNumber&&findTarget.box&&<div ref={highlight} className="find-highlight" style={viewportBox(findTarget.box,viewport)} aria-label="Current search result text area"/>}
     {error&&<p className="render-error" role="alert">{error}</p>}
@@ -55,5 +56,5 @@ export function Thumbnail({pdf,number,current,badge,onSelect,onVisible}) {
     }).catch(()=>{});
     return()=>{stopped=true;render?.cancel();};
   },[pdf,number,visible,onVisible]);
-  return <button ref={root} className={`thumbnail ${current?'current':''}`} onClick={()=>onSelect(number)} aria-current={current?'page':undefined} aria-label={`Page ${number}${badge?`, ${badge}`:''}`}><div className="thumbnail-paper"><canvas ref={canvas}/></div><span>Page {number}</span><small title={badge}>{badge?explainBucket(badge):'Not classified yet'}</small></button>;
+  return <button ref={root} className={`thumbnail ${current?'current':''}`} onClick={()=>onSelect(number)} aria-current={current?'page':undefined} aria-label={`Page ${number}${badge?`, ${badge}`:''}`}><div className="thumbnail-paper"><canvas ref={canvas}/></div><span>Page {number}</span><small title={badge}>{badge?explainBucket(badge):'Page tools available'}</small></button>;
 }
