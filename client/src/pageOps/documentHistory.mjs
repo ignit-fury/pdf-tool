@@ -23,6 +23,8 @@ function cloneData(value,buffers,active=new Set()) {
 }
 /** Copy backing stores and freeze plain snapshot data. Typed arrays are read-only by ownership:
  * never mutate snapshot buffers or transfer them to workers/renderers. Opened bytes live separately.
+ * Caller MUST admit known-sized snapshot backing-store copies before calling this allocator;
+ * use original .buffer.byteLength (not a small alias view's length) and count aliases once.
  * Only whitelisted state is retained; no controllers, proxies, queues or pending work. */
 export function captureSnapshot(state) {
   const picked=Object.fromEntries(fields.filter(key=>key in state).map(key=>[key,state[key]]));
