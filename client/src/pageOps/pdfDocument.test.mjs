@@ -138,3 +138,22 @@ test('physical dimensions reject excessive UserUnit and finite-value multiplicat
   page.node.set(PDFName.of('UserUnit'),PDFNumber.of(75000));page.setMediaBox(0,0,Number.MAX_VALUE,400);
   assert.throws(()=>describePage(pdf,0),{code:'PAGE_GEOMETRY_INVALID'});
 });
+test('deletion preflights serialized stream dictionaries and preserves safe surviving page references',async()=>{
+  for(const removedTarget of [true,false]) {
+    const pdf=await fixture(2),ctx=pdf.context,target=pdf.getPage(removedTarget?0:1).ref;
+    const metadata=ctx.stream('kept',{Type:'Metadata',Subtype:'XML',PageTarget:target});
+    pdf.catalog.set(PDFName.of('Metadata'),ctx.register(metadata));
+    const bytes=await pdf.save(),original=bytes.slice(),loaded=await loadLocalPdf(bytes);
+    const sourceStream=loaded.catalog.lookup(PDFName.of('Metadata'));
+    assert.equal(String(sourceStream.dict.get(PDFName.of('PageTarget'))),String(target));
+    assert.ok(loaded.context.lookup(sourceStream.dict.get(PDFName.of('PageTarget'))));
+    if(removedTarget)await assert.rejects(transformPages(bytes,{type:'delete',index:0}),{code:'CATALOG_UNSAFE'});
+    else {
+      const result=await transformPages(bytes,{type:'delete',index:0}),output=await loadLocalPdf(result.bytes);
+      const stream=output.catalog.lookup(PDFName.of('Metadata')),pageRef=stream.dict.get(PDFName.of('PageTarget'));
+      assert.equal(output.getPageCount(),1);assert.equal(String(pageRef),String(output.getPage(0).ref));
+      assert.ok(output.context.lookup(pageRef));assert.equal(new TextDecoder().decode(stream.getContents()),'kept');
+    }
+    assert.deepEqual(bytes,original);
+  }
+});
