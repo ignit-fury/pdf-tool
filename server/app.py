@@ -88,13 +88,14 @@ async def _body(request: Request, limit: int, timeout: float = 15) -> bytes:
 def create_app(*, max_upload_bytes: int = MAX_UPLOAD_BYTES,
                cache: SourceCache | None = None, cleanup_interval: float = 1,
                max_inflight: int = 4, admission_timeout: float = 0.1,
-               body_timeout: float = 15, response_timeout: float = 15) -> FastAPI:
+               body_timeout: float = 15, response_timeout: float = 15,
+               heic_converter: Callable[[bytes], bytes] | None = None) -> FastAPI:
     sources = cache if cache is not None else SourceCache()
     slots = asyncio.Semaphore(2)
     ingress = asyncio.Semaphore(max_inflight)
-    workers: set[asyncio.Task[dict[str, object]]] = set()
+    workers: set[asyncio.Task[Any]] = set()
 
-    def worker_finished(task: asyncio.Task[dict[str, object]]) -> None:
+    def worker_finished(task: asyncio.Task[Any]) -> None:
         # Request cancellation does not cancel a running thread or child process.
         # Release capacity only when the real operation terminates.
         slots.release()
@@ -126,22 +127,20 @@ def create_app(*, max_upload_bytes: int = MAX_UPLOAD_BYTES,
     api.state.ocr_requests = 0
     origins = os.environ.get('PDF_TOOL_ALLOWED_ORIGINS',
                              'http://localhost:5173,http://127.0.0.1:5173').split(',')
-    api.add_middleware(CORSMiddleware, allow_origins=origins,
-                       allow_methods=['GET', 'POST'],
-                       allow_headers=['Content-Type', 'X-PDF-Password', 'X-PDF-Password-B64'])
-
     @api.middleware('http')
     async def privacy_headers(request: Request, call_next: Any) -> Response:
         admitted = False
+        needs_admission = (request.url.path in ('/upload', '/images/heic-decode') or
+                           request.url.path.startswith('/jobs/'))
         try:
-            if request.url.path == '/upload' or request.url.path.startswith('/jobs/'):
+            if needs_admission:
                 try:
                     await asyncio.wait_for(ingress.acquire(), timeout=admission_timeout)
                     admitted = True
                 except TimeoutError:
                     response = JSONResponse({'detail': {'code': 'WORKER_BUSY'}}, status_code=429,
                                             headers={'Retry-After': '1'})
-            if admitted or not (request.url.path == '/upload' or request.url.path.startswith('/jobs/')):
+            if admitted or not needs_admission:
                 async with asyncio.timeout(body_timeout + 35):
                     response = await call_next(request)
         except Exception:
@@ -161,6 +160,11 @@ def create_app(*, max_upload_bytes: int = MAX_UPLOAD_BYTES,
         if admitted:
             return _AdmittedResponse(response, ingress.release, response_timeout)
         return response
+
+    # CORS wraps synthesized admission/transport errors as well as route replies.
+    api.add_middleware(CORSMiddleware, allow_origins=origins,
+                       allow_methods=['GET', 'POST'],
+                       allow_headers=['Content-Type', 'X-PDF-Password', 'X-PDF-Password-B64'])
 
     def require_source(job_id: str) -> bytes:
         source = sources.get(job_id)
@@ -220,6 +224,43 @@ def create_app(*, max_upload_bytes: int = MAX_UPLOAD_BYTES,
         except ValueError:
             raise HTTPException(413, {'code': 'BODY_TOO_LARGE'}) from None
         return {**result, 'job_id': token, 'source_hash': hashlib.sha256(source).hexdigest()}
+
+    @api.post('/images/heic-decode')
+    async def heic_decode(request: Request) -> Response:
+        from server.errors import report_error
+        from server.image_conversion import (MAX_INPUT_BYTES, ImageConversionError,
+                                             convert_heic, validate_heic)
+        if request.headers.get('content-type', '').split(';')[0].lower() not in ('image/heic', 'image/heif'):
+            raise HTTPException(415, {'code': 'HEIC_CONTENT_TYPE_REQUIRED'})
+        if request.query_params or any(name in request.headers for name in ('x-pdf-password', 'x-pdf-password-b64')):
+            raise HTTPException(400, {'code': 'INVALID_HEIC'})
+        source = await _body(request, MAX_INPUT_BYTES, body_timeout)
+        try:
+            validate_heic(source)
+        except ImageConversionError as error:
+            report_error(error.code, 'heic-decode')
+            raise HTTPException(413 if error.code == 'IMAGE_LIMIT_EXCEEDED' else 400,
+                                {'code': error.code}) from None
+        try:
+            await asyncio.wait_for(slots.acquire(), timeout=0.1)
+        except TimeoutError:
+            raise HTTPException(429, {'code': 'WORKER_BUSY'}) from None
+        # Same slots, task tracking, shield and completion callback as PDF work.
+        # Disconnect/cancellation cannot release a live native worker's capacity.
+        worker = asyncio.create_task(asyncio.to_thread(heic_converter or convert_heic, source))
+        workers.add(worker)
+        worker.add_done_callback(worker_finished)
+        try:
+            result = await asyncio.shield(worker)
+        except ImageConversionError as error:
+            report_error(error.code, 'heic-decode')
+            status = {'HEIC_UNAVAILABLE': 503, 'INVALID_HEIC': 400,
+                      'IMAGE_LIMIT_EXCEEDED': 413}.get(error.code, 422)
+            raise HTTPException(status, {'code': error.code}) from None
+        except Exception:
+            report_error('IMAGE_CONVERSION_FAILED', 'heic-decode')
+            raise HTTPException(422, {'code': 'IMAGE_CONVERSION_FAILED'}) from None
+        return Response(result, media_type='image/png')
 
     @api.get('/jobs/{job_id}/status')
     async def status(job_id: str, request: Request) -> dict[str, Any]:

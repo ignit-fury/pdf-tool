@@ -10,7 +10,11 @@ ERROR_CODES = frozenset({
     "SCRATCH_UNSAFE", "WORKER_TIMEOUT", "WORKER_OUTPUT_LIMIT", "WORKER_FAILED",
     "PDF_INVALID", "PASSWORD_REQUIRED", "PASSWORD_INCORRECT", "PAGE_OUT_OF_RANGE",
     "SIGNATURE_ACKNOWLEDGEMENT_REQUIRED", "INVALID_RECIPE", "DOCUMENT_LIMIT", "PDF_CYCLE", "REQUEST_FAILED",
+    "HEIC_UNAVAILABLE", "INVALID_HEIC", "IMAGE_LIMIT_EXCEEDED",
+    "IMAGE_CONVERSION_FAILED", "IMAGE_CONVERSION_TIMEOUT",
 })
+# PDF worker actions stay separate: accepting heic-decode here would make it a
+# valid action in the PDF transport. Only reporting accepts the image action.
 ACTIONS = frozenset({"inspect", "page", "edit", "plan"})
 
 
@@ -24,7 +28,7 @@ def report_error(code: str, action: str) -> None:
     if _reporter is None:
         return
     event = {"code": code if code in ERROR_CODES else "WORKER_FAILED",
-             "action": action if action in ACTIONS or action == "http" else "unknown"}
+             "action": action if action in ACTIONS or action in ("http", "heic-decode") else "unknown"}
     try:
         _reporter(event)
     except Exception:
