@@ -68,15 +68,18 @@ function supports(values, actual) {
   return positive.length === 0 || positive.includes(actual) || positive.includes('any');
 }
 
-function filesBelow(root) {
+function filesBelow(root, separatelyAuditedRoots) {
   const files = [];
   function walk(directory, depth = 0) {
     if (depth > 32 || files.length > 20000) throw Error('scan limit');
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      if (entry.name === 'node_modules') continue; // Audited at its own lock entry.
       const file = resolve(directory, entry.name);
       if (entry.isSymbolicLink()) throw Error('unreviewed symlink');
-      if (entry.isDirectory()) walk(file, depth + 1);
+      // Only an exact independent runtime lock root may be skipped. Vendored
+      // dist/node_modules and unlisted children must remain in this bundle scan.
+      if (entry.isDirectory()) {
+        if (!separatelyAuditedRoots.has(file)) walk(file, depth + 1);
+      }
       else if (entry.isFile()) files.push(file);
       else throw Error('unsupported file');
     }
@@ -99,6 +102,9 @@ export function auditClientClosure({ lockPath, modulesRoot }) {
   const entries = Object.entries(lock.packages).filter(([path, entry]) => path && entry.dev !== true);
   const runtime = new Set(entries.map(([path]) => path));
   const pathPattern = /^(?:node_modules\/(?:@[A-Za-z0-9_.-]+\/)?[A-Za-z0-9_.-]+)(?:\/node_modules\/(?:@[A-Za-z0-9_.-]+\/)?[A-Za-z0-9_.-]+)*$/;
+  const separatelyAuditedRoots = new Set(entries.filter(([path]) => pathPattern.test(path) &&
+    !path.split('/').some(part => part === '.' || part === '..'))
+    .map(([path]) => resolve(modules, path.slice('node_modules/'.length))));
 
   function dependencyPath(from, name) {
     if (!/^(?:@[A-Za-z0-9_.-]+\/)?[A-Za-z0-9_.-]+$/.test(name)) return null;
@@ -151,7 +157,7 @@ export function auditClientClosure({ lockPath, modulesRoot }) {
       add(name, lockPath, 'UNREVIEWED_SOURCE');
     }
     let files;
-    try { files = filesBelow(directory); }
+    try { files = filesBelow(directory, separatelyAuditedRoots); }
     catch { add(name, lockPath, 'BUNDLE_SCAN_FAILED'); continue; }
     const notices = [];
     for (const file of files) {
@@ -160,9 +166,9 @@ export function auditClientClosure({ lockPath, modulesRoot }) {
       if (!isNotice && !isSource) continue;
       if (lstatSync(file).size > 8 * 1024 * 1024) { add(name, lockPath, 'BUNDLE_SCAN_LIMIT'); continue; }
       const text = readFileSync(file, 'utf8');
-      // Source headers (including SPDX) are independent bundled license evidence.
-      const evidence = isNotice ? text : text.slice(0, 65536);
-      if (COPYLEFT.test(evidence)) add(name, relative(directory, file), 'FORBIDDEN_BUNDLED_LICENSE');
+      // Inspect the complete bounded file: concatenated components can have
+      // their own license headers anywhere, including after an MIT component.
+      if (COPYLEFT.test(text)) add(name, relative(directory, file), 'FORBIDDEN_BUNDLED_LICENSE');
       if (isNotice) {
         if (!PERMISSIVE_NOTICE.test(text)) add(name, relative(directory, file), 'UNKNOWN_BUNDLED_LICENSE');
         notices.push({ file, text });

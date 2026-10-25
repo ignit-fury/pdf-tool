@@ -21,7 +21,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.types import Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from server.cache import SourceCache
 from server.disclosure import operation_location
@@ -32,6 +32,33 @@ CSP = ("default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'se
        "style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; "
        "font-src 'self' blob:; connect-src 'self'; object-src 'none'; "
        "base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+_PRIVACY_HEADERS = (
+    (b'cache-control', b'no-store, private'),
+    (b'content-security-policy', CSP.encode('ascii')),
+    (b'x-content-type-options', b'nosniff'),
+    (b'referrer-policy', b'no-referrer'),
+    (b'x-frame-options', b'DENY'),
+)
+
+
+class _PrivacyHeaders:
+    """Wrap CORS as well as admission so short-circuit replies keep policy.
+
+    This send wrapper leaves streaming/backpressure and cancellation ownership
+    with the admitted response; it never reads a request or buffers a response.
+    """
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        async def send_with_headers(message: Message) -> None:
+            if message['type'] == 'http.response.start':
+                names = {name for name, _ in _PRIVACY_HEADERS}
+                headers = [(name, value) for name, value in message.get('headers', [])
+                           if name.lower() not in names]
+                message = {**message, 'headers': headers + list(_PRIVACY_HEADERS)}
+            await send(message)
+        await self.app(scope, receive, send_with_headers)
 
 
 class _AdmittedResponse(StreamingResponse):
@@ -128,7 +155,7 @@ def create_app(*, max_upload_bytes: int = MAX_UPLOAD_BYTES,
     origins = os.environ.get('PDF_TOOL_ALLOWED_ORIGINS',
                              'http://localhost:5173,http://127.0.0.1:5173').split(',')
     @api.middleware('http')
-    async def privacy_headers(request: Request, call_next: Any) -> Response:
+    async def admission_and_lifetime(request: Request, call_next: Any) -> Response:
         admitted = False
         needs_admission = (request.url.path in ('/upload', '/images/heic-decode') or
                            request.url.path.startswith('/jobs/'))
@@ -152,11 +179,6 @@ def create_app(*, max_upload_bytes: int = MAX_UPLOAD_BYTES,
             if admitted:
                 ingress.release()
             raise
-        response.headers['Cache-Control'] = 'no-store, private'
-        response.headers['Content-Security-Policy'] = CSP
-        response.headers['X-Content-Type-Options'] = 'nosniff'
-        response.headers['Referrer-Policy'] = 'no-referrer'
-        response.headers['X-Frame-Options'] = 'DENY'
         if admitted:
             return _AdmittedResponse(response, ingress.release, response_timeout)
         return response
@@ -165,6 +187,7 @@ def create_app(*, max_upload_bytes: int = MAX_UPLOAD_BYTES,
     api.add_middleware(CORSMiddleware, allow_origins=origins,
                        allow_methods=['GET', 'POST'],
                        allow_headers=['Content-Type', 'X-PDF-Password', 'X-PDF-Password-B64'])
+    api.add_middleware(_PrivacyHeaders)
 
     def require_source(job_id: str) -> bytes:
         source = sources.get(job_id)
