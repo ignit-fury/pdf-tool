@@ -1,4 +1,4 @@
-import {PDFName,PDFDict,PDFArray,PDFStream,PDFString,PDFHexString,PDFRef,PDFNumber} from '@cantoo/pdf-lib';
+import {PDFName,PDFDict,PDFArray,PDFStream,PDFString,PDFHexString,PDFRef,PDFNumber,PDFNull} from '@cantoo/pdf-lib';
 import {pdfError,GRAPH_MAX_DEPTH,GRAPH_MAX_NODES} from './pdfDocument.mjs';
 
 const n=PDFName.of;
@@ -62,6 +62,10 @@ function scanGraph(pdf) {
     if(d) {
       if(d.has(n('XFA')))fail('MERGE_XFA_UNSUPPORTED');
       if(d.has(n('AA'))||d.has(n('JS'))||d.has(n('JavaScript')))fail('MERGE_ACTION_UNSUPPORTED');
+      if(d.has(n('A'))) {
+        const action=get(pdf,d,'A');
+        if(action instanceof PDFDict&&action.has(n('S'))&&(!['GoTo','URI'].some(key=>get(pdf,action,'S')===n(key))||action.has(n('Next'))))fail('MERGE_ACTION_UNSUPPORTED');
+      }
       const action=get(pdf,d,'S');
       if(action instanceof PDFName&&!['GoTo','URI','Transparency','Luminosity','Alpha'].some(key=>action===n(key))) {
         // /S also identifies benign structure elements; only actual action dictionaries are constrained here.
@@ -81,7 +85,7 @@ function appearanceResources(pdf,field,kids,inherited) {
   // Some producers (including cantoo) keep font resources only in AP. Recover
   // missing default fonts only when all appearances agree on the same object.
   const found=new Map(),baseFonts=get(pdf,inherited,'Font');
-  const stream=raw=>{
+  const stream=(raw,depth=0)=>{
     const value=resolve(pdf,raw);
     if(value instanceof PDFStream) {
       const resources=safeResources(pdf,value.dict.get(n('Resources'))),fonts=get(pdf,resources,'Font');
@@ -89,7 +93,7 @@ function appearanceResources(pdf,field,kids,inherited) {
         if(baseFonts?.has(key))continue;
         if(found.has(key)&&resolve(pdf,found.get(key))!==resolve(pdf,font))fail('MERGE_RESOURCES_UNSAFE');found.set(key,font);
       }
-    }else if(value instanceof PDFDict)for(const [,child] of value.entries())stream(child);
+    }else if(value instanceof PDFDict&&depth===0)for(const [,child] of value.entries())stream(child,depth+1);
     else fail('MERGE_AP_UNSAFE');
   };
   for(const candidate of [field,...kids.map(raw=>dict(pdf,raw))]) {
@@ -102,7 +106,10 @@ function appearanceResources(pdf,field,kids,inherited) {
 
 function collectFields(pdf) {
   const acroRaw=pdf.catalog.get(n('AcroForm'));
-  if(!acroRaw)return {acro:undefined,fields:[],roots:[],names:[]};
+  if(!acroRaw) {
+    for(const page of pdf.getPages())for(const ref of page.node.Annots()?.asArray()??[])if(get(pdf,dict(pdf,ref),'Subtype')===n('Widget'))fail('MERGE_FIELD_GRAPH_UNSAFE');
+    return {acro:undefined,fields:[],roots:[],names:[]};
+  }
   const acro=dict(pdf,acroRaw,'MERGE_FIELD_GRAPH_UNSAFE'),fields=[],names=[],seen=new Set(),members=new Map();
   for(const page of pdf.getPages())for(const ref of page.node.Annots()?.asArray()??[]) {
     const annot=dict(pdf,ref);
@@ -118,7 +125,7 @@ function collectFields(pdf) {
     const full=part?[...path,part]:path;
     ft=get(pdf,field,'FT')??ft;dr=safeResources(pdf,field.get(n('DR')))??dr;da=field.get(n('DA'))??da;
     if(ft&&!['Tx','Btn','Ch','Sig'].some(type=>ft===n(type)))fail('MERGE_FIELD_TYPE_UNSUPPORTED');
-    if(field.has(n('Parent'))&&resolve(pdf,field.get(n('Parent')))!==parent)fail('MERGE_FIELD_GRAPH_UNSAFE');
+    if(parent&&resolve(pdf,field.get(n('Parent')))!==parent||!parent&&field.has(n('Parent')))fail('MERGE_FIELD_GRAPH_UNSAFE');
     const kids=field.has(n('Kids'))?array(pdf,field.get(n('Kids')),'MERGE_FIELD_GRAPH_UNSAFE'):[];
     dr=appearanceResources(pdf,field,kids,dr);
     const widget=get(pdf,field,'Subtype')===n('Widget');
@@ -169,7 +176,8 @@ function collectDestinations(pdf) {
   const pageRefs=new Set(pdf.getPages().map(page=>page.ref.toString()));
   const destination=(raw,trail=new Set())=>{
     const value=resolve(pdf,raw);
-    if(value instanceof PDFDict)return destination(value.get(n('D')),trail);
+    if(trail.size>GRAPH_MAX_DEPTH)fail('MERGE_GRAPH_LIMIT');
+    if(value instanceof PDFDict) {if(trail.has(value))fail('MERGE_DESTINATION_UNSAFE');trail.add(value);return destination(value.get(n('D')),trail);}
     const key=text(value);
     if(key!==undefined) {
       if(trail.has(key)||!named.has(key))fail('MERGE_DESTINATION_UNSAFE');trail.add(key);return destination(named.get(key),trail);
@@ -178,6 +186,12 @@ function collectDestinations(pdf) {
     const mode=resolve(pdf,value.get(1));
     const lengths={XYZ:5,Fit:2,FitH:3,FitV:3,FitR:6,FitB:2,FitBH:3,FitBV:3};
     if(!(mode instanceof PDFName)||lengths[mode.decodeText()]!==value.size())fail('MERGE_DESTINATION_UNSAFE');
+    for(let i=2;i<value.size();i++) {
+      const coordinate=resolve(pdf,value.get(i));
+      if(coordinate===PDFNull&&mode!==n('FitR'))continue;
+      if(!(coordinate instanceof PDFNumber)||!Number.isFinite(coordinate.asNumber()))fail('MERGE_DESTINATION_UNSAFE');
+      if(mode===n('XYZ')&&i===4&&coordinate.asNumber()<0)fail('MERGE_DESTINATION_UNSAFE');
+    }
     return value;
   };
   for(const value of named.values())destination(value);

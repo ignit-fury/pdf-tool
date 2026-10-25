@@ -147,3 +147,27 @@ test('an existing DR alias cannot collide with the independent imported resource
   assert.equal(preflight.prefix,'import_2');
   assert.equal(pdf.getForm().getTextField('import_2.unique').getText(),'kept value');
 });
+
+test('ambiguous destination/AP cycles, unknown actions and orphan widgets refuse with named errors',async()=>{
+  const {preflightMergeGraph}=await import('./mergeGraph.mjs');
+  for(const kind of ['destination','appearance','action','orphan']) {
+    const pdf=await forms(),ctx=pdf.context;
+    if(kind==='destination') {
+      const loop=ctx.obj({}),ref=ctx.register(loop);loop.set(n('D'),ref);
+      pdf.catalog.set(n('Dests'),ctx.obj({loop:ref}));
+    }
+    if(kind==='appearance') {
+      const widget=pdf.getForm().getTextField('customer.name').acroField.getWidgets()[0].dict;
+      const loop=ctx.obj({}),ref=ctx.register(loop);loop.set(n('loop'),ref);widget.set(n('AP'),ctx.obj({N:ref}));
+    }
+    if(kind==='action')pdf.getPage(0).node.addAnnot(ctx.register(ctx.obj({Subtype:'Link',Rect:[0,0,10,10],A:{S:'UnknownAction'}})));
+    if(kind==='orphan')pdf.catalog.delete(n('AcroForm'));
+    assert.throws(()=>preflightMergeGraph(pdf),error=>/^MERGE_/.test(error.code??''),kind);
+  }
+});
+
+test('graph node budget counts repeated primitive entries instead of only distinct objects',async()=>{
+  const {preflightMergeGraph}=await import('./mergeGraph.mjs');const pdf=await PDFDocument.create();pdf.addPage();
+  pdf.catalog.set(n('Probe'),pdf.context.obj(Array(100001).fill(0)));
+  assert.throws(()=>preflightMergeGraph(pdf),{code:'MERGE_GRAPH_LIMIT'});
+});

@@ -48,6 +48,7 @@ test('explicit normalization fits rotated cropped physical coordinates and trans
   page.setMediaBox(-50,-50,500,500);page.setCropBox(10,20,100,200);page.setRotation(degrees(90));page.node.set(n('UserUnit'),ctx.obj(2));
   page.drawRectangle({x:10,y:20,width:100,height:200});
   const field=source.getForm().createTextField('entry');field.setText('value');field.addToPage(page,{x:20,y:40,width:30,height:10,borderWidth:0});
+  field.setFontSize(12);
   const annotation=field.acroField.getWidgets()[0].dict;annotation.set(n('Rect'),ctx.obj([20,40,50,50]));
   const root=ctx.register(ctx.obj({Type:'Outlines'})),item=ctx.register(ctx.obj({Parent:root,Title:PDFString.of('point'),Dest:[page.ref,'XYZ',20,40,2]}));
   ctx.lookup(root).set(n('First'),item);ctx.lookup(root).set(n('Last'),item);ctx.lookup(root).set(n('Count'),ctx.obj(1));source.catalog.set(n('Outlines'),root);
@@ -57,6 +58,9 @@ test('explicit normalization fits rotated cropped physical coordinates and trans
   // source visible 400×200 fits at 1.5× with 150pt vertical margin: x'=3(y-20), y'=150+3(110-x).
   const widget=out.getForm().getTextField('import_1.entry').acroField.getWidgets()[0];
   assert.deepEqual(get(out,widget.dict,'Rect').asArray().map(v=>v.asNumber()),[60,330,90,420]);
+  assert.match(get(out,out.getForm().getTextField('import_1.entry').acroField.dict,'DA').decodeText(),/36 Tf/);
+  const appearance=get(out,get(out,widget.dict,'AP'),'N');
+  assert.deepEqual(get(out,appearance.dict,'Matrix').asArray().map(v=>v.asNumber()),[0,-1,1,0,0,0]);
   const outline=get(out,get(out,get(out,out.catalog,'Outlines'),'First'),'First'),dest=get(out,outline,'Dest');
   assert.equal(dest.get(0).toString(),out.getPage(1).ref.toString());assert.deepEqual(dest.asArray().slice(2).map(v=>v.asNumber()),[60,420,4/3]);
   const contents=out.getPage(1).node.Contents().asArray().map(ref=>decodePDFRawStream(out.context.lookup(ref)).decode());
@@ -104,7 +108,7 @@ test('input sizes, invalid insertion, malformed destinations and unsafe graphs r
   const original=await save(await base()),source=await base(),bytes=await save(source);
   await assert.rejects(review(new Uint8Array(50*1024*1024+1)),{code:'LOCAL_PDF_TOO_LARGE'});
   await assert.rejects(merge(original,bytes,{position:-1}),{code:'PAGE_INDEX_INVALID'});
-  const ctx=source.context;source.catalog.set(n('Names'),ctx.obj({Dests:{Names:[PDFString.of('bad'),[ctx.nextRef(),'Fit']]}}));
+  const ctx=source.context;source.catalog.set(n('Names'),ctx.obj({Dests:{Names:[PDFString.of('bad'),[ctx.register(ctx.obj({})),'Fit']]}}));
   const bad=await save(source),before=bad.slice();await assert.rejects(merge(original,bad),{code:'MERGE_DESTINATION_UNSAFE'});assert.deepEqual(bad,before);
 });
 
@@ -126,4 +130,10 @@ test('real visible Arial programs with an identical BaseFont retain distinct has
     assert.equal(hash(decodePDFRawStream(get(out,descriptor,'FontFile2')).decode()),expected);
   }
   assert.notEqual(refs[0],refs[1]);
+});
+
+test('normalization refuses one shared field with incompatible per-page font scales',async()=>{
+  const source=await base(2),field=source.getForm().createTextField('repeated');
+  field.setText('value');for(const page of source.getPages())field.addToPage(page);field.setFontSize(12);
+  await assert.rejects(merge(await save(await base()),await save(source),{normalizeTo:{visibleWidth:600,visibleHeight:600}}),{code:'MERGE_NORMALIZE_UNSUPPORTED'});
 });
