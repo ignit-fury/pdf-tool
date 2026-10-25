@@ -137,3 +137,38 @@ test('normalization refuses one shared field with incompatible per-page font sca
   field.setText('value');for(const page of source.getPages())field.addToPage(page);field.setFontSize(12);
   await assert.rejects(merge(await save(await base()),await save(source),{normalizeTo:{visibleWidth:600,visibleHeight:600}}),{code:'MERGE_NORMALIZE_UNSUPPORTED'});
 });
+
+async function linkOwnershipFixture(kind) {
+  const source=await base(2),ctx=source.context;
+  for(const page of source.getPages())page.setSize(200,300);
+  const link=page=>ctx.register(ctx.obj({Type:'Annot',Subtype:'Link',Rect:[10,20,30,40],P:page.ref,A:{S:'URI',URI:PDFString.of('https://example.com/')}}));
+  const first=link(source.getPage(0));source.getPage(0).node.set(n('Annots'),ctx.obj(kind==='duplicate'?[first,first]:[first]));
+  if(kind==='shared'||kind==='duplicate')ctx.lookup(first).delete(n('P'));
+  if(kind==='shared')source.getPage(1).node.set(n('Annots'),ctx.obj([first]));
+  if(kind==='owner')ctx.lookup(first).set(n('P'),source.getPage(1).ref);
+  if(kind==='separate')source.getPage(1).node.set(n('Annots'),ctx.obj([link(source.getPage(1))]));
+  const bytes=await save(source),loaded=await loadLocalPdf(bytes);
+  if(kind==='shared')assert.equal(loaded.context.lookup(loaded.getPage(0).node.Annots().get(0)),loaded.context.lookup(loaded.getPage(1).node.Annots().get(0)));
+  if(kind==='duplicate')assert.equal(loaded.context.lookup(loaded.getPage(0).node.Annots().get(0)),loaded.context.lookup(loaded.getPage(0).node.Annots().get(1)));
+  return bytes;
+}
+
+for(const kind of ['shared','duplicate','owner'])test(`serialized non-widget annotation ${kind} ownership refuses before review or merge publication`,async()=>{
+  const source=await linkOwnershipFixture(kind),target=await save(await base()),sourceBefore=source.slice(),targetBefore=target.slice();
+  await assert.rejects(review(source,{existingBytes:target}),{code:'MERGE_GRAPH_UNSAFE'});
+  await assert.rejects(merge(target,source,{normalizeTo:{visibleWidth:400,visibleHeight:600}}),{code:'MERGE_GRAPH_UNSAFE'});
+  await assert.rejects(merge(target,source),{code:'MERGE_GRAPH_UNSAFE'});
+  assert.deepEqual(source,sourceBefore);assert.deepEqual(target,targetBefore);
+});
+
+test('separate serialized Link dictionaries normalize exactly once for each actual page owner',async()=>{
+  const source=await linkOwnershipFixture('separate'),target=await save(await base());
+  const inspection=await review(source,{existingBytes:target});assert.equal(inspection.pageCount,2);
+  const output=await loadLocalPdf((await merge(target,source,{position:1,normalizeTo:{visibleWidth:400,visibleHeight:600}})).bytes),annotations=[];
+  for(const index of [1,2]) {
+    const annotation=output.context.lookup(output.getPage(index).node.Annots().get(0));annotations.push(annotation);
+    assert.deepEqual(get(output,annotation,'Rect').asArray().map(value=>value.asNumber()),[20,40,60,80]);
+    assert.equal(annotation.get(n('P')).toString(),output.getPage(index).ref.toString());
+  }
+  assert.notEqual(annotations[0],annotations[1]);
+});
