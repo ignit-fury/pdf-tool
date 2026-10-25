@@ -18,7 +18,34 @@ def privacy(response):
     assert response.headers['cache-control'] == 'no-store, private'
     assert response.headers['x-content-type-options'] == 'nosniff'
     assert response.headers['content-security-policy']
+    assert response.headers['referrer-policy'] == 'no-referrer'
+    assert response.headers['x-frame-options'] == 'DENY'
     assert response.headers['access-control-allow-origin'] == 'http://localhost:5173'
+
+
+def test_allowed_and_rejected_cors_preflights_keep_universal_headers():
+    with TestClient(create_app()) as client:
+        for origin, method, expected in [
+            ('http://localhost:5173', 'POST', 200),
+            ('http://localhost:5173', 'DELETE', 400),
+            ('https://rejected.invalid', 'POST', 400),
+        ]:
+            response = client.options('/images/heic-decode', headers={
+                'origin': origin, 'access-control-request-method': method,
+                'access-control-request-headers': 'content-type',
+            })
+            assert response.status_code == expected
+            assert response.headers['cache-control'] == 'no-store, private'
+            assert response.headers['content-security-policy']
+            assert response.headers['x-content-type-options'] == 'nosniff'
+            assert response.headers['referrer-policy'] == 'no-referrer'
+            assert response.headers['x-frame-options'] == 'DENY'
+            if origin == 'http://localhost:5173':
+                assert response.headers['access-control-allow-origin'] == origin
+            else:
+                assert 'access-control-allow-origin' not in response.headers
+        privacy(client.get('/missing-route', headers=HEADERS))
+        privacy(client.post('/images/heic-decode', content=b'invalid', headers=HEADERS))
 
 
 def test_route_is_image_only_without_cache_or_job():

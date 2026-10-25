@@ -129,3 +129,23 @@ test('applicable missing optional package fails; foreign platform absent entry i
   lock.packages['node_modules/optional'].os = ['definitely-not-this-platform'];
   assert.deepEqual(await audit(), []);
 }));
+
+test('unlisted vendored node_modules cannot hide forbidden notices or WASM', async () => fixture(async ({ pkg, audit }) => {
+  pkg('node_modules/wrapper', { notices: {
+    'dist/node_modules/copyleft/LICENSE': 'GNU AFFERO GENERAL PUBLIC LICENSE Version 3',
+    'dist/node_modules/copyleft/decoder.wasm': Buffer.from('\0asmvendor'),
+  } });
+  const found = await audit();
+  assert.ok(found.some(f => f.code === 'FORBIDDEN_BUNDLED_LICENSE' && f.path.includes('dist/node_modules/copyleft/LICENSE')));
+  assert.ok(found.some(f => f.code === 'WASM_PROVENANCE_MISSING' && f.path.includes('dist/node_modules/copyleft/decoder.wasm')));
+}));
+
+for (const license of ['GPL-3.0-only', 'LGPL-3.0-only', 'AGPL-3.0-only']) {
+  test(`concatenated ${license} component beyond 64 KiB refuses`, async () => fixture(async ({ pkg, audit }) => {
+    pkg('node_modules/wrapper', { notices: { 'dist/bundle.mjs':
+      '/* SPDX-License-Identifier: MIT */\n/*' + 'x'.repeat(66000) + '*/\n' +
+      `/* SPDX-License-Identifier: ${license} */\nexport default 1;`,
+    } });
+    assert.ok((await audit()).some(f => f.code === 'FORBIDDEN_BUNDLED_LICENSE' && f.path === 'dist/bundle.mjs'));
+  }));
+}
