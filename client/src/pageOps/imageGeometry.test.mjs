@@ -23,6 +23,20 @@ test('effective crop intersects media; disjoint crop falls back to media',()=>{
 test('centered fit preserves image ratio in visible dimensions',()=>{
   assert.deepEqual(fitImage({width:800,height:200},geometry(90)),{left:0,top:160,width:320,height:80});
 });
+test('Letter fits use an exact limiting axis even for floating-point and thin-image ratios',()=>{
+  for(const image of [{width:600,height:782},{width:1,height:37},{width:782,height:600},{width:37,height:1}]) {
+    const page={width:612,height:792},rect=fitImage(image,page);
+    assert.deepEqual(validatePlacement(rect,page),{valid:true});
+    assert.ok(rect.left>=0&&rect.top>=0&&rect.left+rect.width<=page.width&&rect.top+rect.height<=page.height);
+    assert.ok(rect.width===page.width||rect.height===page.height);
+    assert.ok(Math.abs(rect.width/rect.height-image.width/image.height)<1e-12);
+  }
+});
+test('floating arithmetic at the visible edge has bounded tolerance; actual outside drafts refuse',()=>{
+  const page={width:612,height:792};
+  assert.deepEqual(validatePlacement({left:0,top:-Number.EPSILON*792,width:612,height:792+Number.EPSILON*792},page),{valid:true});
+  for(const rect of [{left:-0.000001,top:0,width:10,height:10},{left:0,top:0,width:612.000001,height:10},{left:0,top:792.000001,width:1,height:1}])assert.deepEqual(validatePlacement(rect,page),{valid:false,code:'IMAGE_OUTSIDE_PAGE'});
+});
 test('aspect lock is explicit, accepts original ratio, and never mutates draft',()=>{
   assert.deepEqual(updateAspect(rect,'width',200,{locked:true,ratio:2}),{...rect,width:200,height:100});
   assert.deepEqual(updateAspect(rect,'height',30,{locked:true,ratio:2}),{...rect,width:60,height:30});

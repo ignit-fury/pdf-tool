@@ -133,3 +133,13 @@ test('existing AcroForm appearance streams and their references survive image sa
   const expected=appearances(before),result=await writeImage(bytes,png(),{destination:'current-page',pageIndex:0,rect:{left:10,top:10,width:20,height:10}}),out=await loadLocalPdf(result.bytes);
   assert.deepEqual(appearances(out),expected);assert.equal(out.getForm().getTextField('preserved').getText(),'retained');
 });
+test('real 600 by 782 PNG fits and serializes on a new Letter image page',async()=>{
+  const pdf=await PDFDocument.create();pdf.addPage([612,792]);
+  const rgba=Buffer.alloc(600*782*4,255),source=png(600,782,rgba);
+  const result=await writeImage(await pdf.save(),source,{destination:'new-page',pageIndex:0,position:'after'}),out=await loadLocalPdf(result.bytes),page=out.getPage(1);
+  assert.equal(result.selectedPage,1);assert.equal(out.getPageCount(),2);
+  const images=page.node.Resources().lookup(n('XObject'),PDFDict),image=out.context.lookup(images.get(images.keys()[0]));
+  assert.equal(image.dict.get(n('Width')).asNumber(),600);assert.equal(image.dict.get(n('Height')).asNumber(),782);
+  const rect=fitImage({width:600,height:782},describePage(out,1));assert.equal(rect.top,0);assert.equal(rect.height,792);
+  assert.ok(content(out,page).some(s=>s.includes(placementMatrix(rect,describePage(out,1)).join(' ')+' cm')));
+});
