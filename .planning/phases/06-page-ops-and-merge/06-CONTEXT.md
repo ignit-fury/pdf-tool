@@ -223,3 +223,27 @@ A-6.1's explicit HEIC exclusion.
 `@cantoo/pdf-lib` installed in `client/` is **2.9.1**, one minor ahead of `research/STACK.md`'s
 pinned 2.8.1. MIT, unchanged. Plans should pin deliberately rather than inherit whichever version
 the scaffold happened to install.
+
+### 2026-10-24 — local execution over the delivered workstation
+
+The user explicitly instructed "ok go to next phase" after the Phase 5 local
+delivery report. Phase 6 proceeds independently over the existing Phase 4/5
+viewer, text editor and search. G3 Linux/container/CDN release checks and G4's
+literal contract-specimen item remain open; none is relabeled passed. Deployment
+and installation of container tools remain deferred.
+
+The old research predates the delivered application. Implementation planning must
+use `06-RESEARCH-UPDATE.md` and `06-PATTERNS.md` to account for its actual current
+session, cache, mutation ownership and undo paths. Opening currently uploads and
+thumbnail visibility requests classification; both must become explicit opt-in
+text analysis for PAGE-09 to hold. Local page mutations must materialize current
+bytes, invalidate obsolete server addresses and retain full prior document/text
+state for one-step Undo. The text engine and its rewrite rules remain unchanged.
+
+Use the existing Node built-in test runner and available browser connector. The
+older suggestion to install Vitest/Playwright is superseded by delivered test
+infrastructure. A client lockfile license gate is still required; it need not add
+a new test framework or dependency. HEIC's existing A-6.1 exception remains the
+only image server boundary and must agree across requirement, UI and observed
+network proof. Current installed library behavior, including actual password
+decryption, must be probed rather than inferred from old upstream limitations.

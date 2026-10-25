@@ -216,19 +216,27 @@ not close G3 Linux/container/CDN release checks or authorize deployment.
 
 ### Phase 6: Page Ops and Merge
 
-**Goal**: Every page-shaped operation works instantly and never leaves the browser, so the privacy claim becomes literally true for a whole class of session
+**Goal**: Every page-shaped operation works instantly in the browser, so the privacy claim becomes literally true for a whole class of session; the explicitly disclosed HEIC decoder subprocess is the sole image-conversion exception (A-6.1)
 **Depends on**: Phase 4 (Gate G3) — zero dependency on the text engine
 **Requirements**: PAGE-01, PAGE-02, PAGE-03, PAGE-04, PAGE-05, PAGE-06, PAGE-07, PAGE-08, PAGE-09
 **Success Criteria** (what must be TRUE):
 
-  1. A page-operations-only session produces its download entirely in the browser, with **zero requests to document routes**
+  1. A page-operations-only session produces its download entirely in the browser, with **zero requests to document routes**, except the explicitly disclosed HEIC decoder subprocess operation settled in Phase 6 amendment A-6.1; PDF/PNG/JPEG/WebP sessions remain local
   2. Inserting a blank page inherits MediaBox and rotation from the adjacent page and shows the user what it inherited — never a silent Letter default; reorder, rotate and delete work on any page including uneditable ones
-  3. Merging two documents that both embed `ABCDEF+Arial` with different subsets renders both correctly in all three engines — fonts deduped by content hash, never by `/BaseFont`
+  3. Merging two documents that both embed `ABCDEF+Arial` with different subsets renders both correctly in all three engines — retain independent fonts by default; any deduplication must use content identity, never `/BaseFont` (A-6.3)
   4. No other page changes after a resource-dictionary write — inherited `/Resources` are copied, never mutated — and merging another PDF preserves per-page page size by default, nests outlines, and announces form-field collision handling either way
   5. An image (PNG, JPEG, WebP, HEIC, transparency composited) merges as a new page or is placed on an existing page with visible aspect-ratio locking, not a hidden modifier key
 
-**Plans**: TBD
-**Research**: no — page ops are exactly what `@cantoo/pdf-lib` is good at, and the merge correctness traps are already enumerated with their fixes.
+**Plans**: 6 plans
+
+- [ ] 06-01-PLAN.md — Local PDF primitives, whole-document history and guarded worker transactions
+- [ ] 06-02-PLAN.md — Bounded HEIC conversion and resolved client license gate
+- [ ] 06-03-PLAN.md — PDF merge with shared page/form/outline references and font isolation
+- [ ] 06-04-PLAN.md — Local image decoding, resource isolation and rotated/cropped placement
+- [ ] 06-05-PLAN.md — Local-first workstation, page controls, mixed text/page history and lazy analysis
+- [ ] 06-06-PLAN.md — Independent three-renderer fidelity, observed browser traffic and regression proof
+
+**Research**: Refreshed against the delivered workstation and installed 2.9.1 library in `06-RESEARCH-UPDATE.md`; old August notes are retained as historical context.
 **Parallel**: yes — fully independent of the text engine; the natural parallel workstream alongside Phase 5
 **UI hint**: yes
 
@@ -339,7 +347,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → (5 ∥ 6 ∥ 7) → 8
 | 3. Rewrite Engine + Font Pipeline | 9/9 | Complete   | 2026-08-28 |
 | 4. Web Tier Walking Skeleton + Hardening | Consolidated execution | Implemented locally; release verification pending | - |
 | 5. Find and Replace Across All Pages | 4/4 | Implemented/verified locally; contract-specimen G4 coverage pending | - |
-| 6. Page Ops and Merge | 0/TBD | Planning | - |
+| 6. Page Ops and Merge | 0/6 | Executing locally; reviewed plans | - |
 | 7. Exports | 0/TBD | Planning | - |
 | 8. PDF/A, then DOCX | 0/TBD | Planning | - |
 

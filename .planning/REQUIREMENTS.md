@@ -101,10 +101,10 @@ becomes literally true.
 - [ ] **PAGE-03**: User can rotate pages
 - [ ] **PAGE-04**: User can delete pages
 - [ ] **PAGE-05**: User can merge another PDF, with outline nesting, announced form-field collision handling, and per-page page size preserved by default
-- [ ] **PAGE-06**: Merging two documents that embed different subsets of the same named font renders both correctly — fonts deduped by content hash, never by `/BaseFont`
+- [ ] **PAGE-06**: Merging two documents that embed different subsets of the same named font renders both correctly — retain independent fonts by default; any deduplication must use content identity, never `/BaseFont` (Phase 6 amendment A-6.3).
 - [ ] **PAGE-07**: User can merge an image as a new page (PNG, JPEG, WebP, HEIC, with transparency composited)
 - [ ] **PAGE-08**: User can place an image onto an existing page with visible aspect-ratio locking, not a hidden modifier key
-- [ ] **PAGE-09**: A page-operations-only session produces its download entirely in the browser, with zero requests to document routes
+- [ ] **PAGE-09**: A page-operations-only session produces its download entirely in the browser, with zero requests to document routes; HEIC decoding is the explicit disclosed server exception from Phase 6 amendment A-6.1. PDF, PNG, JPEG and WebP page-operation sessions remain local.
 
 ### Ingest and Document Handling
 

@@ -612,7 +612,14 @@ covers for `pdf-lib`.
 
 **If this table is empty:** N/A — see rows above.
 
-## Open Questions
+## Open Questions (historical; RESOLVED by later amendments)
+
+The two August questions below are retained as research history. They are no
+longer awaiting a decision: A-6.1 settles HEIC as the disclosed server-only
+decoder subprocess exception; A-6.6 and the current research update settle the
+observed configured-API-origin/path-prefix assertion, with only the real static
+asset namespace exempted for an empty same-origin API base. Current plans and
+`06-RESEARCH-UPDATE.md` supersede the historical recommendations below.
 
 1. **Can this project bundle LGPL-3.0-derived WASM into the client-side SPA for HEIC decode
    (PAGE-07)?**

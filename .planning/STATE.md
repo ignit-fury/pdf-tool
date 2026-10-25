@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
-status: verifying
-stopped_at: Phase 5 implemented/verified locally; literal contract-specimen G4 item pending, no deployment
-last_updated: "2026-10-24"
-last_activity: Delivered all six Phase 5 FIND requirements with recorded local proof and explicit specimen/release debt
+status: executing
+stopped_at: Phase 6 reviewed plans ready; executing PDF/history and HEIC/license wave, no deployment
+last_updated: "2026-10-25"
+last_activity: Phase 6 six-plan and UI reviews passed without blockers; first implementation wave started
 progress:
   total_phases: 8
   completed_phases: 3
@@ -14,7 +14,7 @@ progress:
 # Project State
 
 **Core value:** Replace existing PDF text while preserving the surrounding document.
-**Current focus:** Phase 05 local work delivered; literal contract-specimen coverage pending.
+**Current focus:** Phase 06 — page operations and merge, local execution.
 
 Phases 1–3 are complete. The Phase 3 engine and its fonts, CLI and regression gates are
 now present in this checkout; the original source worktree and local edits are preserved.
@@ -31,6 +31,20 @@ Execution record: `.planning/PHASE-4-EXECUTION.md`.
 Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04-VERIFICATION.md`.
 
 ## Current work
+
+- On 2026-10-24 the user instructed: "ok go to next phase". Phase 6 proceeds
+  independently over the delivered workstation. No deployment or container-tool
+  installation is included; G3 release checks and G4 literal-specimen debt stay open.
+- Refreshed research, pattern map and approved UI contract are recorded. Six plans
+  cover all nine PAGE requirements in four waves; independent review has no blockers.
+- Wave 1 implements local PDF/history/worker contracts and the independent bounded
+  HEIC service/client license gate. Page, merge and image changes remain local;
+  HEIC conversion is the existing explicitly disclosed server exception.
+- Baseline: 527 Python tests passed (36 deselected), 41 client tests passed.
+  Actual browser RED proof caught two API requests on opening; G5 must reach zero
+  through local page operations/download, not merely inspect a boolean.
+
+### Delivered Phase 5 baseline
 
 - Phase 5 implementation is delivered: canonical Unicode projection, current-recipe
   matching, individual exclusions, resumable indexing, exact preview, source-box
@@ -58,7 +72,7 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
 - Literal legal-contract specimen coverage remains unproven. The all-page source is
   explicitly a public technical-document proxy; G3 release checks remain open.
   Pending item: `phases/05-find-and-replace-across-all-pages/05-HUMAN-UAT.md`.
-  Phase 6 page operations/merge is the next independent local phase; not started here.
+  Phase 6 page operations/merge is now in local planning under the user's instruction.
 
 ### Earlier Phase 4 baseline
 
@@ -76,7 +90,7 @@ Server-issued run addresses; one atomic recipe against immutable original bytes;
 editing; no runtime AGPL; no persistent server document/session history; browser-held
 originals recover evicted memory cache. Phase 5 full-document find/replace is
 delivered locally; its literal contract-specimen gate remains open. Phase 6 page
-operations and later exports remain future work.
+operations are the current local work; later exports remain future work.
 
 ## Decisions made during execution
 
