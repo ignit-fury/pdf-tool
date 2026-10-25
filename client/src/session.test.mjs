@@ -19,6 +19,29 @@ test('snapshot copy prediction counts full unique backing stores before allocati
   const buffer=new ArrayBuffer(32),a=new Uint8Array(buffer,0,2),b=new Uint8Array(buffer,3,4);
   assert.equal(snapshotCopyBytes({bytes:a,sourceBytes:b,analysis:{index:{raw:a}}}),32);
 });
+test('closed session cannot upload its baseline or call a retained job',async()=>{
+  const local=createLocalSession({openedBytes:new Uint8Array([1])});local.controller.abort();
+  let calls=0;
+  await assert.rejects(withSourceRetry(local,async()=>{calls++;},async()=>{calls++;return {job_id:'bad'};}),{name:'AbortError'});
+  assert.equal(calls,0);
+});
+test('mixed materialized snapshots restore exact bytes baseline style selection and fresh analysis session',async()=>{
+  const {captureSnapshot,pushSnapshot,popSnapshot,peekSnapshot,admitHistory}=await import('./pageOps/documentHistory.mjs');
+  const opened=new Uint8Array([1,2,3]),text=new Uint8Array([4,5]),pages=new Uint8Array([8,9,10]);
+  const initial={bytes:opened,sourceBytes:opened,password:' secret ',recipe:[],selectedPage:2,style:{bold:true},selection:{run_id:'original'},analysis:{enabled:true,sourceIdentity:'first',meta:{page_count:2},index:{}},findState:{query:'old'},localMetadata:{signed:false},acknowledged:false};
+  let history=[],live=createLocalSession({name:'mixed.pdf',openedBytes:opened});
+  for(const state of [initial,{...initial,bytes:text,recipe:[{run_id:'original',new_text:'edited',style:{bold:true}}]},{...initial,bytes:pages,sourceBytes:pages,password:'',recipe:[],analysis:{enabled:false},selectedPage:1}]){
+    assert.equal(admitHistory({openedBytes:opened,current:state,history,temporaryBytes:snapshotCopyBytes(state)}).ok,true);
+    history=pushSnapshot(history,captureSnapshot(state));
+  }
+  for(const expected of [pages,text,opened]){
+    const snapshot=peekSnapshot(history),next=restoreSession(live,snapshot);live.controller.abort();live=next;history=popSnapshot(history);
+    assert.deepEqual(live.bytes,expected);assert.equal(live.openedBytes,opened);assert.equal(live.controller.signal.aborted,false);assert.equal(live.jobId,null);
+    assert.deepEqual(snapshot.style,{bold:true});assert.equal(snapshot.selection.run_id,'original');assert.equal(snapshot.findState.query,'old');
+    if(expected===text){assert.deepEqual(live.sourceBytes,opened);assert.equal(live.password,' secret ');assert.equal(snapshot.recipe[0].style.bold,true);}
+  }
+  assert.equal(history.length,0);
+});
 import assert from 'node:assert/strict';
 import { upsertOperation, commitRecipe, previousRecipe, withSourceRetry, viewportBox, createRequestQueue, retryWorkerBusy } from './session.mjs';
 
