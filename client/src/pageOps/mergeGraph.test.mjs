@@ -29,10 +29,11 @@ async function forms(fieldName='customer.name') {
   acro.set(n('NeedAppearances'),pdf.context.obj(true));
   // DA uses an escaped PDF name. Resource aliases and field names are different namespaces.
   const font=pdf.context.register(pdf.context.obj({Type:'Font',Subtype:'Type1',BaseFont:'Courier'}));
-  acro.set(n('DR'),pdf.context.obj({Font:{Helv:font}}));
+  const helvetica=await pdf.embedFont('Helvetica');
+  acro.set(n('DR'),pdf.context.obj({Font:{Helv:font,Helvetica:helvetica.ref}}));
   acro.set(n('DA'),PDFString.of('/H#65lv 11 Tf 0 g'));
   text.acroField.dict.delete(n('DA'));
-  return pdf;
+  return PDFDocument.load(await save(pdf));
 }
 
 test('one copier preserves real hierarchical, multi-widget, radio and choice fields on inserted pages',async()=>{
@@ -56,7 +57,7 @@ test('one copier preserves real hierarchical, multi-widget, radio and choice fie
   assert.equal(fonts.get(n('Helv')).toString(),originalFont.toString());
   assert.notEqual(fonts.get(n(`${preflight.prefix}_Helv`)).toString(),fonts.get(n('Helv')).toString());
   const parent=get(pdf,imported.dict,'Parent');
-  assert.match(get(pdf,parent,'DA')?.decodeText()??get(pdf,get(pdf,parent,'Parent'),'DA').decodeText(),new RegExp(`/${preflight.prefix}_Helv 11 Tf`));
+  assert.match(get(pdf,parent,'DA')?.decodeText()??get(pdf,get(pdf,parent,'Parent'),'DA').decodeText(),new RegExp(`/${preflight.prefix}(?:_f\\d+)?_Helv 11 Tf`));
   assert.equal(get(pdf,acro,'NeedAppearances').asBoolean(),true);
   assert.equal(get(pdf,acro,'CO').size(),2);
   assert.equal(get(pdf,pdf.catalog,'Lang').decodeText(),'en-US');
@@ -127,4 +128,22 @@ test('preflight bounds graph depth and announces absent forms and bookmarks',asy
   let deep=source.context.obj({});source.catalog.set(n('Probe'),deep);
   for(let i=0;i<66;i++) {const child=source.context.obj({});deep.set(n('Child'),child);deep=child;}
   assert.throws(()=>preflightMergeGraph(source),error=>error.code==='MERGE_GRAPH_LIMIT');
+});
+
+test('ordinary generated text forms recover unambiguous AP fonts and announce no field collisions',async()=>{
+  const source=await PDFDocument.create(),page=source.addPage();
+  const field=source.getForm().createTextField('plain');field.setText('visible');field.addToPage(page);
+  const loaded=await PDFDocument.load(await save(source)),destination=await PDFDocument.create();destination.addPage();
+  const {pdf,preflight}=await importGraph(loaded,destination);
+  assert.equal(pdf.getForm().getTextField(`${preflight.prefix}.plain`).getText(),'visible');
+  assert.equal(preflight.collisionCount,0);assert.match(preflight.notices.join(' '),/No duplicate names found/);
+});
+
+test('an existing DR alias cannot collide with the independent imported resource namespace',async()=>{
+  const source=await forms('unique'),destination=await forms('other');
+  const fonts=get(destination,get(destination,get(destination,destination.catalog,'AcroForm'),'DR'),'Font');
+  fonts.set(n('import_1_Helv'),fonts.get(n('Helv')));
+  const {pdf,preflight}=await importGraph(source,destination);
+  assert.equal(preflight.prefix,'import_2');
+  assert.equal(pdf.getForm().getTextField('import_2.unique').getText(),'kept value');
 });
