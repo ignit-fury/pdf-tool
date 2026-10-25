@@ -1,4 +1,24 @@
 import test from 'node:test';
+import {createLocalSession,restoreSession,snapshotCopyBytes,canAnalyzeText} from './session.mjs';
+
+test('local session and restored snapshots never create a server job or reuse controllers',async()=>{
+  const bytes=new Uint8Array([1,2,3]),source=new Uint8Array([4,5]);
+  const local=createLocalSession({name:'private.pdf',openedBytes:bytes});
+  assert.equal(local.jobId,null);assert.equal(canAnalyzeText(local),false);
+  assert.equal(local.openedBytes,bytes);assert.equal(local.bytes,bytes);assert.equal(local.sourceBytes,bytes);
+  local.controller.abort();
+  const restored=restoreSession(local,{bytes,sourceBytes:source,password:'密碼🔑',analysis:{enabled:true,sourceIdentity:'baseline'},recipe:[]});
+  assert.notEqual(restored.controller,local.controller);assert.equal(restored.controller.signal.aborted,false);
+  assert.equal(restored.jobId,null);assert.equal(restored.sourceBytes,source);assert.equal(restored.openedBytes,bytes);
+  assert.equal(canAnalyzeText(restored),true);
+  let uploaded;
+  const result=await withSourceRetry(restored,id=>Promise.resolve(id),(body,password)=>{uploaded={body,password};return Promise.resolve({job_id:'fresh'});});
+  assert.equal(result,'fresh');assert.equal(uploaded.body,source);assert.equal(uploaded.password,'密碼🔑');
+});
+test('snapshot copy prediction counts full unique backing stores before allocation',()=>{
+  const buffer=new ArrayBuffer(32),a=new Uint8Array(buffer,0,2),b=new Uint8Array(buffer,3,4);
+  assert.equal(snapshotCopyBytes({bytes:a,sourceBytes:b,analysis:{index:{raw:a}}}),32);
+});
 import assert from 'node:assert/strict';
 import { upsertOperation, commitRecipe, previousRecipe, withSourceRetry, viewportBox, createRequestQueue, retryWorkerBusy } from './session.mjs';
 
