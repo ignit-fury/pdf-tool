@@ -55,6 +55,7 @@ All three implementation tasks are complete. Requirement IDs above identify the 
 | 3: Structural transforms/worker lifetime | `014ca6d` | `2b687aa` | Same-document transforms, form/destination deletion handling, encrypted-output readback and terminating transport |
 | Review: unknown signatures/repeated signed edits | `3737f5b` | `3b39594` | Fail closed before transform; acknowledgement preserved for the acknowledged signed source |
 | Review: geometry/import integration | `b2fabf5` | `27c3370` | Finite physical geometry, fixed import refusal codes and prepared-metadata acknowledgement |
+| Review: stream dictionary catalog safety | `f9a25f9` | `7255abc` | Refuse unknown references to a removed page inside serialized stream dictionaries; preserve safe surviving references |
 
 Tests were executed and observed failing before each associated implementation/fix. No tracked files were deleted. No App, Viewer, session, server, STATE, ROADMAP or REQUIREMENTS file was changed by this executor. The root orchestrator owns shared planning metadata and later integration.
 
@@ -82,6 +83,7 @@ A successful page mutation rebases sourceBytes to its output bytes, clears passw
 ## Verification
 
 - Final `node --test client/src/pageOps/pdfDocument.test.mjs client/src/pageOps/documentHistory.test.mjs client/src/pageOps/applyPageOperation.test.mjs client/src/pageOps/pdfWorker.test.mjs`: **22 passed, 0 failed**. Recorded in `/tmp/06-01-focused-tests.log` on the resumed handoff.
+- Subsequent review-fix execution of the same focused command: **23 passed, 0 failed**, recorded in `/tmp/06-01-review-fix-tests.log`. The new actual serialized fixture first failed with `Missing expected rejection` before implementation, then proved both unsafe-target refusal and safe surviving-target preservation. No broad suite, corpus run or build loop was required for this bounded traversal fix.
 - `npm --prefix client test`: recorded broad run **65 passed, 0 failed** in `/tmp/06-01-client-tests.log` before the final three review tests were added. An earlier concurrent run reported 63/65 while other executors were editing tests; the recorded rerun passed. No new broad run was performed while plan 03 was actively in RED. Final 22 focused tests include all plan 01 review additions.
 - Final `npm --prefix client run build`: **passed**, recorded in `/tmp/06-01-build.log`; existing bundle-size warning remains. Early build intentionally has no concrete job-worker/parser imports from future modules.
 - Manifest, lock root declaration and resolved installed lock version independently checked: **2.9.1 / 2.9.1 / 2.9.1**. No package installation, closure upgrade or new dependency.
@@ -109,6 +111,10 @@ Deletion supports standard field/widget hierarchies and recognized outline, name
 **3. [Rule 2 - Correctness] Bound physical geometry and allow fixed downstream refusal codes.**
 - Root review identified finite UserUnit values overflowing physical dimensions and stripped merge/image named errors. Added RED tests `b2fabf5`, fix `27c3370`; new optional worker `errorCodes` contains only caller-constant uppercase codes and leaves unknown errors generic.
 
+**4. [Rule 1 - Bug] Catalog safety traversal skipped PDF stream dictionaries.**
+- A fresh review reproduced a metadata stream dictionary containing an unknown `PageTarget` reference to the page being deleted. The prior walker traversed dictionaries and arrays but skipped stream dictionaries, allowing a dangling reference in saved output.
+- Added a saved/reloaded two-page metadata-stream fixture and observed the unsafe deletion fail to reject in RED `f9a25f9`. Fix `7255abc` visits every `PDFStream.dict` through the same visited identities, depth limit and node budget. Unknown references to the removed page now refuse `CATALOG_UNSAFE` before edits/save; a stream referring to the surviving page retains both its bytes and valid reference. Exported APIs and existing guards are unchanged.
+
 ### Workflow Adjustments
 
 The referenced mandatory-initial-read/project-skills-discovery files were absent under the configured .Codex/.cursor paths; available plan, context, patterns, refreshed research, UI contract, installed version-specific library source and executing-plans/TDD skill instructions supplied execution context. Context7 tools and ctx7 CLI were absent, so existing installed source and its actual I/O behavior supplied version-specific API evidence. The root orchestrator owns global state/roadmap/requirements updates; this executor intentionally commits only owned task files and this summary. A quota interruption delayed final summary handoff after implementation, without redoing completed implementation.
@@ -119,4 +125,4 @@ No known stub prevents this core plan's goal. App integration, concrete importin
 
 ## Self-Check: PASSED
 
-All eight created module/test files and both modified package files exist. All ten listed RED/GREEN/fix commit hashes were independently verified in git history. Exact dependency pin, final 22 focused tests, final build and whitespace checks passed. No unexpected tracked deletion or owned untracked generated artifact remains.
+All eight created module/test files and both modified package files exist. All twelve listed RED/GREEN/fix commit hashes were independently verified in git history, including review regression `f9a25f9` and fix `7255abc`. Exact dependency pin, final 23 focused tests, prior final build and whitespace checks passed. No unexpected tracked deletion or owned untracked generated artifact remains.
