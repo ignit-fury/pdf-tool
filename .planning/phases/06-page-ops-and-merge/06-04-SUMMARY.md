@@ -47,6 +47,8 @@ completed: 2026-10-25
 2. Task 1 GREEN: `eaaea61` — physical-point fit, aspect update, named validation and affine placement.
 3. Task 2 RED: `26dcf18` — bounded decode, white composite, resource lifecycle and serialized PDF image tests.
 4. Task 2 GREEN: `b938baf` — local decode and PDF writer, plus adversarial encoding cancellation and form appearance preservation coverage.
+5. Review regression RED: `a878772` — real 600×782 PNG on Letter, thin-image fits and bounded arithmetic-edge tolerance reproduce three failures.
+6. Review fix GREEN: `45d478d` — exact limiting-axis fit and scale-aware residual clamping, with serialized placement and material-outside refusal coverage.
 
 RED commands were run before each implementation module existed and failed on the missing module; the subsequent implementations passed all behavior assertions. No task source was implemented before its RED run.
 
@@ -54,7 +56,7 @@ RED commands were run before each implementation module existed and failed on th
 
 - `fitImage({width,height}, page)` returns a centered fit in physical points. `page` accepts the current descriptor or visible width/height. Geometry is derived from `CropBox ∩ MediaBox`, falling back to MediaBox for empty/disjoint crop, as `describePage` does.
 - `updateAspect(rect, field, value, {locked,ratio})` is pure. `ratio` comes from the oriented decoded image; only locked width/height edits change the paired dimension. The UI owns the checked checkbox state.
-- `validatePlacement(rect,page)` returns `{valid:true}` or `{valid:false,code}`. `placementMatrix(rect,pageGeometry)` refuses invalid bounds and maps the image unit square into PDF coordinates, including inverse page rotation and UserUnit division.
+- `validatePlacement(rect,page)` returns `{valid:true}` or `{valid:false,code}`. `placementMatrix(rect,pageGeometry)` refuses invalid bounds and maps the image unit square into PDF coordinates, including inverse page rotation and UserUnit division. Fits set the limiting axis exactly to page width/height. Validation tolerates only eight machine-epsilon units relative to each page axis, and the content transform clamps that residue to the edge; materially outside rectangles still refuse.
 - `decodeLocalImage(file,{signal,decodeBitmap,createCanvas})` returns `{pngBytes,width,height,preview,dispose}`. `preview` is the actual white-flattened canvas, not the original transparent image. Default adapters use native `createImageBitmap`, OffscreenCanvas or DOM canvas and PNG encoding.
 - Input magic overrides MIME/extension. Structural preflight rejects animated PNG/WebP, multiple JPEG frames/MPF/trailing images and ambiguous containers. HEIC brands throw `HEIC_CONVERSION_REQUIRED` without any decoder or network invocation. An explicitly converted PNG enters the same local path.
 - Admission limits: 20 MiB input; at most 16,000,000 pixels; maximum dimension 16,384; 64 MiB encoded PNG. Header dimensions are checked before decode and native dimensions afterward. These bounds do not guarantee the native decoder's total allocation.
@@ -67,8 +69,8 @@ RED commands were run before each implementation module existed and failed on th
 
 ## Verification
 
-- `node --test client/src/pageOps/imageGeometry.test.mjs` — 8 passed.
-- `node --test client/src/pageOps/images.test.mjs client/src/pageOps/imageGeometry.test.mjs` — 21 passed.
+- Initial `node --test client/src/pageOps/imageGeometry.test.mjs` — 8 passed; review coverage increases this to 10 geometry tests.
+- Latest `node --test client/src/pageOps/images.test.mjs client/src/pageOps/imageGeometry.test.mjs` — 24 passed, including the real 600×782 PNG/new-Letter-page regression and 1×37 thin-image fit.
 - Tests use real small PNG/JPEG/WebP bytes and actual PDF serialization/readback. Assertions inspect embedded image resources, content matrices at 0/90/180/270 degrees, original operators/annotations, inherited sibling immutability, form AP bytes/references, Unicode-password decryption, signature refusal, cleanup and limits.
 - The injected Node canvas adapter actually composites RGBA pixels and encodes a real PNG; readback verifies white and half-alpha pixel values. It does not certify a browser's native codec or canvas pixels.
 - `npm --prefix client run build` — passed; existing Vite large-chunk advisory remains.
@@ -81,6 +83,13 @@ RED commands were run before each implementation module existed and failed on th
 - Added `acknowledged` and complete `localMetadata` to the writer contract to match the delivered plan-01 signature/rebase correctness requirements, as explicitly directed by orchestration. No shared interfaces were edited.
 - Shared STATE/ROADMAP/REQUIREMENTS updates are reserved for the root orchestrator to avoid concurrent metadata writes. Only owned source/tests and this summary were committed.
 
+### Review Fix: Floating-Point Fit Rejection
+
+- **[Rule 1 — Bug]** Review found that multiplying both image dimensions by a common scale could yield a height of `792.0000000000001` and negative top on a 612×792 Letter page, rejecting an ordinary 600×782 image as `IMAGE_OUTSIDE_PAGE`.
+- Added geometry, thin-image and actual PNG/PDF serialization regressions first; the focused run reproduced exactly three failures (21 passed).
+- Set the limiting axis directly to the page dimension, derive the other from the aspect ratio, and clamp only scale-relative machine-rounding residue in the same bounds path consumed by validation and content matrices. Actual outside rectangles, including a 0.000001 pt overrun, remain rejected.
+- Verification: 24 focused tests pass; owned diff check passes. No UI, worker or shared API changed, and no broad suite/corpus run was repeated during parallel UI integration.
+
 ## Remaining Integration and Evidence
 
 - Plan 05 wires worker dispatch, controlled aspect checkbox, draft preview, destination-change reset, explicit HEIC conversion action and one transaction/Undo entry.
@@ -89,4 +98,4 @@ RED commands were run before each implementation module existed and failed on th
 
 ## Self-Check: PASSED
 
-All four source/test files exist, and all four task commits listed above exist in git history. Focused tests and build passed. The root orchestrator owns the remaining shared-state bookkeeping and aggregate test result.
+All four source/test files exist, and all six task/review commits listed above exist in git history. Latest focused tests pass; the initial build passed. The root orchestrator owns the remaining shared-state bookkeeping, integration build and aggregate test result.
