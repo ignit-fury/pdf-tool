@@ -109,9 +109,9 @@ test('a second edit replaces its original address and undo restores text and sty
   assert.equal(first[0].new_text, 'First');
 });
 
-test('cache eviction reuploads authoritative original bytes and retries once', async () => {
+test('cache eviction reuploads authoritative current baseline and retries once', async () => {
   const original = new Uint8Array([37,80,68,70]);
-  const session = {original, password: 'secret', jobId: 'old'};
+  const session = {sourceBytes:original, original:new Uint8Array([99]), password: 'secret', jobId: 'old'};
   const seen = [];
   const result = await withSourceRetry(session, async id => {
     seen.push(id);

@@ -16,8 +16,9 @@ export function needsFontChoice(run, style) {
   return run?.state!=='not_editable'&&(run?.state==='editable_substitution'||run?.suggested_font_family===null)&&!run?.suggested_font_family&&!style.font_family;
 }
 export async function withSourceRetry(session, operation, upload) {
+  if(session.controller?.signal.aborted)throw new DOMException('Document closed','AbortError');
   const restore=()=>{
-    if(!session.restoring)session.restoring=Promise.resolve().then(()=>upload(session.sourceBytes??session.original,session.password)).then(result=>{if(session.controller?.signal.aborted)throw new DOMException('Document closed','AbortError');session.jobId=result.job_id;}).finally(()=>{session.restoring=null;});
+    if(!session.restoring)session.restoring=Promise.resolve().then(()=>upload(session.sourceBytes,session.password)).then(result=>{if(session.controller?.signal.aborted)throw new DOMException('Document closed','AbortError');session.jobId=result.job_id;}).finally(()=>{session.restoring=null;});
     return session.restoring;
   };
   if(!session.jobId)await restore();
