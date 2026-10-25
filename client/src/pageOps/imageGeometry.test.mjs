@@ -34,7 +34,9 @@ test('Letter fits use an exact limiting axis even for floating-point and thin-im
 });
 test('floating arithmetic at the visible edge has bounded tolerance; actual outside drafts refuse',()=>{
   const page={width:612,height:792};
-  assert.deepEqual(validatePlacement({left:0,top:-Number.EPSILON*792,width:612,height:792+Number.EPSILON*792},page),{valid:true});
+  const roundingOnly={left:0,top:-Number.EPSILON*792,width:612,height:792+Number.EPSILON*792};
+  assert.deepEqual(validatePlacement(roundingOnly,page),{valid:true});
+  assert.deepEqual(placementMatrix(roundingOnly,{mediaBox:{x:0,y:0,width:612,height:792},userUnit:1,rotation:0}),[612,0,0,792,0,0]);
   for(const rect of [{left:-0.000001,top:0,width:10,height:10},{left:0,top:0,width:612.000001,height:10},{left:0,top:792.000001,width:1,height:1}])assert.deepEqual(validatePlacement(rect,page),{valid:false,code:'IMAGE_OUTSIDE_PAGE'});
 });
 test('aspect lock is explicit, accepts original ratio, and never mutates draft',()=>{
