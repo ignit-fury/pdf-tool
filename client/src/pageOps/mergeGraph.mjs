@@ -105,18 +105,25 @@ function appearanceResources(pdf,field,kids,inherited) {
 }
 
 function collectFields(pdf) {
-  const acroRaw=pdf.catalog.get(n('AcroForm'));
-  if(!acroRaw) {
-    for(const page of pdf.getPages())for(const ref of page.node.Annots()?.asArray()??[])if(get(pdf,dict(pdf,ref),'Subtype')===n('Widget'))fail('MERGE_FIELD_GRAPH_UNSAFE');
-    return {acro:undefined,fields:[],roots:[],names:[]};
-  }
-  const acro=dict(pdf,acroRaw,'MERGE_FIELD_GRAPH_UNSAFE'),fields=[],names=[],seen=new Set(),members=new Map();
-  for(const page of pdf.getPages())for(const ref of page.node.Annots()?.asArray()??[]) {
-    const annot=dict(pdf,ref);
-    if(get(pdf,annot,'Subtype')===n('Widget')) {
-      if(members.has(annot))fail('MERGE_FIELD_GRAPH_UNSAFE');members.set(annot,page.ref);
+  // An annotation belongs to one Annots slot on one page. The shared copier
+  // preserves object identity, so accepting aliases here would let a later
+  // per-page normalization transform the same mutable dictionary twice.
+  const owners=new Set(),members=new Map();
+  for(const page of pdf.getPages()) {
+    const annotations=page.node.has(n('Annots'))?array(pdf,page.node.get(n('Annots'))):[];
+    for(const raw of annotations) {
+      const annotation=dict(pdf,raw),widget=get(pdf,annotation,'Subtype')===n('Widget');
+      const code=widget?'MERGE_FIELD_GRAPH_UNSAFE':'MERGE_GRAPH_UNSAFE',owner=annotation.get(n('P'));
+      if(owners.has(annotation)||owner&&(!(owner instanceof PDFRef)||owner.toString()!==page.ref.toString()))fail(code);
+      owners.add(annotation);if(widget)members.set(annotation,page.ref);
     }
   }
+  const acroRaw=pdf.catalog.get(n('AcroForm'));
+  if(!acroRaw) {
+    if(members.size)fail('MERGE_FIELD_GRAPH_UNSAFE');
+    return {acro:undefined,fields:[],roots:[],names:[]};
+  }
+  const acro=dict(pdf,acroRaw,'MERGE_FIELD_GRAPH_UNSAFE'),fields=[],names=[],seen=new Set();
   const walk=(raw,parent,path,ft,dr,da,depth)=>{
     if(depth>GRAPH_MAX_DEPTH||fields.length>=GRAPH_MAX_NODES)fail('MERGE_GRAPH_LIMIT');
     const field=dict(pdf,raw,'MERGE_FIELD_GRAPH_UNSAFE');if(seen.has(field))fail('MERGE_FIELD_GRAPH_UNSAFE');seen.add(field);
