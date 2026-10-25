@@ -121,3 +121,13 @@ test('encrypted rewrite is unlocked, disclosed and capped locally',async()=>{
   assert.ok(result.notices.some(n=>n.code==='ENCRYPTED_COPY_UNLOCKED'));
   await assert.rejects(transformPages(new Uint8Array(50*1024*1024+1),{type:'rotate',index:0,quarterTurns:1}),{code:'LOCAL_PDF_TOO_LARGE'});
 });
+test('bounded signatures reject deep field ancestry and deletion refuses unrecognized catalog page references',async()=>{
+  const pdf=await fixture(),ctx=pdf.context;
+  let field=ctx.obj({FT:'Tx'});
+  for(let i=0;i<66;i++)field=ctx.obj({Kids:[ctx.register(field)]});
+  pdf.catalog.set(PDFName.of('AcroForm'),ctx.obj({Fields:[ctx.register(field)]}));
+  await assert.rejects(inspectLocalPdf(await pdf.save()),{code:'SIGNATURE_UNKNOWN'});
+  pdf.catalog.delete(PDFName.of('AcroForm'));
+  pdf.catalog.set(PDFName.of('UnrecognizedPageTarget'),ctx.obj([pdf.getPage(0).ref,'Fit']));
+  await assert.rejects(transformPages(await pdf.save(),{type:'delete',index:0}),{code:'CATALOG_UNSAFE'});
+});
