@@ -1,4 +1,4 @@
-import {PDFDocument, PDFName, PDFDict, PDFArray, PDFNumber, PDFRef, PDFNull, PDFParser, PDFRawStream, PDFInvalidObject, degrees} from '@cantoo/pdf-lib';
+import {PDFDocument, PDFName, PDFDict, PDFArray, PDFNumber, PDFRef, PDFNull, PDFParser, PDFStream, PDFRawStream, PDFInvalidObject, degrees} from '@cantoo/pdf-lib';
 
 export const MAX_LOCAL_PDF_BYTES=50*1024*1024;
 export const GRAPH_MAX_DEPTH=64;
@@ -246,9 +246,10 @@ function planDeletion(pdf,index) {
         parent instanceof PDFArray&&pages.some(page=>page.node.Parent()?.get(name('Kids'))===parent||resolve(page.node.Parent()?.get(name('Kids')))===parent);
       if(!allowed)bad();return;
     }
-    const value=resolve(raw);if(!(value instanceof PDFDict)&&!(value instanceof PDFArray)||graphSeen.has(value))return;
+    const value=resolve(raw);if(!(value instanceof PDFDict)&&!(value instanceof PDFArray)&&!(value instanceof PDFStream)||graphSeen.has(value))return;
     graphSeen.add(value);
-    if(value instanceof PDFArray)value.asArray().forEach((child,i)=>scan(child,depth+1,value,i));
+    if(value instanceof PDFStream)scan(value.dict,depth+1,value,'dict');
+    else if(value instanceof PDFArray)value.asArray().forEach((child,i)=>scan(child,depth+1,value,i));
     else for(const [k,child] of value.entries())scan(child,depth+1,value,k);
   };
   scan(pdf.catalog,0);
