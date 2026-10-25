@@ -79,6 +79,15 @@ test('abort releases current and late bitmap/canvas resources, including cancell
   const failed=canvasAdapter(2,1,{encodeError:true});
   await assert.rejects(decodeLocalImage(file(png()),{decodeBitmap:async()=>({width:2,height:1,close(){}}),createCanvas:failed.createCanvas}),{code:'IMAGE_DECODE_FAILED'});assert.equal(failed.canvas.width,0);
 });
+test('cancel during native encoding releases the canvas promptly; decode/context failures reveal no parser details',async()=>{
+  const a=canvasAdapter(),controller=new AbortController();let finishEncode;
+  a.canvas.convertToBlob=()=>new Promise(resolve=>{finishEncode=resolve;});
+  const pending=decodeLocalImage(file(png()),{signal:controller.signal,decodeBitmap:async()=>({width:2,height:1,close(){}}),createCanvas:a.createCanvas});
+  while(!finishEncode)await new Promise(resolve=>setImmediate(resolve));controller.abort();await assert.rejects(pending,{code:'IMAGE_ABORTED'});assert.equal(a.canvas.width,0);finishEncode(file(png()));
+  await assert.rejects(decodeLocalImage(file(png()),{decodeBitmap:async()=>{throw Error('private parser trace');}}),{code:'IMAGE_DECODE_FAILED',message:'IMAGE_DECODE_FAILED'});
+  let closes=0;const badCanvas={width:2,height:1,getContext(){return null;}};
+  await assert.rejects(decodeLocalImage(file(png()),{decodeBitmap:async()=>({width:2,height:1,close(){closes++;}}),createCanvas:()=>badCanvas}),{code:'IMAGE_DECODE_FAILED'});assert.equal(closes,1);assert.equal(badCanvas.width,0);
+});
 function content(pdf,page) {const raw=page.node.get(n('Contents'));if(!raw)return [];const value=pdf.context.lookup(raw);return (value instanceof PDFArray?value.asArray():[raw]).map(ref=>Buffer.from(decodePDFRawStream(pdf.context.lookup(ref)).decode()).toString());}
 async function pdfFixture(rotation=0) {
   const pdf=await PDFDocument.create(),first=pdf.addPage([300,220]),other=pdf.addPage([300,220]);
@@ -116,4 +125,11 @@ test('image failures return no output and source buffers remain immutable; modul
   for(const options of [{destination:'current-page',pageIndex:8,rect:{}},{destination:'current-page',pageIndex:0,rect:{left:-1,top:0,width:2,height:1}},{destination:'new-page',pageIndex:0,position:'bad'},{destination:'bad',pageIndex:0}])await assert.rejects(writeImage(bytes,png(),options));
   await assert.rejects(writeImage(bytes,new Uint8Array([1,2]),{destination:'new-page',pageIndex:0,position:'after'}));assert.deepEqual(bytes,original);
   for(const path of ['images.mjs','imageGeometry.mjs'])assert.doesNotMatch(await readFile(new URL(path,import.meta.url),'utf8'),/\bfetch\s*\(|XMLHttpRequest|ignoreEncryption/);
+});
+test('existing AcroForm appearance streams and their references survive image save exactly',async()=>{
+  const pdf=await pdfFixture(),page=pdf.getPage(0),form=pdf.getForm(),field=form.createTextField('preserved');field.setText('retained');field.addToPage(page,{x:30,y:40,width:70,height:20});
+  const bytes=await pdf.save(),before=await loadLocalPdf(bytes);
+  const appearances=doc=>doc.getForm().getTextField('preserved').acroField.getWidgets().map(widget=>{const raw=widget.dict.lookup(n('AP'),PDFDict).get(n('N'));return {ref:String(raw),bytes:Buffer.from(doc.context.lookup(raw).getContents()).toString('hex')};});
+  const expected=appearances(before),result=await writeImage(bytes,png(),{destination:'current-page',pageIndex:0,rect:{left:10,top:10,width:20,height:10}}),out=await loadLocalPdf(result.bytes);
+  assert.deepEqual(appearances(out),expected);assert.equal(out.getForm().getTextField('preserved').getText(),'retained');
 });
