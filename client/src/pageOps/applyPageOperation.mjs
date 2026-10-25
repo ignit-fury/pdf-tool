@@ -28,9 +28,10 @@ export async function applyPageOperation({snapshot,transform,prepare,isCurrent,a
     admission=await admit({snapshot,candidateBytes:result.bytes,temporaryBytes:prepared.bytes?[prepared.bytes]:0,stage:'after-prepare'});
     if(!fresh()){await dispose();return {status:'stale'};}
     if(admission?.ok!==true){await dispose();return refused(admission);}
+    const localMetadata=result.localMetadata??prepared.localMetadata??null;
     const next={...snapshot,bytes:result.bytes,sourceBytes:result.bytes,password:undefined,recipe:[],selectedPage:result.selectedPage??snapshot.selectedPage,selection:null,
-      localMetadata:result.localMetadata??prepared.localMetadata??null,analysis:{enabled:false,sourceIdentity:null,meta:null,index:null},findState:null,
-      acknowledged:result.localMetadata?.signed===true&&(result.acknowledged===true||snapshot.localMetadata.signed===true&&snapshot.acknowledged===true),action:result.action??'page'};
+      localMetadata,analysis:{enabled:false,sourceIdentity:null,meta:null,index:null},findState:null,
+      acknowledged:localMetadata?.signed===true&&(result.acknowledged===true||snapshot.localMetadata.signed===true&&snapshot.acknowledged===true),action:result.action??'page'};
     commit(prepared,next,snapshot);
     return {status:'applied',next,notices:result.notices??[]};
   }catch(error) {await dispose();return fresh()?{status:error?.code?'refused':'failed',error,code:error?.code}:{status:'stale'};}

@@ -47,11 +47,12 @@ export function describePage(pdf,index) {
   const unit=page.node.lookupMaybe(name('UserUnit'),PDFNumber)?.asNumber()??1;
   const angle=page.getRotation().angle,rotation=((angle%360)+360)%360;
   for(const box of [mediaBox,cropBox])if(!Object.values(box).every(Number.isFinite)||box.width<=0||box.height<=0)refuse('PAGE_GEOMETRY_INVALID');
-  if(!Number.isFinite(unit)||unit<=0||!Number.isInteger(rotation/90))refuse('PAGE_GEOMETRY_INVALID');
+  if(!Number.isFinite(unit)||unit<=0||unit>75000||!Number.isInteger(rotation/90))refuse('PAGE_GEOMETRY_INVALID');
   const width=Math.max(0,Math.min(mediaBox.x+mediaBox.width,cropBox.x+cropBox.width)-Math.max(mediaBox.x,cropBox.x));
   const height=Math.max(0,Math.min(mediaBox.y+mediaBox.height,cropBox.y+cropBox.height)-Math.max(mediaBox.y,cropBox.y));
   // pdf.js falls back to MediaBox for a disjoint/empty crop.
   const w=(width&&height?width:mediaBox.width)*unit,h=(width&&height?height:mediaBox.height)*unit;
+  if(!Number.isFinite(w)||!Number.isFinite(h)||w<=0||h<=0)refuse('PAGE_GEOMETRY_INVALID');
   return {mediaBox,cropBox,userUnit:unit,rotation,visibleWidth:rotation%180?h:w,visibleHeight:rotation%180?w:h};
 }
 /** Bounded field-tree traversal; malformed, repeated or cyclic field identities fail closed. */

@@ -15,8 +15,10 @@ function buffersIn(value,buffers=new Set(),seen=new Set()) {
  * Payload buffers are cloned into disposable backing stores before transfer. Caller
  * must separately admit retention plus all import/output/prepared buffers; this
  * facade additionally caps known source/copy stores before allocating them.
- * timeoutMs defaults to one 30s deadline covering the entire worker operation. */
-export function runPdfJob({workerFactory,command,payload,signal,timeoutMs=30000}) {
+ * timeoutMs defaults to one 30s deadline covering the entire worker operation.
+ * errorCodes accepts only caller-constant uppercase codes for imported operation modules;
+ * unknown/untrusted worker error content is never passed to the UI. */
+export function runPdfJob({workerFactory,command,payload,signal,timeoutMs=30000,errorCodes=[]}) {
   return new Promise((resolve,reject)=>{
     if(signal?.aborted){reject(error('PDF_JOB_ABORTED'));return;}
     const buffers=buffersIn(payload),size=[...buffers].reduce((n,buffer)=>n+buffer.byteLength,0);
@@ -24,13 +26,15 @@ export function runPdfJob({workerFactory,command,payload,signal,timeoutMs=30000}
     if(size*2>MAX_TRANSIENT_BYTES){reject(error('TRANSIENT_LIMIT'));return;}
     if(!Number.isFinite(timeoutMs)||timeoutMs<=0||timeoutMs>30000){reject(error('PDF_JOB_TIMEOUT'));return;}
     let worker,timer,settled=false;
+    const codes=new Set(allowedCodes);
+    if(Array.isArray(errorCodes))for(const code of errorCodes)if(typeof code==='string'&&/^[A-Z][A-Z0-9_]{0,63}$/.test(code))codes.add(code);
     const id=++sequence;
     const finish=(err,result)=>{
       if(settled)return;settled=true;clearTimeout(timer);
       signal?.removeEventListener('abort',abort);
       if(worker) {
-        for(const [kind,handler] of [['message',message],['error',crash],['messageerror',crash]])worker.removeEventListener(kind,handler);
-        worker.terminate();
+        for(const [kind,handler] of [['message',message],['error',crash],['messageerror',crash]])try{worker.removeEventListener(kind,handler);}catch{}
+        try{worker.terminate();}catch{}
       }
       if(err)reject(err);else resolve(result);
     };
@@ -39,7 +43,7 @@ export function runPdfJob({workerFactory,command,payload,signal,timeoutMs=30000}
     const message=event=>{
       const data=event.data;
       if(!data||data.id!==id||typeof data.ok!=='boolean')return finish(error('PDF_WORKER_RESULT_INVALID'));
-      if(!data.ok)return finish(error(allowedCodes.has(data.error?.code)?data.error.code:'PDF_JOB_FAILED'));
+      if(!data.ok)return finish(error(codes.has(data.error?.code)?data.error.code:'PDF_JOB_FAILED'));
       if(data.result===undefined||data.result===null||typeof data.result!=='object')return finish(error('PDF_WORKER_RESULT_INVALID'));
       finish(null,data.result);
     };
