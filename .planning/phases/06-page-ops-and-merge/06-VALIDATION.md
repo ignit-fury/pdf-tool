@@ -55,7 +55,20 @@ Each new test is created RED-first in its named plan. 01 owns pdfDocument/docume
 
 ## Actual browser proof — 06-06 task 2 owns every row
 
-Use existing connector. Begin observation before Open after app boot; resolve configured API origin/path prefix at segment boundaries. Empty base means same-origin fetch/xhr observation with only genuine `/assets/` static exclusions. Do not enumerate/exempt historical API routes. Retain RED provenance `/private/tmp/pdf-tool-phase6-network-red-20261025.json`: actual POST /upload and GET page runs. Record fresh GREEN request methods/URLs/types/counts on built output through local password, rail visibility, panel switching, navigation, all page operations, PDF merge, PNG/JPEG/WebP, Undo/download. Require zero matching requests. Separate explicit Analyze/HEIC journeys prove the only intended crossings and image-only payload without PDF/password.
+Use the existing connector. Begin browser-context request observation before Open
+after app boot; resolve configured API origin/path prefix at segment boundaries.
+Observe all HTTP request types, including workers, navigation and downloads, so
+a direct API download cannot evade a fetch/xhr-only detector. For the empty
+same-origin base, exempt only the actual `/assets/` static namespace and the
+browser's favicon request; ignore local blob/data URLs. Never enumerate/exempt
+historical API routes. Retain the earlier fetch/xhr RED provenance
+`/private/tmp/pdf-tool-phase6-network-red-20261025.json`: actual POST /upload and
+GET page runs. Record fresh GREEN request methods/URLs/types/counts on built
+output through local password, rail visibility, panel switching, navigation, all
+page operations, PDF merge, PNG/JPEG/WebP, Undo/download. Require zero matching
+requests. Separate explicit Analyze/HEIC journeys prove the only intended
+crossings and image-only payload without PDF/password. Negative observer controls
+must count a synthetic new API path and a navigation-type API download.
 
 Record date/browser/revision, source/download digests, screenshot/capture paths and actual outcomes in `06-G5-RESULTS.md`. Must observe: inheritance before insert; scanned keyboard reorder/rotate/delete/Undo; form/outline collision/no-collision/no-fields notices; unchecked normalization; checked lock/live white preview on rotated/cropped pages; EXIF/transparency; 320/760px layout/focus; native find/input Undo; mixed text/page history/cache/password/style; signed/unlocked-copy disclosures; immutable original; cancel/stale/timeout/retention refusal; HEIC actual success/unavailable/cancel/failure. Connector automation satisfies these observations without a user approval pause. Remove injected routes/observers and close sensitive documents afterward.
 
