@@ -11,6 +11,8 @@ import {buildReplacementRecipe} from './find/buildRecipe.mjs';
 import {createIndexingController} from './find/indexing.mjs';
 import {previewReplacement} from './find/preview.mjs';
 import {applyReviewedReplacement} from './find/replaceAll.mjs';
+import {createLocalSession,restoreSession,snapshotCopyBytes,canAnalyzeText} from './session.mjs';
+import {runPdfJob} from './pageOps/pdfWorker.mjs';
 
 pdfjs.GlobalWorkerOptions.workerSrc=workerUrl;
 const API=import.meta.env.VITE_API_URL||'';
@@ -33,7 +35,8 @@ export default function App(){
   const [recipeState,setRecipeState]=useState(EMPTY),[preview,setPreview]=useState(null),[output,setOutput]=useState(null);
   const [busy,setBusy]=useState(''),[message,setMessage]=useState(''),[passwordPrompt,setPasswordPrompt]=useState(null),[passwordInput,setPasswordInput]=useState('');
   const [acknowledged,setAcknowledged]=useState(false),[dragging,setDragging]=useState(false);
-  const [panel,setPanel]=useState('inspector'),[query,setQuery]=useState(''),[replacement,setReplacement]=useState(''),[fontFamily,setFontFamily]=useState('');
+  const [panel,setPanel]=useState('pages'),[query,setQuery]=useState(''),[replacement,setReplacement]=useState(''),[fontFamily,setFontFamily]=useState('');
+  const [localMetadata,setLocalMetadata]=useState(null);
   const [matchCase,setMatchCase]=useState(false),[wholeWords,setWholeWords]=useState(false),[excludedIds,setExcludedIds]=useState(new Set());
   const [indexProgress,setIndexProgress]=useState(EMPTY_PROGRESS),[batchReview,setBatchReview]=useState(null),[batchError,setBatchError]=useState('');
   const [activeMatch,setActiveMatch]=useState(null),[resultPage,setResultPage]=useState(1),[navigationStatus,setNavigationStatus]=useState('');
@@ -45,10 +48,10 @@ export default function App(){
   const clear=useCallback(()=>{
     editVersion.current++;
     indexingRef.current?.dispose();indexingRef.current=null;busyOwnerRef.current=null;
-    const old=sessionRef.current;if(old){old.controller.abort();old.passwordResolve?.(null);old.original=null;old.password='';}
+    const old=sessionRef.current;if(old){old.controller.abort();old.passwordResolve?.(null);old.original=null;old.openedBytes=null;old.sourceBytes=null;old.bytes=null;old.password='';}
     sessionRef.current=null;loadingRef.current?.destroy();loadingRef.current=null;disposeDocument(pdfRef.current);pdfRef.current=null;
     setSession(null);setPdf(null);setMeta(null);setIndex({});setSelection(null);setRecipeState(EMPTY);setPreview(null);setOutput(null);setMessage('');setBusy('');setPage(1);setAcknowledged(false);setPasswordPrompt(null);setPasswordInput('');
-    setPanel('inspector');setQuery('');setReplacement('');setFontFamily('');setMatchCase(false);setWholeWords(false);setExcludedIds(new Set());setIndexProgress(EMPTY_PROGRESS);setBatchReview(null);setBatchError('');setActiveMatch(null);setResultPage(1);setNavigationStatus('');rowRefs.current.clear();
+    setPanel('pages');setLocalMetadata(null);setQuery('');setReplacement('');setFontFamily('');setMatchCase(false);setWholeWords(false);setExcludedIds(new Set());setIndexProgress(EMPTY_PROGRESS);setBatchReview(null);setBatchError('');setActiveMatch(null);setResultPage(1);setNavigationStatus('');rowRefs.current.clear();
     setSourceMismatch(false);setIndexRevision(0);
     setHistoryKinds([]);
   },[]);
@@ -70,8 +73,12 @@ export default function App(){
     if(!target.passwordPromise){target.passwordPromise=new Promise(resolve=>{target.passwordResolve=resolve;});setPasswordInput('');setPasswordPrompt({target,incorrect});}
     return target.passwordPromise;
   },[]);
-  const upload=useCallback((target,bytes=target.original,password=target.password)=>request('/upload',{method:'POST',body:bytes,signal:target.controller.signal,headers:{'Content-Type':'application/pdf',...passwordHeaders(password)}}),[]);
-  const documentRequest=useCallback((target,suffix,options={},priority=0)=>target.queue.run(()=>retryWorkerBusy(()=>withSourceRetry(target,jobId=>request(`/jobs/${encodeURIComponent(jobId)}${suffix}`,{...options,signal:target.controller.signal,headers:{...passwordHeaders(target.password),...options.headers}}),(bytes,password)=>upload(target,bytes,password)),{signal:target.controller.signal}),priority),[upload]);
+  const upload=useCallback((target,bytes=target.sourceBytes,password=target.password)=>request('/upload',{method:'POST',body:bytes,signal:target.controller.signal,headers:{'Content-Type':'application/pdf',...passwordHeaders(password)}}),[]);
+  const documentRequest=useCallback((target,suffix,options={},priority=0)=>{
+    if(!canAnalyzeText(target))return Promise.reject(new DOMException('Choose Analyze text first','AbortError'));
+    return target.queue.run(()=>retryWorkerBusy(()=>withSourceRetry(target,jobId=>request(`/jobs/${encodeURIComponent(jobId)}${suffix}`,{...options,signal:target.controller.signal,headers:{...passwordHeaders(target.password),...options.headers}}),(bytes,password)=>upload(target,bytes,password)),{signal:target.controller.signal}),priority);
+  },[upload]);
+  const pdfJob=(target,command,payload,errorCodes=[])=>runPdfJob({workerFactory:()=>new Worker(new URL('./pageOps/pdfJob.worker.mjs',import.meta.url),{type:'module'}),command,payload,signal:target.controller.signal,errorCodes});
   const prepareViewer=useCallback(async(target,bytes,isCurrent=()=>current(target))=>{
     if(!isCurrent())throw new DOMException('Document changed','AbortError');
     const assetRoot=`${import.meta.env.BASE_URL}assets/pdfjs/`;
@@ -96,20 +103,31 @@ export default function App(){
   },[prepareViewer,publishViewer]);
   const openFile=useCallback(async file=>{
     if(!file)return;clear();const owner=beginWork('open','Opening document…');
-    const target={name:file.name,password:'',original:null,controller:new AbortController(),jobId:null,pages:new Map()};target.queue=createRequestQueue({limit:2,signal:target.controller.signal});sessionRef.current=target;
+    const target=createLocalSession({name:file.name});sessionRef.current=target;
     try{
       if(file.size>50*1024*1024)throw new Error('This PDF is larger than the 50 MB limit. Choose a smaller file.');
       const bytes=new Uint8Array(await file.arrayBuffer());if(!current(target))return;
       if(new TextDecoder('ascii').decode(bytes.slice(0,5))!=='%PDF-')throw new Error('This file is not a PDF. Choose a file with a PDF header.');
-      target.original=bytes;setSession(target);
-      const viewer=loadViewer(target,bytes).catch(error=>{if(current(target)&&!ignored(error))setMessage('The document viewer could not open this PDF.');});
-      let result;for(;;){try{result=await upload(target);break;}catch(error){if(!['PASSWORD_REQUIRED','PASSWORD_INCORRECT'].includes(error.code))throw error;if(error.code==='PASSWORD_REQUIRED'&&target.password)continue;const password=await askPassword(target,error.code==='PASSWORD_INCORRECT');if(password===null||!current(target))return;}}
-      if(!current(target))return;target.jobId=result.job_id;setMeta(result);await viewer;
+      target.openedBytes=bytes;target.sourceBytes=bytes;target.bytes=bytes;setSession(target);
+      await loadViewer(target,bytes);
+      if(!current(target))return;
+      const result=await pdfJob(target,'inspect',{bytes,options:{password:target.password}});
+      if(current(target)&&sessionRef.current===target)setLocalMetadata(result);
     }catch(error){if(current(target)&&!ignored(error))setMessage(error.message);}
     finally{if(current(target))finishWork(owner);}
-  },[clear,loadViewer,upload,askPassword]);
+  },[clear,loadViewer]);
+  const analyze=async()=>{
+    const target=sessionRef.current;if(!target||busyOwnerRef.current)return;
+    const owner=beginWork('analysis','Analyzing text on the server…');
+    try {
+      const result=await upload(target);
+      if(!current(target)||sessionRef.current!==target)return;
+      target.analysisEnabled=true;target.sourceIdentity=crypto.randomUUID();target.jobId=result.job_id;setMeta(result);
+    }catch(error){if(current(target)&&!ignored(error))setMessage(error.message);}
+    finally{finishWork(owner);}
+  };
   const fetchRuns=useCallback((number,priority=10)=>{
-    const target=sessionRef.current;if(!target?.jobId)return Promise.resolve(null);
+    const target=sessionRef.current;if(!canAnalyzeText(target))return Promise.resolve(null);
     if(target.pages.has(number)){target.pages.get(number).promote?.(priority);return target.pages.get(number);}
     const pending=documentRequest(target,`/pages/${number-1}/runs`,{},priority);
     target.pages.set(number,pending);
@@ -120,8 +138,8 @@ export default function App(){
   useEffect(()=>{if(busyOwnerRef.current?.kind==='single-preview')editVersion.current++;setSelection(null);setPreview(null);},[page]);
   useEffect(()=>{setPreview(null);},[draft,style]);
   useEffect(()=>{
-    if(!session||!meta)return;
-    const target=session,controller=createIndexingController({fetchPage:number=>fetchRuns(number,20),onProgress:setIndexProgress,isCurrent:()=>current(target)&&sessionRef.current===target});
+    if(!session||!meta||!canAnalyzeText(sessionRef.current))return;
+    const target=sessionRef.current,controller=createIndexingController({fetchPage:number=>fetchRuns(number,20),onProgress:setIndexProgress,isCurrent:()=>current(target)&&sessionRef.current===target});
     indexingRef.current=controller;
     return()=>{controller.dispose();if(indexingRef.current===controller)indexingRef.current=null;};
   },[session,meta,fetchRuns,indexRevision]);
@@ -209,7 +227,7 @@ export default function App(){
     const valid=()=>current(target)&&sessionRef.current===target&&busyOwnerRef.current===owner&&editVersion.current===version;
     setBatchReview(null);setPreview(null);setMessage('');let prepared;
     try{
-      let bytes=target.original;
+      let bytes=target.openedBytes;
       if(operationLocation(restored.recipe)==='server'){
         const result=await documentRequest(target,`/edit?dry_run=false&acknowledge_signature=${acknowledged}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(restored.recipe)});
         if(!valid())return;
@@ -226,7 +244,7 @@ export default function App(){
     finally{finishWork(owner);}
   },[recipeState,historyKinds,documentRequest,prepareViewer,publishViewer,acknowledged]);
   useEffect(()=>{const handler=event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'&&!event.shiftKey&&!event.target.closest('input,textarea,[contenteditable=true]')){event.preventDefault();undo();}};window.addEventListener('keydown',handler);return()=>window.removeEventListener('keydown',handler);},[undo]);
-  const download=()=>{const url=URL.createObjectURL(new Blob([output||session.original],{type:'application/pdf'})),anchor=document.createElement('a');anchor.href=url;anchor.download=output?`edited-${session.name.replace(/\.pdf$/i,'')}.pdf`:session.name;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+  const download=()=>{const url=URL.createObjectURL(new Blob([output||session.openedBytes],{type:'application/pdf'})),anchor=document.createElement('a');anchor.href=url;anchor.download=output?`edited-${session.name.replace(/\.pdf$/i,'')}.pdf`:session.name;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
   const pageData=index[page],runs=pageData?.runs||[],noEditable=pageData&&!runs.some(run=>run.state!=='not_editable');
   const batchPreviewing=busyOwnerRef.current?.kind==='batch-preview',findLocked=!!busy&&!batchPreviewing;
   const currentReview=batchReview?.key===batchKey?batchReview:null;
@@ -235,13 +253,13 @@ export default function App(){
     <header className="app-header"><div className="brand"><span className="brand-mark" aria-hidden="true">P<span>↳</span></span><strong>PDF Tool</strong><span className="brand-caption">Document workstation</span></div><button onClick={()=>inputRef.current.click()}>Open PDF</button></header>
     <input ref={inputRef} type="file" accept="application/pdf,.pdf" className="visually-hidden" aria-label="Open PDF file" onChange={event=>{const file=event.target.files[0];event.target.value='';openFile(file);}}/>
     {dragging&&<div className="drop-overlay">Drop your PDF to open it</div>}
-    {!session?<main className="welcome"><div className="welcome-copy"><p className="edition">A focused place for precise changes</p><h1>Your document.<br/>A few words better.</h1><p>Open a PDF, select a text run, and make the change. Keep the page around it intact.</p><button className="primary large" onClick={()=>inputRef.current.click()}>Choose a PDF</button><span className="drop-hint">or drop a file anywhere on this page</span></div><div className="welcome-sheet" aria-hidden="true"><div className="sheet-rule"/><span className="sheet-title">A working document</span><div className="ink-line long"/><div className="ink-line"/><div className="ink-line medium"/><div className="sample-edit">Make room for a better word.</div><div className="ink-line long"/><div className="ink-line"/><div className="ink-line medium"/><span className="sheet-page">1</span></div><div className="privacy-intro"><strong>Know where your document goes.</strong><p>Viewing, selecting text, and downloading happen in your browser. Opening uploads the PDF for analysis; text and style edits run on the server. Your browser keeps the original for recovery.</p></div></main>:<>
-      <section className="document-bar"><div className="document-title"><strong title={session.name}>{session.name}</strong><span>{meta?`${meta.page_count} ${meta.page_count===1?'page':'pages'}`:'Opening PDF'}{session.original&&` · ${(session.original.length/1024).toFixed(0)} KB`}{recipeState.recipe.length?` · ${recipeState.recipe.length} edited text ${recipeState.recipe.length===1?'run':'runs'}`:''}</span></div><div className="document-actions"><button onClick={undo} disabled={!!busy||!recipeState.history.length} title={`Undo last edit (Ctrl/Cmd+Z): ${operationLocation(previousRecipe(recipeState).recipe)==='server'?'server replay':'browser'}`}>{historyKinds.at(-1)==='batch'?'Undo replacements':'Undo'} <span className="action-location">{operationLocation(previousRecipe(recipeState).recipe)==='server'?'Server':'Browser'}</span></button><button className="primary" disabled={!!busy||!pdf} onClick={download}>{output?'Download edited PDF':'Download original'} <span className="action-location">Browser</span></button><button onClick={clear}>Close</button></div></section>
-      {meta?.signed&&<div className="signature-notice"><strong>Digitally signed document.</strong> Any edit invalidates its signature. Downloading the untouched original preserves its bytes.<label><input type="checkbox" checked={acknowledged} onChange={event=>setAcknowledged(event.target.checked)} disabled={!!output}/> I understand that editing invalidates the signature.</label></div>}
-      {meta?.encrypted&&<div className="notice">Password-protected PDF. The original download retains its encryption. An edited copy may use different encryption settings.</div>}
+    {!session?<main className="welcome"><div className="welcome-copy"><p className="edition">A focused place for precise changes</p><h1>Your document.<br/>A few words better.</h1><p>Open a PDF, select a text run, and make the change. Keep the page around it intact.</p><button className="primary large" onClick={()=>inputRef.current.click()}>Choose a PDF</button><span className="drop-hint">or drop a file anywhere on this page</span></div><div className="welcome-sheet" aria-hidden="true"><div className="sheet-rule"/><span className="sheet-title">A working document</span><div className="ink-line long"/><div className="ink-line"/><div className="ink-line medium"/><div className="sample-edit">Make room for a better word.</div><div className="ink-line long"/><div className="ink-line"/><div className="ink-line medium"/><span className="sheet-page">1</span></div><div className="privacy-intro"><strong>Know where your document goes.</strong><p>Open and organize PDFs in your browser. Text analysis and text edits use the server. HEIC conversion uploads only the selected image when you choose Convert.</p></div></main>:<>
+      <section className="document-bar"><div className="document-title"><strong title={session.name}>{session.name}</strong><span>{localMetadata?`${localMetadata.pageCount} ${localMetadata.pageCount===1?'page':'pages'}`:'Opening PDF'}{session.openedBytes&&` · ${(session.openedBytes.length/1024).toFixed(0)} KB`}{recipeState.recipe.length?` · ${recipeState.recipe.length} edited text ${recipeState.recipe.length===1?'run':'runs'}`:''}</span></div><div className="document-actions"><button onClick={undo} disabled={!!busy||!recipeState.history.length} title={`Undo last edit (Ctrl/Cmd+Z): ${operationLocation(previousRecipe(recipeState).recipe)==='server'?'server replay':'browser'}`}>{historyKinds.at(-1)==='batch'?'Undo replacements':'Undo'} <span className="action-location">{operationLocation(previousRecipe(recipeState).recipe)==='server'?'Server':'Browser'}</span></button><button className="primary" disabled={!!busy||!pdf} onClick={download}>{output?'Download edited PDF':'Download original'} <span className="action-location">Browser</span></button><button onClick={clear}>Close</button></div></section>
+      {localMetadata?.signed&&<div className="signature-notice"><strong>Digitally signed document.</strong> Any edit invalidates its signature. Downloading the untouched original preserves its bytes.<label><input type="checkbox" checked={acknowledged} onChange={event=>setAcknowledged(event.target.checked)} disabled={!!output}/> I understand that editing invalidates the signature.</label></div>}
+      {localMetadata?.encrypted&&<div className="notice">Local edits save an unlocked copy. Your untouched original retains its password protection.</div>}
       <main className="workspace"><aside className="page-rail" aria-label="Document pages"><h2>Pages <span className="location">Browser</span></h2>{pdf&&Array.from({length:pdf.numPages},(_,i)=><Thumbnail key={`${pdf.fingerprints[0]}-${i}`} pdf={pdf} number={i+1} current={page===i+1} badge={index[i+1]?.bucket} onSelect={number=>{setPage(number);fetchRuns(number,0);}} onVisible={fetchRuns}/>)}</aside>
       <section className="viewer"><div className="viewer-toolbar"><div className="mode-switch" role="group" aria-label="Text mode"><button className={mode==='select'?'active':''} onClick={()=>setMode('select')}>Select text</button><button className={mode==='edit'?'active':''} onClick={()=>setMode('edit')}>Edit text</button></div><div className="page-controls"><button aria-label="Previous page" disabled={page<=1} onClick={()=>setPage(page-1)}>‹</button><span>{page} / {pdf?.numPages||'…'}</span><button aria-label="Next page" disabled={!pdf||page>=pdf.numPages} onClick={()=>setPage(page+1)}>›</button><label className="zoom"><span className="visually-hidden">Zoom</span><select value={scale} onChange={event=>setScale(Number(event.target.value))}><option value="0.65">65%</option><option value="0.85">85%</option><option value="1">100%</option><option value="1.15">115%</option><option value="1.5">150%</option><option value="2">200%</option></select></label></div></div><div className="canvas-stage">{pdf?<PageCanvas pdf={pdf} pageNumber={page} scale={scale} mode={mode} runs={runs} selected={selection?.run_id} onSelect={choose} findTarget={findTarget}/>:<p className="loading-page">Opening the first page…</p>}</div><div className="viewer-caption">{panel==='find'&&activeMatch&&<button className="back-results" onClick={()=>{setResultPage(Math.floor(matches.findIndex(match=>match.id===activeMatch.id)/50)+1);requestAnimationFrame(()=>rowRefs.current.get(activeMatch.id)?.focus());}}>Back to results</button>}<span>{mode==='select'?'Select and copy text, or use your browser’s find on this page.':'Choose an outlined text run to inspect and edit it.'}</span><span className="location">Viewing in browser</span></div>{panel==='find'&&navigationStatus&&<p className="find-navigation-status" aria-live="polite">{navigationStatus}</p>}</section>
-      <aside className="inspector"><div className="panel-switch" role="group" aria-label="Inspector panel"><button ref={inspectorButtonRef} aria-pressed={panel==='inspector'} onClick={showInspector}>Text inspector</button><button aria-pressed={panel==='find'} onClick={showFind}>Find and replace</button></div>{panel==='find'?<FindPanel query={query} replacement={replacement} fontFamily={fontFamily} matchCase={matchCase} wholeWords={wholeWords}
+      <aside className="inspector"><div className="panel-switch" role="group" aria-label="Inspector panel"><button aria-pressed={panel==='pages'} onClick={()=>setPanel('pages')}>Pages</button><button ref={inspectorButtonRef} aria-pressed={panel==='inspector'} onClick={showInspector}>Text inspector</button><button aria-pressed={panel==='find'} onClick={showFind}>Find and replace</button></div>{panel==='pages'?<p>Page tools are preparing.</p>:!meta?<div className="analysis-gate"><h2>Analyze text to edit it</h2><p>This uploads the current PDF for classification and text edits. Page tools work without uploading.</p><button className="primary" disabled={!!busy} onClick={analyze}>Analyze text <span className="location server">Server</span></button></div>:panel==='find'?<FindPanel query={query} replacement={replacement} fontFamily={fontFamily} matchCase={matchCase} wholeWords={wholeWords}
         onQuery={value=>changeFind(setQuery,value,true)} onReplacement={value=>changeFind(setReplacement,value)} onFont={value=>changeFind(setFontFamily,value)}
         onMatchCase={value=>changeFind(setMatchCase,value,true)} onWholeWords={value=>changeFind(setWholeWords,value,true)}
         progress={indexProgress} matches={matches} excludedIds={excludedIds} onToggle={id=>{invalidateBatch();setExcludedIds(previous=>{const next=new Set(previous);if(next.has(id))next.delete(id);else next.add(id);return next;});}}
@@ -251,7 +269,7 @@ export default function App(){
       {selection?<div className="edit-form"><div className="selected-heading"><h3>Selected text</h3><span className={`state-badge ${selection.state==='not_editable'?'blocked':''}`}>{selection.state==='editable_original'?'Original font':selection.state==='editable_substitution'?'Font substitution':'Cannot edit'}</span></div><p className="original-text">{selection.text}</p>{selection.state==='not_editable'?<p className="refusal-reason">{explainReason(selection.reason)}{refusalCode(selection.reason)&&<code>{refusalCode(selection.reason)}</code>}</p>:<><label>Replacement text<textarea value={draft} onChange={event=>{editVersion.current++;setPreview(null);setDraft(event.target.value);}} disabled={!!busy} rows={4}/></label><fieldset disabled={!!busy}><legend>Text style</legend><p className="source-font">Detected font: <strong>{selection.source_font||'Unknown'}</strong></p><label className="font-choice">Replacement font<select value={style.font_family||''} onChange={event=>setStyle(chooseFontFamily(style,event.target.value))}><option value="">Automatic — preserve or match original</option><option value="Serif">Serif — Liberation Serif</option><option value="Sans">Sans-serif — Liberation Sans</option><option value="Mono">Monospace — Liberation Mono</option></select></label>{needsFontChoice(selection,style)&&<p className="font-guidance">No automatic font match. Choose a replacement above to edit this text.</p>}<div className="style-controls"><label><input type="checkbox" checked={style.bold||false} onChange={event=>setStyle({...style,bold:event.target.checked})}/> Bold</label><label><input type="checkbox" checked={style.italic||false} onChange={event=>setStyle({...style,italic:event.target.checked})}/> Italic</label><label className="color-control">Color<input aria-label="Text color" type="color" value={style.color?`#${style.color.map(value=>Math.round(value*255).toString(16).padStart(2,'0')).join('')}`:'#000000'} onChange={event=>setStyle({...style,color:event.target.value.slice(1).match(/../g).map(value=>parseInt(value,16)/255)})}/></label></div><p className="size-refusal">Font-size changes are not supported. Edits must fit the original width.</p></fieldset>{(selection.state==='editable_substitution'||'font_family' in style||'bold' in style||'italic' in style)&&<p className="substitution-note">A bundled substitute font will be used. Preview checks its fit before applying.</p>}<button onClick={checkFit} disabled={!!busy||!meta}>Preview fit <span>Server</span></button>{preview&&<div className={`fit-result ${preview.result.ok?'fits':'does-not-fit'}`} role="status"><strong>{preview.result.ok?'Ready to apply':'Edit refused'}</strong>{preview.result.resolved?.map(item=><p key={item.run_id}>{item.ok?explainFit(item.strategy):explainReason(item.reason)}{!item.ok&&refusalCode(item.reason)&&<code>{refusalCode(item.reason)}</code>}</p>)}</div>}<button className="primary" onClick={apply} disabled={!!busy||!preview?.result.ok||(meta.signed&&!acknowledged)}>Apply edit <span>Server</span></button><p className="edit-disclosure">Preview and apply send the recipe to the server. Edits replay against the original PDF. Undo restores the previous recipe.</p></>}<button className="text-button" onClick={()=>setSelection(null)}>Back to page text</button></div>:!noEditable&&<><p className="inspector-hint">Switch to Edit text and choose a run on the page, or select one below.</p><div className="run-list">{runs.map(run=><button key={run.run_id} onClick={()=>{setMode('edit');choose(run);}}><span>{run.text||'(Empty text)'}</span><small>{run.state==='not_editable'?explainReason(run.reason):run.state==='editable_substitution'?'Substitute font':'Editable'}</small></button>)}</div></>}</>}</>}</aside></main>
     </>}
     {(busy||message)&&<div className="status-bar" role="status" aria-live="polite"><span>{busy||message}</span>{message&&!busy&&<button onClick={()=>setMessage('')} aria-label="Dismiss message">×</button>}</div>}
-    <footer className="app-footer"><span>Original stays in this browser’s memory while open.</span><span>Opening, analysis and editing use the server. No account required.</span></footer>
-    {passwordPrompt&&<div className="modal-backdrop"><form className="password-dialog" role="dialog" aria-modal="true" aria-labelledby="password-title" onSubmit={event=>{event.preventDefault();const target=passwordPrompt.target;target.password=passwordInput;const resolve=target.passwordResolve;target.passwordPromise=null;target.passwordResolve=null;setPasswordPrompt(null);setPasswordInput('');resolve?.(target.password);}}><h2 id="password-title">Unlock this PDF</h2><p>{passwordPrompt.incorrect?'That password was incorrect. Try again.':'Enter the document password to view and edit it.'}</p><label>PDF password<input autoFocus type="password" value={passwordInput} onChange={event=>setPasswordInput(event.target.value)} autoComplete="off"/></label><p className="small-copy">Kept in memory for this document and sent to the server to unlock it. Cleared when you close the document.</p><div className="dialog-actions"><button type="button" onClick={clear}>Cancel</button><button className="primary" type="submit">Unlock PDF</button></div></form></div>}
+    <footer className="app-footer"><span>Original stays in this browser’s memory while open.</span><span>Page changes and PDF download stay in this browser. Text analysis uses the server; HEIC conversion is a separate server action.</span></footer>
+    {passwordPrompt&&<div className="modal-backdrop"><form className="password-dialog" role="dialog" aria-modal="true" aria-labelledby="password-title" onSubmit={event=>{event.preventDefault();const target=passwordPrompt.target;target.password=passwordInput;const resolve=target.passwordResolve;target.passwordPromise=null;target.passwordResolve=null;setPasswordPrompt(null);setPasswordInput('');resolve?.(target.password);}}><h2 id="password-title">Unlock this PDF</h2><p>{passwordPrompt.incorrect?'That password was incorrect. Try again.':'Enter the document password to view and organize it in this browser.'}</p><label>PDF password<input autoFocus type="password" value={passwordInput} onChange={event=>setPasswordInput(event.target.value)} autoComplete="off"/></label><p className="small-copy">Kept in memory while this document is open. Sent to the server only if you choose text analysis.</p><div className="dialog-actions"><button type="button" onClick={clear}>Cancel</button><button className="primary" type="submit">Unlock PDF</button></div></form></div>}
   </div>;
 }

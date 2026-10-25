@@ -16,13 +16,33 @@ export function needsFontChoice(run, style) {
   return run?.state!=='not_editable'&&(run?.state==='editable_substitution'||run?.suggested_font_family===null)&&!run?.suggested_font_family&&!style.font_family;
 }
 export async function withSourceRetry(session, operation, upload) {
+  const restore=()=>{
+    if(!session.restoring)session.restoring=Promise.resolve().then(()=>upload(session.sourceBytes??session.original,session.password)).then(result=>{if(session.controller?.signal.aborted)throw new DOMException('Document closed','AbortError');session.jobId=result.job_id;}).finally(()=>{session.restoring=null;});
+    return session.restoring;
+  };
+  if(!session.jobId)await restore();
   try {return await operation(session.jobId);}
   catch (error) {
     if (error.status !== 409 || error.code !== 'SOURCE_MISSING') throw error;
-    if (!session.restoring) session.restoring = upload(session.original,session.password).then(result => {session.jobId=result.job_id;}).finally(()=>{session.restoring=null;});
-    await session.restoring;
+    await restore();
     return operation(session.jobId);
   }
+}
+export function createLocalSession({name,openedBytes,bytes=openedBytes,sourceBytes=bytes,password='',analysisEnabled=false,sourceIdentity=null}={}) {
+  const controller=new AbortController();
+  return {name,openedBytes,bytes,sourceBytes,password,analysisEnabled,sourceIdentity,controller,queue:createRequestQueue({limit:2,signal:controller.signal}),jobId:null,pages:new Map()};
+}
+export function restoreSession(previous,snapshot) {
+  return createLocalSession({name:previous.name,openedBytes:previous.openedBytes,bytes:snapshot.bytes,sourceBytes:snapshot.sourceBytes,password:snapshot.password,analysisEnabled:snapshot.analysis?.enabled===true,sourceIdentity:snapshot.analysis?.sourceIdentity});
+}
+export function canAnalyzeText(session) {return session?.analysisEnabled===true&&!session.controller.signal.aborted;}
+export function snapshotCopyBytes(value,stores=new Set(),seen=new Set()) {
+  if(!value||typeof value!=='object'||seen.has(value))return 0;
+  seen.add(value);
+  if(value instanceof ArrayBuffer)stores.add(value);
+  else if(ArrayBuffer.isView(value))stores.add(value.buffer);
+  else for(const child of Object.values(value))snapshotCopyBytes(child,stores,seen);
+  return [...stores].reduce((sum,buffer)=>sum+buffer.byteLength,0);
 }
 export function viewportBox(box, viewport) {
   const points=[[box[0],box[1]],[box[2],box[1]],[box[2],box[3]],[box[0],box[3]]].map(([x,y])=>viewport.convertToViewportPoint(x,y));
