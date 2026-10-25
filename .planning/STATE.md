@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
 status: executing
-stopped_at: Phase 6 reviewed plans ready; executing PDF/history and HEIC/license wave, no deployment
+stopped_at: Phase 6 plans 01 and 02 delivered; merge/image implementation and core/server review active, no deployment
 last_updated: "2026-10-25"
-last_activity: Phase 6 six-plan and UI reviews passed without blockers; first implementation wave started
+last_activity: Delivered tested local PDF/history/worker and HEIC/license boundaries; continuing merge and image work
 progress:
   total_phases: 8
   completed_phases: 3
@@ -37,9 +37,17 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
   installation is included; G3 release checks and G4 literal-specimen debt stay open.
 - Refreshed research, pattern map and approved UI contract are recorded. Six plans
   cover all nine PAGE requirements in four waves; independent review has no blockers.
-- Wave 1 implements local PDF/history/worker contracts and the independent bounded
-  HEIC service/client license gate. Page, merge and image changes remain local;
-  HEIC conversion is the existing explicitly disclosed server exception.
+- Plans 06-01 and 06-02 are delivered with committed summaries. Local PDF load,
+  password/signature/geometry/resource handling, page transforms, exact snapshot
+  history and terminable worker transport pass 22 focused tests and build.
+- The HEIC boundary passes 18 native/lifecycle tests (including real macOS sips),
+  25 HTTP/privacy tests, 15 license tests, both dependency gates and strict typing.
+  Production conversion fails closed until separate Linux confinement is verified;
+  this local proof does not close G3 or claim Linux execution.
+- Merge and local image primitives are active; independent review of completed
+  core/server slices runs alongside them. Workstation integration and actual G5
+  network/renderer/browser proof remain pending. No PAGE requirement is marked
+  complete from pure helper tests alone.
 - Baseline: 527 Python tests passed (36 deselected), 41 client tests passed.
   Actual browser RED proof caught two API requests on opening; G5 must reach zero
   through local page operations/download, not merely inspect a boolean.
