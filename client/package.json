@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "node --test src/*.test.mjs src/find/*.test.mjs",
+    "test": "node --test src/*.test.mjs src/find/*.test.mjs src/pageOps/*.test.mjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
@@ -13,7 +13,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "pdfjs-dist": "^6.2.108",
-    "@cantoo/pdf-lib": "^2.8.1"
+    "@cantoo/pdf-lib": "2.9.1"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",
