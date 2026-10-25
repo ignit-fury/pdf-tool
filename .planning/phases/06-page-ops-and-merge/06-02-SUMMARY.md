@@ -123,22 +123,51 @@ paths were used with `git commit --only` to preserve parallel executor changes.
   truncated/symlink/extra output, invalid compressed pixels despite valid CRCs,
   descendant termination and secret-environment omission.
 - `.venv/bin/python -m pytest -q tests/test_heic_contract.py tests/test_web_contract.py tests/test_headers.py tests/test_privacy_canary.py`:
-  **25 passed**. Admission-before-read, false Content-Length/streamed oversize,
+  **26 passed after review fixes**. Admission-before-read, false Content-Length/streamed oversize,
   body deadline, shared image/PDF cancellation capacity, recovery, backpressure,
-  exact fixed errors/reporting and privacy/CORS responses passed. Existing
+  exact fixed errors/reporting and privacy/CORS responses passed, including
+  allowed/rejected CORS preflights and early errors. Existing
   Starlette TestClient/httpx deprecation warning remains; no package substitution.
-- `node --test tools/client_license_gate.test.mjs`: **15 passed**. Transitive
+- `node --test tools/client_license_gate.test.mjs`: **19 passed after review fixes**. Transitive
   AGPL, bundled LGPL WASM, unknown/missing metadata/notices, version/license
   drift, optional runtime packages, SPDX branches, nonregistry sources, lock
   traversal, bundled GPL source and changed QuickJS artifact controls passed.
+  Review controls additionally detect unlisted vendored `dist/node_modules`
+  forbidden notices/unknown WASM and GPL/LGPL/AGPL component headers beyond
+  64 KiB in a concatenated bundle with a permissive first component.
 - `node tools/client_license_gate.mjs`: existing installed runtime closure and
   bundled notices **passed**.
 - `.venv/bin/python tools/license_gate.py`: existing Python closure **passed**.
 - `.venv/bin/python -m mypy`: **31 source files passed**; Node syntax and
   `git diff --check` passed.
 
-The combined broad regression is coordinated by the parent executor. Earlier
-converter/HTTP tests were not rerun after changes confined to Node/CI/docs.
+The combined broad regression is coordinated by the parent executor. Converter
+tests were not rerun after fixes confined to Node/HTTP middleware/docs; the full
+targeted HTTP/header/privacy set was rerun for the middleware correction.
+
+## Review fixes
+
+The initial review found two genuine client license bypasses and a preflight
+header regression. New regressions reproduced all of them before implementation:
+15 existing Node cases passed and four new Node cases failed; the new HTTP
+preflight case failed on missing `cache-control`.
+
+- **CR-02:** Traversal formerly skipped every directory named `node_modules`.
+  It now skips only exact independently audited runtime lock roots. Unlisted
+  vendored folders are traversed, and the permanent fixture reports both its
+  AGPL notice and unknown WASM provenance.
+- **CR-03:** Formerly only the first 65,536 source characters were checked.
+  The entire already-bounded file is now scanned. Three permanent controls
+  place GPL/LGPL/AGPL SPDX headers after 66,000 characters of an MIT-first bundle.
+  Files exceeding 8 MiB continue to refuse rather than escaping inspection.
+- **WR-01:** CORS remains outside admission so busy replies have CORS. A pure
+  ASGI privacy-header send wrapper now surrounds CORS too, so allowed/rejected
+  preflights, early errors and normal replies have the same five headers.
+  It buffers no body and preserves the existing admitted response lifetime.
+
+Review RED commit: `39a746c`; GREEN fix: `52a1876`. Focused revalidation passed
+19 Node cases, both installed closure gates, 26 HTTP/header/privacy cases and
+strict mypy over 31 files. Independent reviewer recheck is coordinated by root.
 
 ## Decisions and platform limitations
 
@@ -180,7 +209,8 @@ documented platform release debt, not a claimed working production codec.
 
 ## Self-Check: PASSED
 
-All seven created artifacts/summary exist; all six task RED/GREEN commits resolve
-as commits. No implementation placeholder was found in the owned files, no
+All seven created artifacts/summary exist; all six task RED/GREEN commits and
+both review-fix RED/GREEN commits resolve as commits. No implementation
+placeholder was found in the owned files, no
 unexpected deletion was committed, and the root peer review accepted the narrow
 QuickJS source/hash evidence. Parallel executor files were preserved.

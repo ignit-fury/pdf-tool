@@ -70,6 +70,8 @@ Errors contain only fixed codes: `HEIC_UNAVAILABLE`, `INVALID_HEIC`,
 HTTP ingress/body errors retain their existing fixed codes. Responses use the
 existing no-store, CSP, nosniff and CORS policy. No decoder stderr, filenames,
 exceptions, image bytes or credentials enter error reporting.
+An outer ASGI header wrapper includes allowed/rejected CORS preflights in that
+policy; CORS still wraps admission so synthesized busy replies retain CORS.
 
 ## Verification
 
@@ -87,6 +89,10 @@ It compares installed names/versions/licenses, rejects unknown metadata and
 unreviewed sources, scans packaged notices and bundled source headers, and
 requires component-specific WASM evidence. Development dependencies are excluded;
 absent foreign-platform optional packages are not shipped by this installation.
+Bundle traversal skips only exact runtime package roots independently audited
+from the lock. Unlisted vendored folders, including `dist/node_modules`, remain
+in the scan. The entire notice/source file is inspected up to an 8 MiB limit;
+oversized files fail closed rather than leaving a source tail uninspected.
 
 SPDX `AND` requires every license to pass; `OR` permits an explicit known
 permissive option. Any AGPL/Affero expression refuses, including an OR branch.
