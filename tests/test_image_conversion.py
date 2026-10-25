@@ -97,6 +97,42 @@ def test_png_requires_complete_decode(conversion, tmp_path):
     conversion._validate_png(target)
 
 
+def test_corrupt_pixels_with_valid_chunk_crcs_refuse(conversion, tmp_path):
+    import zlib
+    data = bytearray(png())
+    offset = data.index(b'IDAT')
+    size = struct.unpack_from('>I', data, offset - 4)[0]
+    data[offset + 4] ^= 0xff
+    struct.pack_into('>I', data, offset + 4 + size, zlib.crc32(data[offset:offset + 4 + size]) & 0xffffffff)
+    output = tmp_path / 'output.png'
+    output.write_bytes(data)
+    with pytest.raises(Exception):
+        conversion._validate_png(output)
+
+
+def test_timeout_reaps_descendants_and_scrubs_environment(conversion, monkeypatch, tmp_path):
+    import signal
+    import time
+    record = tmp_path.parent / (tmp_path.name + '.pid')
+    script = ('import os,subprocess,sys,time; '
+        'assert "PDF_TOOL_TEST_SECRET" not in os.environ; '
+        'p=subprocess.Popen([sys.executable,"-c","import time;time.sleep(10)"]); '
+        f'open({str(record)!r},"w").write(str(p.pid)); time.sleep(10)')
+    monkeypatch.setenv('PDF_TOOL_TEST_SECRET', 'never-forward')
+    monkeypatch.setattr(conversion, '_codec', lambda: '/usr/bin/sips')
+    monkeypatch.setattr(conversion, '_worker_command', lambda *_: [sys.executable, '-c', script])
+    try:
+        with pytest.raises(conversion.ImageConversionError, match='IMAGE_CONVERSION_TIMEOUT'):
+            conversion.convert_heic(heic(), timeout=0.3)
+        child = int(record.read_text())
+        # A killed orphan can briefly remain a zombie pending init's reap.
+        status = subprocess.run(['/bin/ps', '-o', 'stat=', '-p', str(child)], capture_output=True, text=True).stdout.strip()
+        assert not status or status.startswith('Z')
+        assert list(tmp_path.iterdir()) == []
+    finally:
+        record.unlink(missing_ok=True)
+
+
 @pytest.mark.skipif(sys.platform != 'darwin' or not Path('/usr/bin/sips').exists(), reason='installed macOS codec')
 def test_real_native_heic_roundtrip(conversion, tmp_path):
     # No downloaded fixture or decoder library: use the installed OS encoder.
