@@ -78,3 +78,32 @@ the project virtual environment. The installed macOS codec may require OS access
 outside an agent filesystem sandbox; a blocked real smoke is a failure to resolve,
 not an excuse to skip an available codec. Linux CPU/address-space/tmpfs and native
 filesystem/egress confinement remain unexecuted on the macOS workstation.
+
+## Client license gate
+
+`node tools/client_license_gate.mjs` audits the installed runtime entries from
+`client/package-lock.json`, including nested and installed optional packages.
+It compares installed names/versions/licenses, rejects unknown metadata and
+unreviewed sources, scans packaged notices and bundled source headers, and
+requires component-specific WASM evidence. Development dependencies are excluded;
+absent foreign-platform optional packages are not shipped by this installation.
+
+SPDX `AND` requires every license to pass; `OR` permits an explicit known
+permissive option. Any AGPL/Affero expression refuses, including an OR branch.
+Bundled copyleft notices refuse independently of the wrapper's metadata.
+
+The sole missing-notice exception is `pdfjs-dist@6.2.108`'s
+`wasm/quickjs-eval.wasm`, SHA-256
+`7bcacc9f22cacf7e9b23866d2a6d1639693d40c7f144e41b7c69ed37ba9cbe8f`.
+The [versioned upstream build README](https://raw.githubusercontent.com/mozilla/pdf.js/v6.2.108/external/quickjs/README.md)
+identifies QuickJS and pdf.js.quickjs as MIT. The exception records that evidence
+and reason in `REVIEWED_WASM`; another version, artifact or hash refuses.
+It does not suppress forbidden-license findings. A changed-artifact negative
+fixture proves the exact-hash boundary.
+
+`node --test tools/client_license_gate.test.mjs` runs synthetic forbidden,
+unknown, transitive, optional, version-drift, source and WASM controls without
+installing those packages. Local auditing used the existing installed closure.
+The CI workflow separately runs a clean `npm ci --ignore-scripts` from the lock,
+these tests and the client audit, while preserving the Python closure gate.
+That clean CI install has not been executed on this workstation.
