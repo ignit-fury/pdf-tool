@@ -48,6 +48,8 @@ completed: 2026-10-25
 2. Task 1 GREEN: `b9fa660` — shared-copier form and outline preservation.
 3. Task 2 RED: `7cd86b0` — atomic merge, geometry, password, signature and font tests.
 4. Task 2 GREEN: `0f90a29` — public merge/review, affine normalization and adversarial graph refinements.
+5. Review regression RED: `67aadab` — serialized shared/duplicate non-widget annotation ownership and separate-link control.
+6. Review regression GREEN: `f45b8d0` — validate every annotation identity and optional page owner before copying.
 
 ## Exported Contracts
 
@@ -62,16 +64,17 @@ completed: 2026-10-25
 
 Supported forms include ordinary Tx, Btn and Ch fields; hierarchical names and inherited defaults; multiple widgets and radio options; values/options; existing appearance streams; independent field/DR namespaces; `NeedAppearances`, calculation order and signature flags. Sig fields retain their structure only after the separate imported-signature acknowledgement. Destination fields, catalog entries, names categories and outlines remain attached. Imported outlines retain Unicode titles, styles, colors and child structure under the filename root. Named and direct destinations and internal link actions resolve to inserted pages.
 
-The importer refuses XFA, JavaScript/additional actions, unsupported action kinds, ambiguous fonts/default appearances, unsafe field/AP/outline/destination graphs, orphan widgets, invalid targets and graph limits with named errors. Limits are 50 MiB per input/output, depth 64 and 100,000 visited graph entries. It neither flattens fields nor silently removes unsupported structures.
+The importer refuses XFA, JavaScript/additional actions, unsupported action kinds, ambiguous fonts/default appearances, unsafe field/AP/outline/destination graphs, orphan widgets, invalid targets and graph limits with named errors. Every annotation dictionary must occur in exactly one page's Annots slot; shared annotations, duplicate slots on one page and mismatched optional `/P` owners refuse before copying, including documents without AcroForm. Limits are 50 MiB per input/output, depth 64 and 100,000 visited graph entries. It neither flattens fields nor silently removes unsupported structures.
 
 Default merge preserves each page's original MediaBox, CropBox, rotation and UserUnit. Explicit `normalizeTo` uses `visibleWidth`/`visibleHeight` from PageGeometry, fits the visible crop without distortion, clips original content to that crop, and transforms annotations, AP matrices, borders, default font sizes and destination coordinates coherently. Output normalized pages use an origin-zero target box, rotation zero and UserUnit one. Requested normalization supports safe Link/Widget annotations; unknown geometry, NoRotate/NoZoom flags and incompatible fixed-font scales on shared multi-page fields refuse while leaving default merge available.
 
 ## Verification
 
-- Focused Node verification: **18/18 passed**, with actual serialized/readback PDF objects and no mocked PDF import implementation.
+- Final focused Node verification after the review correction: **22/22 passed**, with actual serialized/readback PDF objects and no mocked PDF import implementation.
 - Form tests prove actual widget `/P` and page `/Annots` identity, surviving values/AP, hierarchical names, radio/dropdown state, independent field and font resource collisions, deterministic unused prefixes, inherited DA token rewriting, calculation order and destination catalog preservation.
 - Graph tests prove nested styled outlines, name-tree import, actual inserted targets, internal links, named refusals for cycles/orphans/active content, and both depth and node limits.
 - Merge tests cover insertion at start/middle/end, original inputs unchanged, serializable review/source SHA-256, genuine AES Unicode passwords on both inputs, independent signature acknowledgements, geometry defaults, explicit rotation/crop/UserUnit normalization and safe refusal.
+- The review correction adds three serialized non-widget ownership refusals: a Link reference shared across two pages, a duplicate Link reference on one page, and an incorrect `/P` owner. Shared/duplicate cases omit `/P` so they directly prove dictionary-identity validation. Review, normalized merge and default merge all refuse with `MERGE_GRAPH_UNSAFE` while preserving original byte arrays. A positive control with distinct Link dictionaries on two 200×300 pages normalizes each rectangle from `[10,20,30,40]` to exactly `[20,40,60,80]` on a 400×600 target and retains actual inserted page owners.
 - The stronger real Arial pair uses `govdocs1_003_003063.pdf` page 0 `/TT2` and `govdocs1_001_001038.pdf` page 2 `/TT0`. Controlled copies give both fonts the identical `/ABCDEF+Arial` name while preserving real font programs; output retains both measured program hashes and distinct dictionary references. No font-name deduplication or program reconstruction is added.
 - `npm --prefix client run build` passed; the existing large-chunk warning remains.
 - Full client suite during parallel work: **89 passed / 1 failed**, solely the concurrent plan 04 `images.test.mjs` module-load RED state. The orchestrator subsequently confirmed plan 04 implementation GREEN and owns the final stable combined suite; this earlier run is not relabeled all-green.
@@ -86,7 +89,16 @@ Source and destination signature acknowledgements are independent. Saves always 
 
 ## Deviations from Plan
 
-None in implementation scope. The committed execution refinement allowed task 1 to begin against plan 01's fixed exports; the full plan 01 dependency was confirmed before completing this plan. Additional cycle, orphan, node-budget and normalization-font assertions refine the planned graph-safety and interactive-form requirements.
+The committed execution refinement allowed task 1 to begin against plan 01's fixed exports; the full plan 01 dependency was confirmed before completing this plan. Additional cycle, orphan, node-budget and normalization-font assertions refine the planned graph-safety and interactive-form requirements.
+
+### Auto-fixed Issues
+
+**1. [Rule 1 - Bug] Reject ambiguous non-widget annotation ownership**
+- Found during independent review after initial plan completion.
+- Issue: ownership preflight checked only widgets. A shared Link dictionary with no AcroForm could be copied once and then transformed twice by per-page normalization, producing doubled rectangle coordinates.
+- Fix: validate all annotation dictionary identities and optional `/P` owners before the AcroForm branch. Ambiguous graphs refuse through existing named errors, with no public contract change or annotation cloning policy.
+- Files: `mergeGraph.mjs`, `mergePdf.test.mjs`.
+- RED `67aadab` reproduced three missing refusals; GREEN `f45b8d0` passes all 22 focused tests, including the separate-link positive control. No broad suite/build was repeated during concurrent UI work; the orchestrator owns combined integration checks.
 
 The requested `.Codex` mandatory-initial-read/project-skills-discovery files were absent at both the specified and `.cursor` fallback paths. Available `.cursor` execution-thinking/summary references, committed plan/context/research/UI contracts, installed dependency source and project instructions were used. No package was installed.
 
@@ -104,4 +116,4 @@ Both tasks have RED test commits preceding their GREEN implementation commits. T
 
 ## Self-Check: PASSED
 
-All four source/test files and this summary exist. All four recorded task commits resolve to real commits. No tracked file deletion is included in the task implementation commit.
+All four source/test files and this summary exist. All six recorded implementation/test commits resolve to real commits. No tracked file deletion is included in the task implementation or review-fix commits.
