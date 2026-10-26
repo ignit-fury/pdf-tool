@@ -23,7 +23,7 @@ tech-stack:
   patterns: [prepare-before-publication, explicit-analysis-consent, native-controlled-forms, exact-local-undo]
 key-files:
   created: [client/src/pageOps/pdfJob.worker.mjs, client/src/pageOps/PageOpsPanel.jsx]
-  modified: [client/src/App.jsx, client/src/session.mjs, client/src/session.test.mjs, client/src/Viewer.jsx, client/src/style.css]
+  modified: [client/src/App.jsx, client/src/session.mjs, client/src/session.test.mjs, client/src/Viewer.jsx, client/src/style.css, client/src/pageOps/images.mjs, client/src/pageOps/images.test.mjs]
 key-decisions:
   - Keep localMetadata separate from analysis consent and metadata; only Analyze text uploads a new PDF baseline.
   - Restore exact snapshots locally with fresh controllers/queues and defer restored analysis until explicit text interaction.
@@ -85,10 +85,22 @@ The configured `.Codex/get-shit-done/references/mandatory-initial-read.md` and p
 
 ## Remaining Evidence and Limits
 
-No implementation stub was found in the seven owned source/test files. Empty recipes, indexes and nullable drafts are actual lifecycle state and are connected to data sources/actions.
+No implementation stub was found in the owned source/test files. Empty recipes, indexes and nullable drafts are actual lifecycle state and are connected to data sources/actions.
 
 G5 must independently observe zero API traffic during the full local journey, explicit analysis/HEIC boundaries, rotated/cropped preview and native image pixels, responsive 320/760px keyboard/focus behavior, mixed App history and renderer fidelity. This plan does not claim those observations, Linux HEIC certification, G3 release closure, the earlier literal contract specimen check, or deployment. Browser memory accounting bounds application-owned buffers and known image pixel stores; it cannot guarantee the entire native parser/renderer heap.
 
+## Narrow Integration Review Fixes — 2026-10-26
+
+**[Rule 1 — Bug] Navigation during decode/conversion retained the old destination.** Both App paths now call the same tested `prepareImageDraft({decode,getDestination,isCurrent,name})` session helper. It awaits decode, refuses/disposes stale output, then reads a live page/geometry reference at completion. `imageDraftMatchesPage(draft,page)` guards actual image commit, preventing an old page-tagged rectangle from reaching the writer while navigation recalculation is pending. Deferred tests for local and converted decode navigate to a rotated/cropped/UserUnit destination before completion and prove the resulting rectangle uses that destination; an obsolete completion disposes without reading the new destination.
+
+**[Rule 1 — Bug] Valid converted PNG output inherited the raw 20 MiB cap.** App now bounds declared/streamed HEIC response bytes at `MAX_IMAGE_PNG_BYTES` (64 MiB). `decodeLocalImage` adds the narrow optional `{convertedPng:true}` contract: only that explicit conversion path admits PNG input up to 64 MiB, checks actual magic/type before native decode, and preserves the existing pixel/dimension/orientation/output checks. Raw selected inputs remain capped at `MAX_IMAGE_BYTES` (20 MiB). Failed conversion admission disposes decoded resources while retaining the disclosure/retry draft.
+
+- RED `4136c90` observed the missing navigation-helper export and rejection of a valid >20 MiB PNG despite explicit conversion mode. The test PNG has valid PNG chunks/CRC and a large text chunk; injected native decoding tests admission and pipeline behavior without claiming browser-native decoding of a large real HEIC output.
+- GREEN `c55ee55` implements both fixes on the authorized App/session/image helper paths. No G5 artifact or other owner's source was changed.
+- Focused `node --test client/src/session.test.mjs client/src/pageOps/images.test.mjs`: **35 passed, 0 failed**, `/tmp/06-05-navigation-converted-green.log`.
+- Final `npm --prefix client test`: **118 passed, 0 failed**, `/tmp/06-05-navigation-converted-client.log`.
+- Final production build and whitespace check passed, `/tmp/06-05-navigation-converted-build.log`; existing Vite size advisory remains. No installation or deployment occurred.
+
 ## Self-Check: PASSED
 
-All seven owned source/test paths and this summary exist. All five listed RED/GREEN/task commits exist in git history. The final 114-test suite, production build and whitespace checks passed. No generated owned untracked files or unexpected tracked deletions remain.
+All nine owned source/test paths and this summary exist. The five original RED/GREEN/task commits and review commits `4136c90`/`c55ee55` exist in git history. The latest 118-test suite, production build and whitespace checks passed. No generated owned untracked files or unexpected tracked deletions remain.
