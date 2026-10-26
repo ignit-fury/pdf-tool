@@ -2,6 +2,21 @@ import test from 'node:test';
 import {createLocalSession,restoreSession,snapshotCopyBytes,canAnalyzeText} from './session.mjs';
 import {prepareImageDraft,imageDraftMatchesPage} from './session.mjs';
 
+for(const status of ['stopped','indexing'])test(`mixed Undo restores ${status} Find cache locally and explicit Resume owns a fresh producer`,async()=>{
+  const {captureSnapshot}=await import('./pageOps/documentHistory.mjs');
+  const {createIndexingController,normalizeIndexProgress}=await import('./find/indexing.mjs');
+  const bytes=new Uint8Array([1,2]),cached={runs:[{text:'retained match'}]};
+  const saved=captureSnapshot({bytes,sourceBytes:bytes,password:'secret',recipe:[],selectedPage:0,analysis:{enabled:true,sourceIdentity:'old baseline',meta:{page_count:4},index:{1:cached,3:{runs:[]}}},findState:{query:'retained',indexProgress:{completed:2,completedPages:[1,3],failedPages:[2],total:4,status}}});
+  const pageSession=createLocalSession({name:'mixed.pdf',openedBytes:bytes,bytes:new Uint8Array([3]),analysisEnabled:false});pageSession.controller.abort();
+  const restored=restoreSession(pageSession,saved);let uploads=0;const requested=[],progress=[];
+  const fetchPage=async page=>{if(restored.pages.has(page))return restored.pages.get(page);return withSourceRetry(restored,async()=>{requested.push(page);return {runs:[]};},async()=>{uploads++;return {job_id:'fresh baseline'};});};
+  const controller=createIndexingController({initialProgress:normalizeIndexProgress(saved.findState.indexProgress),fetchPage,onProgress:value=>progress.push(value)});
+  assert.equal(uploads,0);assert.deepEqual(requested,[]);assert.equal(progress.length,0);assert.equal(restored.jobId,null);
+  assert.equal((await restored.pages.get(1)).runs[0].text,'retained match');
+  await controller.resume();assert.equal(uploads,1);assert.deepEqual(requested,[2,4]);assert.equal(progress.at(-1).total,4);assert.equal(progress.at(-1).completed,4);
+  assert.equal(saved.findState.query,'retained');assert.deepEqual(saved.analysis.index[1].runs,cached.runs);
+});
+
 for(const kind of ['local decode','HEIC conversion decode'])test(`${kind} resolves placement against the destination after deferred navigation`,async()=>{
   const {fitImage}=await import('./pageOps/imageGeometry.mjs');
   const pages=[{mediaBox:{x:0,y:0,width:600,height:800},rotation:0,userUnit:1},{mediaBox:{x:-30,y:10,width:300,height:220},cropBox:{x:20,y:30,width:200,height:160},rotation:90,userUnit:2}];

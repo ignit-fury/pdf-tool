@@ -1,9 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createIndexingController} from './indexing.mjs';
+import {createIndexingController,normalizeIndexProgress} from './indexing.mjs';
 
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
+
+for(const status of ['stopped','failed','indexing'])test(`restored ${status} progress seeds missing-page resume without zero-total completion`,async()=>{
+  const seen=[],progress=[],seed={completed:2,completedPages:[1,3],failedPages:[2],total:4,status};
+  const normalized=normalizeIndexProgress(seed);
+  assert.equal(normalized.status,status==='indexing'?'stopped':status);
+  const controller=createIndexingController({initialProgress:normalized,fetchPage:async page=>{seen.push(page);return {runs:[]};},onProgress:value=>progress.push(value)});
+  assert.equal(progress.length,0);assert.equal(seen.length,0);
+  await controller.resume();
+  assert.deepEqual(seen,[2,4]);assert.deepEqual(progress.at(-1),{completed:4,completedPages:[1,2,3,4],failedPages:[],total:4,status:'complete'});
+});
 
 test('indexing counts successful empty pages and retries only missing or failed pages',async()=>{
   const seen=[],progress=[];let fail=true;
