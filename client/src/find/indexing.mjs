@@ -1,12 +1,23 @@
 // This producer owns progress, not the document's page cache or request lifetime.
 // A stopped request may still serve the viewer; only this generation stops consuming it.
-export function createIndexingController({fetchPage,onProgress,isCurrent=()=>true}) {
-  const completed=new Set(),failed=new Set();
-  let total=0,generation=0,disposed=false,status='idle',pending;
+export function normalizeIndexProgress(progress={}) {
+  const total=Number.isInteger(progress?.total)&&progress.total>0?progress.total:0;
+  const valid=pages=>new Set((Array.isArray(pages)?pages:[]).filter(page=>Number.isInteger(page)&&page>=1&&page<=total));
+  const completed=valid(progress?.completedPages),failed=valid(progress?.failedPages);
+  for(const page of completed)failed.delete(page);
+  let status=progress?.status;
+  if(status==='indexing'||!['idle','stopped','failed','complete'].includes(status))status='stopped';
+  if(status==='complete'&&completed.size!==total)status='stopped';
+  if(!total)status='idle';
+  return {completed:completed.size,completedPages:[...completed].sort((a,b)=>a-b),total,failedPages:[...failed].sort((a,b)=>a-b),status};
+}
+export function createIndexingController({fetchPage,onProgress,isCurrent=()=>true,initialProgress}) {
+  const seed=normalizeIndexProgress(initialProgress),completed=new Set(seed.completedPages),failed=new Set(seed.failedPages);
+  let total=seed.total,generation=0,disposed=false,status=seed.status,pending;
   const alive=token=>!disposed&&token===generation&&isCurrent();
   const publish=()=>{if(!disposed&&isCurrent())onProgress({completed:completed.size,completedPages:[...completed].sort((a,b)=>a-b),total,failedPages:[...failed].sort((a,b)=>a-b),status});};
   const run=()=>{
-    if(disposed||!isCurrent())return Promise.resolve();
+    if(disposed||!isCurrent()||total<1)return Promise.resolve();
     if(status==='indexing')return pending;
     const token=++generation;status='indexing';publish();
     pending=(async()=>{

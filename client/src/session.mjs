@@ -47,7 +47,11 @@ export function createLocalSession({name,openedBytes,bytes=openedBytes,sourceByt
   return {name,openedBytes,bytes,sourceBytes,password,analysisEnabled,sourceIdentity,controller,queue:createRequestQueue({limit:2,signal:controller.signal}),jobId:null,pages:new Map()};
 }
 export function restoreSession(previous,snapshot) {
-  return createLocalSession({name:previous.name,openedBytes:previous.openedBytes,bytes:snapshot.bytes,sourceBytes:snapshot.sourceBytes,password:snapshot.password,analysisEnabled:snapshot.analysis?.enabled===true,sourceIdentity:snapshot.analysis?.sourceIdentity});
+  const restored=createLocalSession({name:previous.name,openedBytes:previous.openedBytes,bytes:snapshot.bytes,sourceBytes:snapshot.sourceBytes,password:snapshot.password,analysisEnabled:snapshot.analysis?.enabled===true,sourceIdentity:snapshot.analysis?.sourceIdentity});
+  if(restored.analysisEnabled)for(const [number,data] of Object.entries(snapshot.analysis?.index||{})){
+    const page=Number(number);if(Number.isInteger(page)&&page>0)restored.pages.set(page,Promise.resolve(data));
+  }
+  return restored;
 }
 export function canAnalyzeText(session) {return session?.analysisEnabled===true&&!session.controller.signal.aborted;}
 export function snapshotCopyBytes(value,stores=new Set(),seen=new Set()) {
