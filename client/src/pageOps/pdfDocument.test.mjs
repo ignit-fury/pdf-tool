@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {PDFDocument, PDFName, PDFNumber, PDFDict, degrees} from '@cantoo/pdf-lib';
+import {readFile} from 'node:fs/promises';
+import {PDFDocument, PDFName, PDFNumber, PDFDict, PDFString, PDFHexString, degrees} from '@cantoo/pdf-lib';
 import {loadLocalPdf, describePage, inspectLocalPdf, isolatePageResources, transformPages} from './pdfDocument.mjs';
 
 export async function fixture(count=2) {
@@ -156,4 +157,30 @@ test('deletion preflights serialized stream dictionaries and preserves safe surv
     }
     assert.deepEqual(bytes,original);
   }
+});
+async function realMixedSequence() {
+  const original=new Uint8Array(await readFile(new URL('../../../tests/fixtures/mixed_scanned.pdf',import.meta.url)));
+  let bytes=original.slice();
+  const initial=await inspectLocalPdf(bytes);
+  assert.equal(initial.pageCount,40);
+  const commands=[{type:'insertBlank',adjacentIndex:0,position:'after'},{type:'move',from:1,to:2},{type:'rotate',index:2,quarterTurns:1},{type:'delete',index:2}];
+  for(let i=0;i<commands.length;i++) {
+    const input=bytes.slice(),result=await transformPages(bytes,commands[i]);
+    assert.deepEqual(bytes,input);bytes=result.bytes;
+    const metadata=await inspectLocalPdf(bytes);
+    assert.equal(metadata.pageCount,i===3?40:41);
+    assert.equal(result.selectedPage,i===0?1:2);
+    if(i===2)assert.equal(metadata.pages[2].rotation,90);
+  }
+  assert.deepEqual((await inspectLocalPdf(bytes)).pages,initial.pages);
+  assert.deepEqual(original,new Uint8Array(await readFile(new URL('../../../tests/fixtures/mixed_scanned.pdf',import.meta.url))));
+}
+test('real mixed scanned document supports inserting moving rotating and deleting the same blank',realMixedSequence);
+test('real mixed scanned page sequence keeps named destinations valid with minified PDF string class names',async()=>{
+  const classes=[PDFString,PDFHexString],descriptors=classes.map(type=>Object.getOwnPropertyDescriptor(type,'name'));
+  try {
+    // Production bundling changes constructor.name; serialized PDF type identity is unchanged.
+    classes.forEach((type,index)=>Object.defineProperty(type,'name',{value:`Minified${index}`,configurable:true}));
+    await realMixedSequence();
+  }finally {classes.forEach((type,index)=>Object.defineProperty(type,'name',descriptors[index]));}
 });
