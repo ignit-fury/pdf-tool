@@ -1,4 +1,4 @@
-import {PDFDocument, PDFName, PDFDict, PDFArray, PDFNumber, PDFRef, PDFNull, PDFParser, PDFStream, PDFRawStream, PDFInvalidObject, degrees} from '@cantoo/pdf-lib';
+import {PDFDocument, PDFName, PDFDict, PDFArray, PDFNumber, PDFRef, PDFNull, PDFString, PDFHexString, PDFParser, PDFStream, PDFRawStream, PDFInvalidObject, degrees} from '@cantoo/pdf-lib';
 
 export const MAX_LOCAL_PDF_BYTES=50*1024*1024;
 export const GRAPH_MAX_DEPTH=64;
@@ -130,7 +130,7 @@ function planDeletion(pdf,index) {
   const refEqual=(a,b)=>a===b||a instanceof PDFRef&&b instanceof PDFRef&&String(a)===String(b);
   const destination=(raw,depth=0)=>{
     tick(depth);const value=resolve(raw);
-    if(value instanceof PDFName||value?.constructor?.name==='PDFString'||value?.constructor?.name==='PDFHexString')return; // named target resolved below
+    if(value instanceof PDFName||value instanceof PDFString||value instanceof PDFHexString)return; // named target resolved below
     if(value instanceof PDFDict) {const d=value.get(name('D'));if(!d)bad();destination(d,depth+1);return;}
     if(!(value instanceof PDFArray)||value.size()<2)bad();
     destinationArrays.add(value);
