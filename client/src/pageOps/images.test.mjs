@@ -27,6 +27,18 @@ function canvasAdapter(width=2,height=1,{encodeError,outputSize}={}) {
   canvas.convertToBlob=async options=>{calls.push(['encode',options.type]);if(encodeError)throw Error('private detail');if(outputSize)return {size:outputSize};return file(png(width,height,pixels),'image/png');};
   return {canvas,calls,createCanvas:(w,h)=>{assert.equal(w,width);assert.equal(h,height);return canvas;}};
 }
+test('only explicit converted PNG input admits 20–64 MiB while raw selected images stay capped',async()=>{
+  const source=png(),large=Buffer.concat([source.subarray(0,33),chunk('tEXt',Buffer.concat([Buffer.from('Comment\0'),Buffer.alloc(MAX_IMAGE_BYTES,65)])),source.subarray(33)]);
+  assert.ok(large.length>MAX_IMAGE_BYTES&&large.length<MAX_IMAGE_PNG_BYTES);
+  await assert.rejects(decodeLocalImage(file(large),{decodeBitmap:()=>assert.fail('raw input must refuse before decode')}),{code:'IMAGE_TOO_LARGE'});
+  const a=canvasAdapter();let calls=0;
+  const result=await decodeLocalImage(file(large),{convertedPng:true,createCanvas:a.createCanvas,decodeBitmap:async blob=>{calls++;assert.equal(blob.type,'image/png');assert.equal(blob.size,large.length);return {width:2,height:1,close(){}};}});
+  assert.equal(calls,1);assert.equal(result.width,2);result.dispose();
+  await assert.rejects(decodeLocalImage(file(orientedJpeg),{convertedPng:true,decodeBitmap:()=>assert.fail('converted route admits PNG only')}),{code:'IMAGE_INVALID'});
+  await assert.rejects(decodeLocalImage({size:MAX_IMAGE_PNG_BYTES+1,arrayBuffer:()=>assert.fail('oversized conversion must refuse before read')},{convertedPng:true}),{code:'IMAGE_PNG_TOO_LARGE'});
+  const hugeDimensions=png();hugeDimensions.writeUInt32BE(4001,16);hugeDimensions.writeUInt32BE(4000,20);
+  await assert.rejects(decodeLocalImage(file(hugeDimensions),{convertedPng:true,decodeBitmap:()=>assert.fail('pixel bound unchanged')}),{code:'IMAGE_DIMENSIONS_EXCEEDED'});
+});
 test('local PNG uses magic, white composites pixels, previews flattened canvas, and disposes idempotently',async()=>{
   const a=canvasAdapter(),rgba=Buffer.from([255,0,0,0,255,0,0,128]);let closes=0;
   const result=await decodeLocalImage(file(png(),'image/jpeg'),{createCanvas:a.createCanvas,decodeBitmap:async(blob,options)=>{

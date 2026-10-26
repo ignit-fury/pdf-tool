@@ -1,5 +1,24 @@
 import test from 'node:test';
 import {createLocalSession,restoreSession,snapshotCopyBytes,canAnalyzeText} from './session.mjs';
+import {prepareImageDraft,imageDraftMatchesPage} from './session.mjs';
+
+for(const kind of ['local decode','HEIC conversion decode'])test(`${kind} resolves placement against the destination after deferred navigation`,async()=>{
+  const {fitImage}=await import('./pageOps/imageGeometry.mjs');
+  const pages=[{mediaBox:{x:0,y:0,width:600,height:800},rotation:0,userUnit:1},{mediaBox:{x:-30,y:10,width:300,height:220},cropBox:{x:20,y:30,width:200,height:160},rotation:90,userUnit:2}];
+  let page=1,finish,reads=0,disposed=0;
+  const pending=prepareImageDraft({name:'selected image',decode:()=>new Promise(resolve=>{finish=resolve;}),isCurrent:()=>true,getDestination:()=>{reads++;return {page,geometry:pages[page-1]};}});
+  assert.equal(reads,0);page=2;
+  const decoded={width:40,height:20,pngBytes:new Uint8Array([1]),dispose(){disposed++;}};finish(decoded);
+  const draft=await pending;
+  assert.equal(reads,1);assert.equal(draft.page,2);assert.deepEqual(draft.rect,fitImage(decoded,pages[1]));
+  assert.equal(imageDraftMatchesPage(draft,2),true);assert.equal(imageDraftMatchesPage(draft,1),false);assert.equal(disposed,0);
+});
+test('obsolete deferred image decode disposes output without reading a new destination',async()=>{
+  let finish,fresh=true,disposed=0;
+  const pending=prepareImageDraft({name:'old image',decode:()=>new Promise(resolve=>{finish=resolve;}),isCurrent:()=>fresh,getDestination:()=>assert.fail('obsolete draft cannot read a destination')});
+  fresh=false;finish({dispose(){disposed++;}});assert.equal(await pending,null);assert.equal(disposed,1);
+  assert.equal(imageDraftMatchesPage(null,1),false);
+});
 
 test('local session and restored snapshots never create a server job or reuse controllers',async()=>{
   const bytes=new Uint8Array([1,2,3]),source=new Uint8Array([4,5]);
