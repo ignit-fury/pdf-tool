@@ -12,7 +12,9 @@ It is a real product for other people, used anonymously — no signup to edit a 
 
 ## Current State
 
-Phases 4 and 5 are implemented locally. All-page find/replace now supports exact review,
+Phases 4–6 are implemented locally. Phase 6 adds browser-local page operations, PDF/image
+merge and mixed Undo; HEIC conversion is an explicit image-only server exception.
+Its independent native/browser evidence is in `phases/06-page-ops-and-merge/06-G5-RESULTS.md`. All-page find/replace now supports exact review,
 individual opt-outs, font fallback, atomic apply and one whole-batch undo. The 40-page
 technical-document proof, browser journeys and final regression verification are complete.
 Literal contract-specimen coverage and Linux/container/CDN release checks remain open in
@@ -27,7 +29,7 @@ happened.** If everything else on this list fails, this one capability must work
 
 ### Validated
 
-Validated locally in Phases 1–5 (public release remains gated):
+Validated locally in Phases 1–6 (public release remains gated):
 
 - Open and render PDFs in the browser, including password-protected files.
 - Classify text and select server-issued text boxes before editing.
@@ -38,6 +40,9 @@ Validated locally in Phases 1–5 (public release remains gated):
   per-occurrence exclusions and visible refusals; review then apply one whole recipe
   and undo the batch once, preserving prior text and style.
 
+- Insert, move, rotate and delete pages locally; merge PDFs with preserved independent
+  fonts/forms/bookmarks; add or place images with visible aspect locking and mixed Undo.
+
 Evidence: `phases/04-web-tier-walking-skeleton-hardening/04-VERIFICATION.md` and
 `phases/05-find-and-replace-across-all-pages/05-G4-RESULTS.md`.
 Font-size changes are explicitly unsupported; later-phase features remain active.
@@ -46,10 +51,10 @@ Font-size changes are explicitly unsupported; later-phase features remain active
 
 - [ ] Open a PDF in the browser and see its pages rendered faithfully
 - [ ] Edit text on a single page directly (select a text run, change it)
-- [ ] Insert a blank page at any position
-- [ ] Merge another PDF into the document
-- [ ] Merge an image into the document, as a new page or placed on an existing page
-- [ ] Reorder, rotate, and delete pages
+- [x] Insert a blank page at any position (local Phase 6)
+- [x] Merge another PDF into the document (local Phase 6)
+- [x] Merge an image into the document, as a new page or placed on an existing page (local Phase 6)
+- [x] Reorder, rotate, and delete pages (local Phase 6)
 - [ ] Apply a font from a bundled open-license set to edited text, subset and embedded on save
 - [ ] Apply basic formatting to edited text — size, weight, style, color
 - [ ] Classify every page and every text run for editability *before* the user types — scanned,

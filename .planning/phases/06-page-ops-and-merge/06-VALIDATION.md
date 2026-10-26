@@ -1,16 +1,16 @@
 ---
 phase: 6
 slug: page-ops-and-merge
-status: planned
+status: completed_locally
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-08-30
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
 # Phase 6 — Validation Strategy
 
-Use existing Node 22 built-in tests, pytest and installed renderers. No Vitest, Playwright, npx download, host/container install or deployment. Current source baseline is 630ca28, delivery docs through 0f9167a. Root's 25 October baseline is 41 Node tests and 527 Python passed/36 deselected; those are baseline results, not Phase 6 passes.
+Use existing Node 22 built-in tests, pytest and installed renderers. No Vitest/Playwright dependency installation, npx download, host/container install or deployment. Actual browser checks use the connected Playwright plugin. Current source baseline is 630ca28, delivery docs through 0f9167a. Root's 25 October baseline is 41 Node tests and 527 Python passed/36 deselected; those are baseline results, not Phase 6 passes.
 
 ## Commands and ownership
 
@@ -114,4 +114,4 @@ Explicit normalization is covered. Deferred splitting/export/image extraction/de
 
 ## Completion limits
 
-All execution results are pending until tasks run. `wave_0_complete` becomes true only after owned tests/scaffolds exist. G3 Linux/container/CDN and G4 literal legal-contract specimen remain open. Native HEIC Linux containment is unproven locally and required production confinement fails closed. Root owns metadata and independent checker/review convergence before execution.
+All owned tests/scaffolds and six plan summaries exist. Actual automated/browser results and limits are recorded in `06-G5-RESULTS.md` and `06-VERIFICATION.md`; negative guards exercised only automatically are distinguished from actual browser observations. G3 Linux/container/CDN and G4 literal legal-contract specimen remain open. Native HEIC Linux containment is unproven locally and required production confinement fails closed. Root owns metadata and independent checker/review convergence before execution.

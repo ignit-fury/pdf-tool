@@ -96,15 +96,18 @@ PDF-XChange's documented limitation.
 Zero dependency on the text engine — fully parallelizable, and where "never leaves your browser"
 becomes literally true.
 
-- [ ] **PAGE-01**: User can insert a blank page at any position, inheriting page size and rotation from the adjacent page and showing what it inherited — never a silent Letter default
-- [ ] **PAGE-02**: User can reorder pages
-- [ ] **PAGE-03**: User can rotate pages
-- [ ] **PAGE-04**: User can delete pages
-- [ ] **PAGE-05**: User can merge another PDF, with outline nesting, announced form-field collision handling, and per-page page size preserved by default
-- [ ] **PAGE-06**: Merging two documents that embed different subsets of the same named font renders both correctly — retain independent fonts by default; any deduplication must use content identity, never `/BaseFont` (Phase 6 amendment A-6.3).
-- [ ] **PAGE-07**: User can merge an image as a new page (PNG, JPEG, WebP, HEIC, with transparency composited)
-- [ ] **PAGE-08**: User can place an image onto an existing page with visible aspect-ratio locking, not a hidden modifier key
-- [ ] **PAGE-09**: A page-operations-only session produces its download entirely in the browser, with zero requests to document routes; HEIC decoding is the explicit disclosed server exception from Phase 6 amendment A-6.1. PDF, PNG, JPEG and WebP page-operation sessions remain local.
+- [x] **PAGE-01**: User can insert a blank page at any position, inheriting page size and rotation from the adjacent page and showing what it inherited — never a silent Letter default
+- [x] **PAGE-02**: User can reorder pages
+- [x] **PAGE-03**: User can rotate pages
+- [x] **PAGE-04**: User can delete pages
+- [x] **PAGE-05**: User can merge another PDF, with outline nesting, announced form-field collision handling, and per-page page size preserved by default
+- [x] **PAGE-06**: Merging two documents that embed different subsets of the same named font renders both correctly — retain independent fonts by default; any deduplication must use content identity, never `/BaseFont` (Phase 6 amendment A-6.3).
+- [x] **PAGE-07**: User can merge an image as a new page (PNG, JPEG, WebP, HEIC, with transparency composited)
+- [x] **PAGE-08**: User can place an image onto an existing page with visible aspect-ratio locking, not a hidden modifier key
+- [x] **PAGE-09**: A page-operations-only session produces its download entirely in the browser, with zero requests to document routes; HEIC decoding is the explicit disclosed server exception from Phase 6 amendment A-6.1. PDF, PNG, JPEG and WebP page-operation sessions remain local.
+
+Validated locally in Phase 6; see `phases/06-page-ops-and-merge/06-VERIFICATION.md`.
+Production HEIC confinement, G3 release checks and G4 literal-specimen coverage remain open.
 
 ### Ingest and Document Handling
 
@@ -241,15 +244,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FIND-04 | Phase 5 — Find and Replace Across All Pages | Complete locally |
 | FIND-05 | Phase 5 — Find and Replace Across All Pages | Complete locally |
 | FIND-06 | Phase 5 — Find and Replace Across All Pages | Complete locally |
-| PAGE-01 | Phase 6 — Page Ops and Merge | Pending |
-| PAGE-02 | Phase 6 — Page Ops and Merge | Pending |
-| PAGE-03 | Phase 6 — Page Ops and Merge | Pending |
-| PAGE-04 | Phase 6 — Page Ops and Merge | Pending |
-| PAGE-05 | Phase 6 — Page Ops and Merge | Pending |
-| PAGE-06 | Phase 6 — Page Ops and Merge | Pending |
-| PAGE-07 | Phase 6 — Page Ops and Merge | Pending |
-| PAGE-08 | Phase 6 — Page Ops and Merge | Pending |
-| PAGE-09 | Phase 6 — Page Ops and Merge | Pending |
+| PAGE-01 | Phase 6 — Page Ops and Merge | Complete locally |
+| PAGE-02 | Phase 6 — Page Ops and Merge | Complete locally |
+| PAGE-03 | Phase 6 — Page Ops and Merge | Complete locally |
+| PAGE-04 | Phase 6 — Page Ops and Merge | Complete locally |
+| PAGE-05 | Phase 6 — Page Ops and Merge | Complete locally |
+| PAGE-06 | Phase 6 — Page Ops and Merge | Complete locally |
+| PAGE-07 | Phase 6 — Page Ops and Merge | Complete locally |
+| PAGE-08 | Phase 6 — Page Ops and Merge | Complete locally |
+| PAGE-09 | Phase 6 — Page Ops and Merge | Complete locally |
 | EXPO-01 | Phase 7 — Exports | Pending |
 | EXPO-02 | Phase 7 — Exports | Pending |
 | EXPO-03 | Phase 7 — Exports | Pending |

@@ -1,6 +1,6 @@
 # PDF Tool
 
-A browser-based PDF editor that edits the **actual existing content** of a PDF — replacing text inside the page's content stream rather than pasting annotations or white boxes on top. The current browser supports opening a PDF, editing individual text runs, finding and replacing text across all pages, changing colour or font style, undoing changes and downloading the edited PDF. Page operations and format conversions are planned later milestones. It is aimed at people who need to change a document that already exists and want the result to look untouched.
+A browser-based PDF editor that edits the **actual existing content** of a PDF — replacing text inside the page's content stream rather than pasting annotations or white boxes on top. The current browser supports opening a PDF, editing individual text runs, finding and replacing text across all pages, changing colour or font style, organizing pages, merging PDFs and images, undoing changes and downloading the edited PDF. Format conversions are planned later milestones. It is aimed at people who need to change a document that already exists and want the result to look untouched.
 
 It is a real product for other people, used anonymously — no signup to edit a file.
 
@@ -8,7 +8,7 @@ It is a real product for other people, used anonymously — no signup to edit a 
 
 ## Architecture
 
-Hybrid client/server — rendering, text selection, original-byte retention and downloads run in the browser. Content indexing, text rewrites and font work run in isolated server workers. Planned page operations will remain browser-local.
+Hybrid client/server — rendering, text selection, original-byte retention and downloads run in the browser. Content indexing, text rewrites and font work run in isolated server workers. Page insertion, reorder, rotation, deletion, PDF merge and PNG/JPEG/WebP placement run in the browser. HEIC conversion is a separate, explicitly chosen image-only server action; production conversion remains disabled until Linux confinement is verified.
 
 Editing is **content-stream only**. No white-box overlays. No reflow across lines or pages — replaced text occupies the original text run's space.
 
@@ -72,6 +72,7 @@ Phase 3's rewrite engine is integrated into this checkout. Phase 4 implements a 
 viewer and single-run editor with text/style preview, PDF download and recipe-level undo.
 Phase 5 adds all-page search, per-occurrence exclusions, exact replacement review,
 one atomic batch apply and one-step undo through the same content-stream engine.
+Phase 6 adds local page tools, PDF merge with independent embedded fonts and preserved forms/bookmarks, image placement, and one mixed page/text Undo history. Opening and organizing a PDF do not upload it; text analysis starts only when chosen.
 The editor uses the actual content stream. Unsupported edits are refused explicitly.
 
 Implemented: password-protected PDFs, signature warnings, server-issued edit boxes,
@@ -183,7 +184,10 @@ and remaining release checks are recorded in the Phase 4 verification report. Ph
 local batch/browser evidence is in
 [05-G4-RESULTS.md](.planning/phases/05-find-and-replace-across-all-pages/05-G4-RESULTS.md).
 Its 40-page public technical-document proxy does not establish literal contract-source
-coverage. No deployment or public-release sign-off is implied.
+coverage. Phase 6 browser/network and independent native fidelity evidence is in
+[06-G5-RESULTS.md](.planning/phases/06-page-ops-and-merge/06-G5-RESULTS.md), including
+unchanged source-baseline renderer discrepancies and production HEIC limitations.
+No deployment or public-release sign-off is implied.
 
 ## Corpus testing
 

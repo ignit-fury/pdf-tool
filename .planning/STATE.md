@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
-status: executing
-stopped_at: Phase 6 primitives 01 through 04 delivered; workstation integration and reproduced review fixes active, G5 pending
-last_updated: "2026-10-25"
-last_activity: Started local-first workstation integration after tested merge/image handoffs; fixing independent review findings
+status: ready_to_plan
+stopped_at: Phase 6 verified locally; next Phase 7 Exports
+last_updated: "2026-10-26"
+last_activity: Completed six Phase 6 plans, browser/native fidelity proof, review fixes and local goal verification
 progress:
   total_phases: 8
-  completed_phases: 3
+  completed_phases: 4
 ---
 
 # Project State
 
 **Core value:** Replace existing PDF text while preserving the surrounding document.
-**Current focus:** Phase 06 — page operations and merge, local execution.
+**Current focus:** Phase 06 complete locally; next is Phase 07 — Exports.
 
 Phases 1–3 are complete. The Phase 3 engine and its fonts, CLI and regression gates are
 now present in this checkout; the original source worktree and local edits are preserved.
@@ -32,32 +32,25 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
 
 ## Current work
 
-- On 2026-10-24 the user instructed: "ok go to next phase". Phase 6 proceeds
-  independently over the delivered workstation. No deployment or container-tool
-  installation is included; G3 release checks and G4 literal-specimen debt stay open.
-- Refreshed research, pattern map and approved UI contract are recorded. Six plans
-  cover all nine PAGE requirements in four waves; independent review has no blockers.
-- Plans 06-01 and 06-02 are delivered with committed summaries. Local PDF load,
-  password/signature/geometry/resource handling, page transforms, exact snapshot
-  history and terminable worker transport pass 22 focused tests and build.
-- The HEIC boundary passes 18 native/lifecycle tests (including real macOS sips),
-  25 HTTP/privacy tests, 15 license tests, both dependency gates and strict typing.
-  Production conversion fails closed until separate Linux confinement is verified;
-  this local proof does not close G3 or claim Linux execution.
-- Plans 06-03 and 06-04 are delivered: 18 merge/graph tests and 21 image/geometry
-  tests pass, with build and targeted qpdf/pdfcpu/render proof. Historical parallel
-  RED module failures are recorded in their summaries, not treated as final results.
-- Workstation integration (06-05) is active. It owns local opening, explicit text
-  analysis, page/import/image controls, the concrete worker and one mixed undo stack.
-- Independent core/server review reproduced three blockers (nested bundled license
-  scanning, source-tail license scanning, stream-dictionary deletion references)
-  and one preflight privacy-header warning. Owners are applying RED/GREEN fixes.
-  Review scope will extend to merge/images/integration before final verification.
-- Actual G5 network/renderer/browser proof remains pending. No PAGE requirement is
-  marked complete from pure helper tests alone; no deployment is included.
-- Baseline: 527 Python tests passed (36 deselected), 41 client tests passed.
-  Actual browser RED proof caught two API requests on opening; G5 must reach zero
-  through local page operations/download, not merely inspect a boolean.
+- The user's local-only authorization remains in force. All six Phase 6 plans and
+  PAGE-01 through PAGE-09 are verified locally. See `06-VERIFICATION.md` and
+  `06-G5-RESULTS.md` under `phases/06-page-ops-and-merge/`.
+- Opening/organizing PDFs, merge, PNG/JPEG/WebP placement, mixed Undo and downloads
+  are browser-local, observed with zero API requests. Explicit Analyze text and
+  image-only Convert HEIC cross their disclosed boundaries. Unicode-password and
+  signed-document controls, original-byte restoration, styles and index Resume pass.
+- Actual native gate: 24 PDFs / 53 pages, 159 exact same-engine mapped comparisons,
+  independent RGB oracles, distinct same-named Arial programs, and all qpdf/pdfcpu
+  checks pass. Existing 64 cross-engine UserUnit differences match unchanged source
+  baselines; they are disclosed, not counted as passing cross-engine comparisons.
+- Final checks: 560 Python tests (36 deselected), 125 client tests, seven G4 technical
+  proxy tests, 31 typed files, 19 license-gate tests, both closures, Unicode artifact
+  and build pass. Source review resolves nine blockers and one warning. Actual
+  320/760 px checks also found/fixed hidden-input overflow (`f8fc3e4`).
+- G3 Linux/container/live-CDN checks, G4 literal contract-specimen coverage and Linux
+  HEIC confinement remain open. Production HEIC stays disabled until confined.
+  No deployment, dependency installation or container-tool setup occurred.
+- Next: Phase 7 — Exports. No Phase 7 plan has been executed.
 
 ### Delivered Phase 5 baseline
 
@@ -87,7 +80,7 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
 - Literal legal-contract specimen coverage remains unproven. The all-page source is
   explicitly a public technical-document proxy; G3 release checks remain open.
   Pending item: `phases/05-find-and-replace-across-all-pages/05-HUMAN-UAT.md`.
-  Phase 6 page operations/merge is now in local planning under the user's instruction.
+  Phase 6 page operations/merge is now delivered and verified locally.
 
 ### Earlier Phase 4 baseline
 
@@ -105,7 +98,7 @@ Server-issued run addresses; one atomic recipe against immutable original bytes;
 editing; no runtime AGPL; no persistent server document/session history; browser-held
 originals recover evicted memory cache. Phase 5 full-document find/replace is
 delivered locally; its literal contract-specimen gate remains open. Phase 6 page
-operations are the current local work; later exports remain future work.
+operations are delivered locally; exports are the next phase.
 
 ## Decisions made during execution
 
