@@ -1,3 +1,16 @@
+import {fitImage} from './pageOps/imageGeometry.mjs';
+
+/** Resolve the destination only after native/conversion decode finishes. */
+export async function prepareImageDraft({decode,getDestination,isCurrent,name}) {
+  const decoded=await decode();
+  if(!isCurrent()){decoded.dispose();return null;}
+  try {
+    const {page,geometry}=getDestination();
+    return {...decoded,name,destination:'new-page',position:'after',locked:true,rect:fitImage(decoded,geometry),page};
+  }catch(error){decoded.dispose();throw error;}
+}
+export function imageDraftMatchesPage(draft,page) {return !!draft&&Number.isInteger(page)&&page>0&&draft.page===page;}
+
 export function upsertOperation(recipe, operation) {
   return recipe.some(item => item.run_id === operation.run_id) ? recipe.map(item => item.run_id === operation.run_id ? operation : item) : [...recipe, operation];
 }

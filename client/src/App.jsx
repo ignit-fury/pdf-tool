@@ -11,7 +11,7 @@ import {buildReplacementRecipe} from './find/buildRecipe.mjs';
 import {createIndexingController} from './find/indexing.mjs';
 import {previewReplacement} from './find/preview.mjs';
 import {applyReviewedReplacement} from './find/replaceAll.mjs';
-import {createLocalSession,restoreSession,snapshotCopyBytes,canAnalyzeText} from './session.mjs';
+import {createLocalSession,restoreSession,snapshotCopyBytes,canAnalyzeText,prepareImageDraft,imageDraftMatchesPage} from './session.mjs';
 import {runPdfJob} from './pageOps/pdfWorker.mjs';
 import PageOpsPanel from './pageOps/PageOpsPanel.jsx';
 import {captureSnapshot,admitHistory,pushSnapshot,popSnapshot,peekSnapshot,MAX_RETAINED_BYTES,MAX_TRANSIENT_BYTES,MAX_HISTORY_ENTRIES} from './pageOps/documentHistory.mjs';
@@ -54,6 +54,7 @@ export default function App(){
   const [acknowledged,setAcknowledged]=useState(false),[dragging,setDragging]=useState(false);
   const [panel,setPanel]=useState('pages'),[query,setQuery]=useState(''),[replacement,setReplacement]=useState(''),[fontFamily,setFontFamily]=useState('');
   const [localMetadata,setLocalMetadata]=useState(null);
+  const imageDestinationRef=useRef(null);imageDestinationRef.current={page,geometry:localMetadata?.pages[page-1]};
   const historyRef=useRef([]),draftRef=useRef(null),restoringPageRef=useRef(false);
   const [documentHistory,setDocumentHistory]=useState([]),[importReview,setImportReview]=useState(null),[imageDraft,setImageDraft]=useState(null),[pageError,setPageError]=useState('');
   const [matchCase,setMatchCase]=useState(false),[wholeWords,setWholeWords]=useState(false),[excludedIds,setExcludedIds]=useState(new Set());
@@ -258,9 +259,8 @@ export default function App(){
     try{
       if(file.size>MAX_IMAGE_BYTES)throw Object.assign(new Error(),{code:'IMAGE_TOO_LARGE'});
       requireBudget({temporaryBytes:file.size+192*1024*1024,retainSnapshot:false});
-      const decoded=await decodeLocalImage(file,{signal:draft.controller.signal});
-      if(!valid()){decoded.dispose();return;}draft.decoded=decoded;requireBudget({retainSnapshot:false});
-      setImageDraft({...decoded,name:file.name,destination:'new-page',position:'after',locked:true,rect:fitImage(decoded,localMetadata.pages[page-1]),page});
+      const prepared=await prepareImageDraft({decode:()=>decodeLocalImage(file,{signal:draft.controller.signal}),isCurrent:valid,getDestination:()=>imageDestinationRef.current,name:file.name});
+      if(!prepared)return;draft.decoded=prepared;requireBudget({retainSnapshot:false});setImageDraft(prepared);
     }catch(error){if(valid()){if(error.code==='HEIC_CONVERSION_REQUIRED')setImageDraft({heic:true,name:file.name,converting:false});else{releaseDraft();setPageError(localFailure(error));}}}
     finally{finishWork(owner);}
   };
@@ -273,14 +273,13 @@ export default function App(){
       const response=await fetch(`${API}/images/heic-decode`,{method:'POST',headers:{'Content-Type':draft.file.type==='image/heif'?'image/heif':'image/heic'},body:draft.file,signal:draft.controller.signal,cache:'no-store'});
       if(!response.ok){let data;try{data=await response.json();}catch{}throw Object.assign(new Error(),{code:data?.detail?.code||'HEIC_UNAVAILABLE'});}
       if(response.headers.get('content-type')?.split(';')[0]!=='image/png')throw Object.assign(new Error(),{code:'IMAGE_INVALID'});
-      const declared=Number(response.headers.get('content-length'));if(declared>MAX_IMAGE_BYTES)throw Object.assign(new Error(),{code:'IMAGE_PNG_TOO_LARGE'});
+      const declared=Number(response.headers.get('content-length'));if(declared>MAX_IMAGE_PNG_BYTES)throw Object.assign(new Error(),{code:'IMAGE_PNG_TOO_LARGE'});
       const reader=response.body.getReader(),chunks=[];let total=0;
-      try{for(;;){const {done,value}=await reader.read();if(done)break;total+=value.byteLength;if(total>MAX_IMAGE_BYTES){await reader.cancel();throw Object.assign(new Error(),{code:'IMAGE_PNG_TOO_LARGE'});}chunks.push(value);}}finally{reader.releaseLock();}
+      try{for(;;){const {done,value}=await reader.read();if(done)break;total+=value.byteLength;if(total>MAX_IMAGE_PNG_BYTES){await reader.cancel();throw Object.assign(new Error(),{code:'IMAGE_PNG_TOO_LARGE'});}chunks.push(value);}}finally{reader.releaseLock();}
       if(!valid())return;
-      const decoded=await decodeLocalImage(new Blob(chunks,{type:'image/png'}),{signal:draft.controller.signal});
-      if(!valid()){decoded.dispose();return;}draft.decoded=decoded;requireBudget({retainSnapshot:false});
-      setImageDraft({...decoded,name:draft.file.name,destination:'new-page',position:'after',locked:true,rect:fitImage(decoded,localMetadata.pages[page-1]),page});
-    }catch(error){if(valid()&&!ignored(error)){setImageDraft(value=>({...value,converting:false}));setPageError(localFailure(error));}}
+      const prepared=await prepareImageDraft({decode:()=>decodeLocalImage(new Blob(chunks,{type:'image/png'}),{signal:draft.controller.signal,convertedPng:true}),isCurrent:valid,getDestination:()=>imageDestinationRef.current,name:draft.file.name});
+      if(!prepared)return;draft.decoded=prepared;requireBudget({retainSnapshot:false});setImageDraft(prepared);
+    }catch(error){if(valid()&&!ignored(error)){draft.decoded?.dispose();draft.decoded=undefined;setImageDraft(value=>({...value,converting:false}));setPageError(localFailure(error));}}
     finally{finishWork(owner);}
   };
   const updateDraft=change=>{
@@ -296,8 +295,8 @@ export default function App(){
     localMutation('merge',{sourceBytes:draft.bytes,options:{sourcePassword:draft.password,filename:review.name,sourceIdentity:review.sourceIdentity,position:review.position-1,normalizeTo:review.normalize?localMetadata.pages[page-1]:null,sourceAcknowledged:review.acknowledged}},'PDF merge',`Added ${review.pageCount} pages from ${review.name}. Undo restores the previous document. ${review.bookmarkCount?`Bookmarks will be nested under “${review.name}”.`:'No bookmarks to merge.'} ${form}`);
   };
   const commitImage=()=>{
-    const draft=imageDraft;if(!draft?.pngBytes||!validatePlacement(draft.rect,localMetadata.pages[page-1]).valid)return;
-    localMutation('image',{pngBytes:draft.pngBytes,options:{destination:draft.destination,pageIndex:page-1,position:draft.position,rect:draft.rect}},draft.destination==='new-page'?'image page':'image placement',draft.destination==='new-page'?'Image page added. Undo restores the previous document.':'Image placed. Undo restores the previous document.');
+    const draft=imageDraft,destination=imageDestinationRef.current;if(!draft?.pngBytes||!imageDraftMatchesPage(draft,destination.page)||!validatePlacement(draft.rect,destination.geometry).valid)return;
+    localMutation('image',{pngBytes:draft.pngBytes,options:{destination:draft.destination,pageIndex:destination.page-1,position:draft.position,rect:draft.rect}},draft.destination==='new-page'?'image page':'image placement',draft.destination==='new-page'?'Image page added. Undo restores the previous document.':'Image placed. Undo restores the previous document.');
   };
   const checkReplacements=async()=>{
     if(indexProgress.status!=='complete'||!query)return;

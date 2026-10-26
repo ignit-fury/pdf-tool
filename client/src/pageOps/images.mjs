@@ -147,17 +147,23 @@ function cancellable(promise,signal,lateDispose=()=>{}) {
 }
 /** Local PNG/JPEG/WebP decode, exactly-once native EXIF normalization and white
  * compositing. preview is the actual flattened canvas, owned until dispose/abort.
+ * convertedPng is reserved for explicitly requested server conversion output:
+ * it raises only PNG input admission to the existing 64 MiB output cap. Selected
+ * raw images retain their 20 MiB cap; dimensions/pixels and decode checks match.
  * Caps limit admitted dimensions/bytes, not the native decoder's total heap. */
-export async function decodeLocalImage(file,{signal,decodeBitmap=(blob,options)=>globalThis.createImageBitmap(blob,options),createCanvas=browserCanvas}={}) {
+export async function decodeLocalImage(file,{signal,convertedPng=false,decodeBitmap=(blob,options)=>globalThis.createImageBitmap(blob,options),createCanvas=browserCanvas}={}) {
   let bitmap,canvas,disposed=false;
   const dispose=()=>{if(disposed)return;disposed=true;signal?.removeEventListener('abort',dispose);try{bitmap?.close();}catch{}bitmap=undefined;if(canvas){canvas.width=0;canvas.height=0;}};
   try {
     checkAbort(signal);
     if(!file||!Number.isFinite(file.size)||file.size<=0||typeof file.arrayBuffer!=='function')refuse('IMAGE_INVALID');
-    if(file.size>MAX_IMAGE_BYTES)refuse('IMAGE_TOO_LARGE');
+    const inputLimit=convertedPng===true?MAX_IMAGE_PNG_BYTES:MAX_IMAGE_BYTES;
+    const inputError=convertedPng===true?'IMAGE_PNG_TOO_LARGE':'IMAGE_TOO_LARGE';
+    if(file.size>inputLimit)refuse(inputError);
     const input=await cancellable(file.arrayBuffer(),signal);checkAbort(signal);
-    if(input.byteLength>MAX_IMAGE_BYTES)refuse('IMAGE_TOO_LARGE');
+    if(input.byteLength>inputLimit)refuse(inputError);
     const info=inspectImage(new Uint8Array(input));
+    if(convertedPng===true&&info.mime!=='image/png')refuse('IMAGE_INVALID');
     bitmap=await cancellable(decodeBitmap(new Blob([input],{type:info.mime}),{imageOrientation:'from-image'}),signal,value=>value?.close());
     checkAbort(signal);dimensions(bitmap?.width,bitmap?.height);
     if(bitmap.width!==info.width||bitmap.height!==info.height)refuse('IMAGE_ORIENTATION_INVALID');
