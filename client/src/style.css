@@ -19,6 +19,7 @@
 .page-ops button,.page-ops input,.page-ops select {min-height:44px;max-width:100%;min-width:0;box-sizing:border-box;}
 .page-ops button {font-size:12px;font-weight:600;white-space:normal;margin:4px 0;}
 .page-ops input,.page-ops select {width:100%;}
+.page-ops input.visually-hidden {width:1px;height:1px;min-height:0;}
 .page-ops .check-label {flex-direction:row;align-items:center;min-height:44px;gap:8px;}
 .page-ops .check-label input {width:18px;flex:0 0 18px;accent-color:#2458df;}
 .page-actions {display:flex;flex-wrap:wrap;gap:8px;}
