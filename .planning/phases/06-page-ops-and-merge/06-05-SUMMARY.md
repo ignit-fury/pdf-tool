@@ -23,7 +23,7 @@ tech-stack:
   patterns: [prepare-before-publication, explicit-analysis-consent, native-controlled-forms, exact-local-undo]
 key-files:
   created: [client/src/pageOps/pdfJob.worker.mjs, client/src/pageOps/PageOpsPanel.jsx]
-  modified: [client/src/App.jsx, client/src/session.mjs, client/src/session.test.mjs, client/src/Viewer.jsx, client/src/style.css, client/src/pageOps/images.mjs, client/src/pageOps/images.test.mjs]
+  modified: [client/src/App.jsx, client/src/session.mjs, client/src/session.test.mjs, client/src/Viewer.jsx, client/src/style.css, client/src/pageOps/images.mjs, client/src/pageOps/images.test.mjs, client/src/find/indexing.mjs, client/src/find/indexing.test.mjs]
 key-decisions:
   - Keep localMetadata separate from analysis consent and metadata; only Analyze text uploads a new PDF baseline.
   - Restore exact snapshots locally with fresh controllers/queues and defer restored analysis until explicit text interaction.
@@ -101,6 +101,16 @@ G5 must independently observe zero API traffic during the full local journey, ex
 - Final `npm --prefix client test`: **118 passed, 0 failed**, `/tmp/06-05-navigation-converted-client.log`.
 - Final production build and whitespace check passed, `/tmp/06-05-navigation-converted-build.log`; existing Vite size advisory remains. No installation or deployment occurred.
 
+## Restored Find Producer Review Fix — CR08
+
+**[Rule 1 — Bug] Undo restored progress without the producer state needed by Resume.** Previously saved stopped/failed progress had no controller while analysis was deferred. Reentering Find created an unseeded controller whose Resume could publish a misleading complete 0/0 state; saved in-flight progress could also leave Stop pointing at no producer.
+
+- `normalizeIndexProgress(progress)` derives counts from valid saved page sets and turns saved `indexing` into `stopped`. `createIndexingController` accepts optional `initialProgress`, preserving total/completed/failed sets without fetching or publishing during construction. A zero-total unstarted producer does not publish an empty completion.
+- `restoreSession` reconstructs the saved analysis index as resolved page-cache promises, alongside its already fresh controller/queue. Undo itself still does not upload or start indexing.
+- App restores normalized UI progress and seeds every replacement producer. Explicit Resume clears the analysis deferral, creates a seeded controller synchronously if absent and starts missing/failed pages; baseline cache recovery occurs lazily on the first actual unfinished-page request. The active Stop callback now has a live producer to stop. Explicit Find reentry also creates a seeded controller rather than losing counts.
+- RED `83a99f8` covers stopped/failed/in-flight seeds plus mixed page-session Undo into paused/in-flight Find state. GREEN `8a0b532` passes **29 focused session/indexing tests**, `/tmp/06-05-restored-index-green.log`. The mixed tests prove zero upload/request during restore/construction, retained match cache, one lazy upload and requests for only pages 2/4 from a saved four-page document with pages 1/3 complete.
+- One final production build passed, `/tmp/06-05-restored-index-build.log`, including the concurrently completed core minification-safe deletion fix `3b96f3b`. Whitespace check passed. Per root coordination, no broad client suite was repeated for CR08; root owns the final combined regression run.
+
 ## Self-Check: PASSED
 
-All nine owned source/test paths and this summary exist. The five original RED/GREEN/task commits and review commits `4136c90`/`c55ee55` exist in git history. The latest 118-test suite, production build and whitespace checks passed. No generated owned untracked files or unexpected tracked deletions remain.
+All eleven owned source/test paths and this summary exist. The five original RED/GREEN/task commits and review commits `4136c90`/`c55ee55`/`83a99f8`/`8a0b532` exist in git history. The prior 118-test full client run, latest 29-test CR08 focused run, final production build and whitespace checks passed. No generated owned untracked files or unexpected tracked deletions remain.
