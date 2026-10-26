@@ -192,6 +192,8 @@ def test_all_outputs_structure_provenance_and_pixels(gate):
             for page, geometry in zip(pdf.pages, metadata['pages'], strict=True):
                 box = geometry['mediaBox']
                 assert list(page.MediaBox) == [box['x'], box['y'], box['x']+box['width'], box['y']+box['height']]
+                crop = geometry['cropBox']
+                assert list(page.obj.get('/CropBox', page.MediaBox)) == [crop['x'], crop['y'], crop['x']+crop['width'], crop['y']+crop['height']]
                 assert int(page.obj.get('/Rotate', 0)) % 360 == geometry['rotation']
                 assert float(page.obj.get('/UserUnit', 1)) == geometry['userUnit']
         for index, expected in enumerate(output['mapping']):
