@@ -111,11 +111,15 @@ def _exchange(process: subprocess.Popen[bytes], payload: bytes, timeout: float) 
 
 def run_worker(action: str, source: bytes, *, password: str = "", page: int = 0,
                recipe: bytes = b"[]", dry_run: bool = False,
-               acknowledge_signature: bool = False, timeout: float = 30) -> dict[str, object]:
+               acknowledge_signature: bool = False, timeout: float = 30,
+               export_operation: str = "", downsample: bool = False) -> dict[str, object]:
     """Run one operation. Failures are fixed codes, never exception messages."""
     code: str | None = None
     if action not in ACTIONS:
         code = "INVALID_ACTION"
+    elif action == 'export' and (export_operation not in ('compress', 'flatten', 'text', 'markdown', 'html')
+            or not isinstance(downsample, bool) or (downsample and export_operation != 'compress')):
+        code = 'EXPORT_OPTIONS_INVALID'
     elif len(source) > MAX_SOURCE_BYTES:
         code = "SOURCE_TOO_LARGE"
     elif len(recipe) > MAX_RECIPE_BYTES:
@@ -131,7 +135,8 @@ def run_worker(action: str, source: bytes, *, password: str = "", page: int = 0,
             request = {"action": action, "source": base64.b64encode(source).decode("ascii"),
                 "password": secret.get_secret_value(), "page": page,
                 "recipe": base64.b64encode(recipe).decode("ascii"), "dry_run": dry_run,
-                "acknowledge_signature": acknowledge_signature}
+                "acknowledge_signature": acknowledge_signature,
+                "export_operation": export_operation, "downsample": downsample}
             payload = json.dumps(request, separators=(",", ":")).encode()
             # Never give an untrusted-document parser cloud/service credentials,
             # import-path overrides, dynamic-loader hooks, or proxy secrets.

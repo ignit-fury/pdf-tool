@@ -134,3 +134,10 @@ def test_flatten_xfa_and_bad_appearance_geometry_refuse():
 def test_invalid_options_refuse(operation, downsample):
     with pytest.raises(ExportRefusal, match='^EXPORT_OPTIONS_INVALID$'):
         perform(source_pdf(), operation, downsample=downsample)
+
+
+def test_output_limit_stops_native_writes(monkeypatch):
+    import engine.export.pdf as exports
+    monkeypatch.setattr(exports, 'MAX_EXPORT_BYTES', 100)
+    with pytest.raises(ExportRefusal, match='^EXPORT_LIMIT$'):
+        perform(source_pdf())

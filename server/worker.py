@@ -149,7 +149,7 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
     action = request.get("action")
     source64 = request.get("source")
     password = request.get("password", "")
-    if action not in {"inspect", "page", "edit", "plan"} or not isinstance(source64, str) or not isinstance(password, str):
+    if action not in {"inspect", "page", "edit", "plan", "export"} or not isinstance(source64, str) or not isinstance(password, str):
         raise WorkerRefusal("INVALID_INPUT")
     source = base64.b64decode(source64, validate=True)
     if len(source) > MAX_SOURCE_BYTES or not source.startswith(b"%PDF-"):
@@ -202,6 +202,45 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
                 "width": box[2] - box[0], "height": box[3] - box[1],
                 "rotation": int(pdf.pages[number].get("/Rotate", 0)), "view_box": box}
         _preflight(pdf)
+        if action == 'export':
+            from engine.export.pdf import ExportRefusal, MAX_EXPORT_BYTES, export_pdf
+            from engine.export.text import export_document
+            operation = request.get('export_operation')
+            downsample = request.get('downsample', False)
+            if (operation not in ('compress', 'flatten', 'text', 'markdown', 'html')
+                    or not isinstance(operation, str) or not isinstance(downsample, bool)
+                    or (downsample and operation != 'compress')):
+                raise WorkerRefusal('EXPORT_OPTIONS_INVALID')
+            notices: list[str] = []
+            changed_images = 0
+            if operation in ('compress', 'flatten'):
+                if signed and request.get('acknowledge_signature') is not True:
+                    raise WorkerRefusal('SIGNATURE_ACKNOWLEDGEMENT_REQUIRED')
+                try:
+                    exported = export_pdf(pdf, source, operation, downsample=downsample)
+                except ExportRefusal as error:
+                    raise WorkerRefusal(str(error)) from None
+                data = exported.data
+                notices.extend(exported.notices)
+                changed_images = exported.changed_images
+                if signed and data != source:
+                    notices.append('SIGNATURES_INVALIDATED')
+                filename = 'compressed.pdf' if operation == 'compress' else 'flattened.pdf'
+                media_type = 'application/pdf'
+            else:
+                with RunIndex(path, password=secret.get_secret_value()) as index:
+                    text = export_document(index, operation)
+                data = text.encode('utf-8')
+                if not text.strip():
+                    notices.append('NO_EXTRACTABLE_TEXT')
+                extension = {'text': 'txt', 'markdown': 'md', 'html': 'html'}[operation]
+                filename = 'document.' + extension
+                media_type = {'text': 'text/plain', 'markdown': 'text/markdown', 'html': 'text/html'}[operation]
+            if len(data) > MAX_EXPORT_BYTES:
+                raise WorkerRefusal('EXPORT_LIMIT')
+            return {'data': base64.b64encode(data).decode('ascii'), 'media_type': media_type,
+                    'filename': filename, 'before_bytes': len(source), 'after_bytes': len(data),
+                    'notices': notices, 'changed_images': changed_images}
         if signed and action != "plan" and request.get("dry_run") is not True and request.get("acknowledge_signature") is not True:
             raise WorkerRefusal("SIGNATURE_ACKNOWLEDGEMENT_REQUIRED")
         recipe64 = request.get("recipe")
@@ -238,6 +277,10 @@ def main() -> None:
         import engine.index  # noqa: F401
         import engine.recipe  # noqa: F401
         import engine.boxes  # noqa: F401
+        import engine.export.pdf  # noqa: F401
+        import engine.export.text  # noqa: F401
+        from PIL import Image
+        Image.init()  # Trusted codec plugins load before irreversible filtering.
         from engine.playa_boundary import PDFSyntaxError
         from server.linux_sandbox import restrict_worker
         restrict_worker()

@@ -12,10 +12,11 @@ ERROR_CODES = frozenset({
     "SIGNATURE_ACKNOWLEDGEMENT_REQUIRED", "INVALID_RECIPE", "DOCUMENT_LIMIT", "PDF_CYCLE", "REQUEST_FAILED",
     "HEIC_UNAVAILABLE", "INVALID_HEIC", "IMAGE_LIMIT_EXCEEDED",
     "IMAGE_CONVERSION_FAILED", "IMAGE_CONVERSION_TIMEOUT",
+    "EXPORT_OPTIONS_INVALID", "EXPORT_LIMIT", "EXPORT_UNSUPPORTED", "FLATTEN_APPEARANCE_REQUIRED",
 })
 # PDF worker actions stay separate: accepting heic-decode here would make it a
 # valid action in the PDF transport. Only reporting accepts the image action.
-ACTIONS = frozenset({"inspect", "page", "edit", "plan"})
+ACTIONS = frozenset({"inspect", "page", "edit", "plan", "export"})
 
 
 def set_error_reporter(reporter: ErrorReporter | None) -> None:

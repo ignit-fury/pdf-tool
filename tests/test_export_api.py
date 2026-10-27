@@ -111,7 +111,15 @@ def test_export_preflight_and_missing_appearance_fail_closed():
         limited = client.post('/exports?operation=text', content=decompression_bomb(), headers=HEADERS)
         assert limited.status_code == 422
         assert limited.json()['detail']['code'] == 'DOCUMENT_LIMIT'
+        # The signature-detector fixture has no page widget; attach one so this
+        # check actually exercises a visible field with a missing appearance.
+        with pikepdf.open(io.BytesIO(signed_pdf())) as pdf:
+            field = pdf.Root.AcroForm.Fields[0]
+            field.Subtype, field.Rect, field.P = pikepdf.Name.Widget, [20, 20, 80, 50], pdf.pages[0].obj
+            pdf.pages[0].obj.Annots = pikepdf.Array([field])
+            output = io.BytesIO()
+            pdf.save(output)
         unsafe = client.post('/exports?operation=flatten&acknowledge_signature=true',
-                             content=signed_pdf(), headers=HEADERS)
+                             content=output.getvalue(), headers=HEADERS)
         assert unsafe.status_code == 422
         assert unsafe.json()['detail']['code'] == 'FLATTEN_APPEARANCE_REQUIRED'

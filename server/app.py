@@ -157,7 +157,7 @@ def create_app(*, max_upload_bytes: int = MAX_UPLOAD_BYTES,
     @api.middleware('http')
     async def admission_and_lifetime(request: Request, call_next: Any) -> Response:
         admitted = False
-        needs_admission = (request.url.path in ('/upload', '/images/heic-decode') or
+        needs_admission = (request.url.path in ('/upload', '/images/heic-decode', '/exports') or
                            request.url.path.startswith('/jobs/'))
         try:
             if needs_admission:
@@ -247,6 +247,27 @@ def create_app(*, max_upload_bytes: int = MAX_UPLOAD_BYTES,
         except ValueError:
             raise HTTPException(413, {'code': 'BODY_TOO_LARGE'}) from None
         return {**result, 'job_id': token, 'source_hash': hashlib.sha256(source).hexdigest()}
+
+    @api.post('/exports')
+    async def export_current(request: Request, operation: str = Query(default=''),
+                             downsample: str = Query(default='false'),
+                             acknowledge_signature: str = Query(default='false')) -> dict[str, Any]:
+        allowed = {'operation', 'downsample', 'acknowledge_signature'}
+        if (operation not in ('compress', 'flatten', 'text', 'markdown', 'html')
+                or downsample not in ('true', 'false') or acknowledge_signature not in ('true', 'false')
+                or (downsample == 'true' and operation != 'compress')
+                or any(key not in allowed or len(request.query_params.getlist(key)) != 1
+                       for key in request.query_params)):
+            raise HTTPException(400, {'code': 'EXPORT_OPTIONS_INVALID'})
+        if request.headers.get('content-type', '').split(';')[0] != 'application/pdf':
+            raise HTTPException(415, {'code': 'PDF_CONTENT_TYPE_REQUIRED'})
+        source = await _body(request, max_upload_bytes, body_timeout)
+        if not source.startswith(b'%PDF-'):
+            raise HTTPException(400, {'code': 'INVALID_PDF_MAGIC'})
+        result = await dispatch('export', source, request, export_operation=operation,
+                                downsample=downsample == 'true',
+                                acknowledge_signature=acknowledge_signature == 'true')
+        return {**result, 'location': 'server'}
 
     @api.post('/images/heic-decode')
     async def heic_decode(request: Request) -> Response:
