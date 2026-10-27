@@ -134,6 +134,22 @@ def test_fixtures_production_archive_and_structure(gate):
                 assert output['after_bytes'] < output['before_bytes']
                 image = actual.pages[0].Resources.XObject.Im
                 assert (int(image.Width), int(image.Height)) == (1600, 800)
+            if output['kind'] in ('split', 'compress'):
+                for page, index in zip(actual.pages, output['mapping'], strict=True):
+                    assert resource_fingerprint(page) == resource_fingerprint(source.pages[index])
+            if output['kind'] == 'split':
+                for page, index in zip(actual.pages, output['mapping'], strict=True):
+                    def appearances(page):
+                        records = []
+                        for annot in page.obj.get('/Annots', []):
+                            ap = annot.AP.N
+                            if isinstance(ap, pikepdf.Dictionary):
+                                ap = ap[str(annot.AS)]
+                            records.append((str(annot.Subtype), str(annot.get('/V')),
+                                str(annot.get('/AS')), tuple(annot.Rect),
+                                hashlib.sha256(ap.read_bytes()).hexdigest()))
+                        return records
+                    assert appearances(page) == appearances(source.pages[index])
 
 
 def test_negative_mapping_graph_resources_and_refusals(gate):
@@ -161,11 +177,9 @@ def test_negative_mapping_graph_resources_and_refusals(gate):
     from server.isolation import run_worker
     for file, code in [('missing-appearance.pdf', 'FLATTEN_APPEARANCE_REQUIRED'),
                        ('unsafe-appearance.pdf', 'EXPORT_UNSUPPORTED')]:
-        from server.errors import ApiError
-        with pytest.raises(ApiError) as error:
-            run_worker('export', (directory / file).read_bytes(),
-                       export_operation='flatten', acknowledge_signature=True)
-        assert error.value.code == code
+        result = run_worker('export', (directory / file).read_bytes(),
+                            export_operation='flatten', acknowledge_signature=True)
+        assert result == {'error': code}
 
 
 def test_native_three_engine_export_fidelity(gate):
@@ -192,6 +206,7 @@ def test_native_three_engine_export_fidelity(gate):
                         regions = physical_regions(geometry, raster.size)
                     assert_region_pixels(expected if output['kind'] == 'flatten' else a, b, regions,
                                          check_inside=output['kind'] == 'flatten')
+                    assert_region_pixels(a, b, regions, check_inside=False)
                     confined += 1
                     if output['kind'] == 'flatten':
                         # Full independent painted reference catches dropped APs
