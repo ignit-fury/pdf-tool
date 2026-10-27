@@ -80,3 +80,15 @@ def test_same_named_fonts_in_distinct_resources_have_distinct_identity(tmp_path:
         pdf.save(path)
     with RunIndex(path) as index:
         assert index.page(0).runs[0][0].font_identity != index.page(1).runs[0][0].font_identity
+
+
+def test_direct_same_named_font_resources_keep_their_page_owner(tmp_path: Path) -> None:
+    path = tmp_path / 'direct.pdf'
+    with pikepdf.Pdf.new() as pdf:
+        for _ in range(2):
+            page = pdf.add_blank_page(page_size=(400,300))
+            page.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=pikepdf.Dictionary(Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name.Helvetica)))
+            page.Contents = pdf.make_stream(b'BT /F1 12 Tf 40 100 Td (Body) Tj ET')
+        pdf.save(path)
+    with RunIndex(path) as index:
+        assert index.page(0).runs[0][0].font_identity != index.page(1).runs[0][0].font_identity
