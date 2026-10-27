@@ -32,7 +32,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 4: Web Tier Walking Skeleton + Hardening** - Implemented and verified locally 2026-10-21; Linux/container/CDN public-release gates pending (see 04-VERIFICATION.md)
 - [ ] **Phase 5: Find and Replace Across All Pages** - All six FIND requirements implemented and verified locally; literal contract-specimen G4 coverage pending (05-VERIFICATION.md)
 - [x] **Phase 6: Page Ops and Merge** - Verified locally 2026-10-26; browser-local page/PDF/native-image operations, explicit image-only HEIC server exception (06-VERIFICATION.md)
-- [ ] **Phase 7: Exports** - Page images, compress, split, flatten, and text/Markdown/HTML — all consuming the one run index
+- [x] **Phase 7: Exports** - Verified locally 2026-10-27; current-byte images, compress, split, flatten and shared-index text/Markdown/HTML (07-VERIFICATION.md)
 - [ ] **Phase 8: PDF/A, then DOCX** - Validator-gated PDF/A, then best-effort DOCX within a written ceiling, independently cuttable
 
 ## Phase Details
@@ -261,13 +261,17 @@ and Linux HEIC confinement checks remain open; no deployment occurred.
 
 **Plans**: 4 plans
 
-- [ ] 07-01-PLAN.md — Extend the shared run index and build reusable blocks/text serializers
-- [ ] 07-02-PLAN.md — Native compression/flatten and bounded current-byte server exports
-- [ ] 07-03-PLAN.md — Local page images/split and immutable Export panel controls
-- [ ] 07-04-PLAN.md — Independent G6 native/browser/privacy/regression proof
+- [x] 07-01-PLAN.md — Extend the shared run index and build reusable blocks/text serializers
+- [x] 07-02-PLAN.md — Native compression/flatten and bounded current-byte server exports
+- [x] 07-03-PLAN.md — Local page images/split and immutable Export panel controls
+- [x] 07-04-PLAN.md — Independent G6 native/browser/privacy/regression proof
 
 **Local authorization (2026-10-26):** The user instructed Phase 7 to start. No deployment,
 container/dependency installation or earlier release-gate closure is included.
+**Local verification (2026-10-27):** `07-VERIFICATION.md` passes 12/12 merged must-haves;
+`07-G6-RESULTS.md` records actual browser/native/regression proof and unchanged renderer
+baselines. Earlier release/specimen/Linux HEIC checks stay open. No deployment occurred.
+
 **Research**: no — `pypdfium2` and Pillow are solved problems; `pdftopdfa` 0.9.0 is a working reference for the pikepdf/fontTools shape.
 **Parallel**: yes — independent of Phases 5 and 6 after G3
 **UI hint**: yes
@@ -361,14 +365,14 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → (5 ∥ 6 ∥ 7) → 8
 | 4. Web Tier Walking Skeleton + Hardening | Consolidated execution | Implemented locally; release verification pending | - |
 | 5. Find and Replace Across All Pages | 4/4 | Implemented/verified locally; contract-specimen G4 coverage pending | - |
 | 6. Page Ops and Merge | 6/6 | Complete locally; G5 verified with disclosed source-baseline renderer limits | 2026-10-26 |
-| 7. Exports | 0/4 | Planning locally; independent plan check | - |
+| 7. Exports | 4/4 | Complete locally; G6 verified with disclosed source-baseline renderer limits | 2026-10-27 |
 | 8. PDF/A, then DOCX | 0/TBD | Planning | - |
 
 **Table corrected 2026-08-30.** The rows for Phases 2 and 3 read "Not started" until this date
 while both were in fact complete — Phase 2 closed 2026-08-17 (Gate G1, `02-VERIFICATION.md`) and
-Phase 3 closed 2026-08-28 (Gate G2b, `G2B-GATE-RESULTS.md`). Phases 7–8 remain
-in planning because context/research/validation artifacts exist; their plan counts
-stay `TBD` until planning runs. Phase 6 has six delivered, locally verified plans. Phase 5 now has four delivered local plans, with
+Phase 3 closed 2026-08-28 (Gate G2b, `G2B-GATE-RESULTS.md`). Phase 8 remains
+in planning with its plan count `TBD`. Phase 6 has six delivered, locally verified
+plans; Phase 7 has four delivered and locally verified plans. Phase 5 now has four delivered local plans, with
 literal contract-specimen G4 verification retained separately.
 
 **Branch state updated 2026-10-21.** Phase 3 source/fonts/tests and Phase 4–8 planning artifacts

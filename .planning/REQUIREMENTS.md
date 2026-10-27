@@ -118,14 +118,18 @@ Production HEIC confinement, G3 release checks and G4 literal-specimen coverage 
 
 ### Export
 
-- [ ] **EXPO-01**: User can export pages as PNG or JPEG at a chosen DPI, per-page or all pages as a zip
-- [ ] **EXPO-02**: User can compress a PDF, lossless and structural by default, with image downsampling as an explicit labeled choice showing before/after size and a preview
-- [ ] **EXPO-03**: User can split a PDF into separate files
-- [ ] **EXPO-04**: User can flatten a PDF
-- [ ] **EXPO-05**: User can export plain text, Markdown, and HTML, all consuming the same run index — a second extraction path anywhere is a signal the text model is under-specified
+- [x] **EXPO-01**: User can export pages as PNG or JPEG at a chosen DPI, per-page or all pages as a zip
+- [x] **EXPO-02**: User can compress a PDF, lossless and structural by default, with image downsampling as an explicit labeled choice showing before/after size and a preview
+- [x] **EXPO-03**: User can split a PDF into separate files
+- [x] **EXPO-04**: User can flatten a PDF
+- [x] **EXPO-05**: User can export plain text, Markdown, and HTML, all consuming the same run index — a second extraction path anywhere is a signal the text model is under-specified
 - [ ] **EXPO-06**: User can export PDF/A, gated on veraPDF passing against a fixture corpus in CI rather than on spot checks
 - [ ] **EXPO-07**: User can export DOCX, generated as OOXML directly from the text model, within a written scope ceiling: single-column body text, headings by font-size clustering, bold/italic, inline images, ruled tables only
 - [ ] **EXPO-08**: DOCX export shows a pre-conversion warning naming what will degrade in *this specific document*
+
+EXPO-01 through EXPO-05 are verified locally in Phase 7; see
+`phases/07-exports/07-VERIFICATION.md`. EXPO-06 through EXPO-08 remain Phase 8 work.
+Earlier release/specimen/Linux HEIC checks remain open.
 
 ### Privacy and Trust
 
@@ -253,11 +257,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PAGE-07 | Phase 6 — Page Ops and Merge | Complete locally |
 | PAGE-08 | Phase 6 — Page Ops and Merge | Complete locally |
 | PAGE-09 | Phase 6 — Page Ops and Merge | Complete locally |
-| EXPO-01 | Phase 7 — Exports | Pending |
-| EXPO-02 | Phase 7 — Exports | Pending |
-| EXPO-03 | Phase 7 — Exports | Pending |
-| EXPO-04 | Phase 7 — Exports | Pending |
-| EXPO-05 | Phase 7 — Exports | Pending |
+| EXPO-01 | Phase 7 — Exports | Complete locally |
+| EXPO-02 | Phase 7 — Exports | Complete locally |
+| EXPO-03 | Phase 7 — Exports | Complete locally |
+| EXPO-04 | Phase 7 — Exports | Complete locally |
+| EXPO-05 | Phase 7 — Exports | Complete locally |
 | EXPO-06 | Phase 8 — PDF/A, then DOCX | Pending |
 | EXPO-07 | Phase 8 — PDF/A, then DOCX | Pending |
 | EXPO-08 | Phase 8 — PDF/A, then DOCX | Pending |

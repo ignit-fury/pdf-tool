@@ -1,9 +1,9 @@
 ---
 phase: 7
 slug: exports
-status: planned
+status: completed_locally
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-08-30
 updated: 2026-10-26
 ---
@@ -54,3 +54,11 @@ constructed heading/column/table fixtures. Record proof/limits in `07-G6-RESULTS
 All four plans must produce summaries; independent goal verification reconciles all five
 EXPO requirements. G3 Linux/container/live-CDN, Phase 5 literal contract specimen and
 production HEIC confinement remain open. macOS local G6 is not Linux/CI execution.
+
+## Local completion — 2026-10-27
+
+All four plan summaries exist; `07-VERIFICATION.md` passes 12/12 merged must-haves.
+Consolidated local regression: 634 passed / 36 deselected; client: 140 passed; G4: 7 passed;
+strict types/build/Unicode and 19 license negatives/closures pass. Actual browser and
+G6 native evidence, masks, limitations and raw artifact paths are in 07-G6-RESULTS.md.
+Existing Linux/CDN/specimen/HEIC release debt stays open; no deployment occurred.

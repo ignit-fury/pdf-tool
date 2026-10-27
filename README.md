@@ -1,6 +1,6 @@
 # PDF Tool
 
-A browser-based PDF editor that edits the **actual existing content** of a PDF — replacing text inside the page's content stream rather than pasting annotations or white boxes on top. The current browser supports opening a PDF, editing individual text runs, finding and replacing text across all pages, changing colour or font style, organizing pages, merging PDFs and images, undoing changes and downloading the edited PDF. Format conversions are planned later milestones. It is aimed at people who need to change a document that already exists and want the result to look untouched.
+A browser-based PDF editor that edits the **actual existing content** of a PDF — replacing text inside the page's content stream rather than pasting annotations or white boxes on top. The current browser supports opening a PDF, editing individual text runs, finding and replacing text across all pages, changing colour or font style, organizing pages, merging PDFs and images, undoing changes and exporting PDFs, page images, plain text, Markdown or HTML. PDF/A and DOCX are planned for Phase 8. It is aimed at people who need to change a document that already exists and want the result to look untouched.
 
 It is a real product for other people, used anonymously — no signup to edit a file.
 
@@ -9,6 +9,8 @@ It is a real product for other people, used anonymously — no signup to edit a 
 ## Architecture
 
 Hybrid client/server — rendering, text selection, original-byte retention and downloads run in the browser. Content indexing, text rewrites and font work run in isolated server workers. Page insertion, reorder, rotation, deletion, PDF merge and PNG/JPEG/WebP placement run in the browser. HEIC conversion is a separate, explicitly chosen image-only server action; production conversion remains disabled until Linux confinement is verified.
+
+Page-image export and splitting also run in the browser. Compression, annotation/form flattening, and text/Markdown/HTML exports use isolated server workers after an explicit export action. Exports use the current edited PDF and preserve its Undo history.
 
 Editing is **content-stream only**. No white-box overlays. No reflow across lines or pages — replaced text occupies the original text run's space.
 
@@ -73,6 +75,7 @@ viewer and single-run editor with text/style preview, PDF download and recipe-le
 Phase 5 adds all-page search, per-occurrence exclusions, exact replacement review,
 one atomic batch apply and one-step undo through the same content-stream engine.
 Phase 6 adds local page tools, PDF merge with independent embedded fonts and preserved forms/bookmarks, image placement, and one mixed page/text Undo history. Opening and organizing a PDF do not upload it; text analysis starts only when chosen.
+Phase 7 adds page-image exports at chosen DPI, PDF splitting, structural compression with optional previewed image reduction, annotation/form flattening, and text/Markdown/HTML from the shared run index.
 The editor uses the actual content stream. Unsupported edits are refused explicitly.
 
 Implemented: password-protected PDFs, signature warnings, server-issued edit boxes,
@@ -84,8 +87,7 @@ following text's position; they do not need to be stretched to the original widt
 Edits using stateful quote operators or unsupported Unicode shaping are also refused to
 preserve layout and searchable text. Precomposed accents such as `é` remain supported.
 
-Page operations, format exports and built-in OCR are later
-milestones. The current screen links to OCRmyPDF's external guide without uploading the
+PDF/A, DOCX and built-in OCR are later milestones. The current screen links to OCRmyPDF's external guide without uploading the
 PDF there. The OCR interest counter collects no document or contact data.
 
 ## How to run
@@ -187,6 +189,8 @@ Its 40-page public technical-document proxy does not establish literal contract-
 coverage. Phase 6 browser/network and independent native fidelity evidence is in
 [06-G5-RESULTS.md](.planning/phases/06-page-ops-and-merge/06-G5-RESULTS.md), including
 unchanged source-baseline renderer discrepancies and production HEIC limitations.
+Phase 7 implementation, browser downloads and independent native export proof are in
+[07-G6-RESULTS.md](.planning/phases/07-exports/07-G6-RESULTS.md).
 No deployment or public-release sign-off is implied.
 
 ## Corpus testing

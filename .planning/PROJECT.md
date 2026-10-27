@@ -12,13 +12,16 @@ It is a real product for other people, used anonymously — no signup to edit a 
 
 ## Current State
 
-Phases 4–6 are implemented locally. Phase 6 adds browser-local page operations, PDF/image
-merge and mixed Undo; HEIC conversion is an explicit image-only server exception.
-Its independent native/browser evidence is in `phases/06-page-ops-and-merge/06-G5-RESULTS.md`. All-page find/replace now supports exact review,
-individual opt-outs, font fallback, atomic apply and one whole-batch undo. The 40-page
-technical-document proof, browser journeys and final regression verification are complete.
-Literal contract-specimen coverage and Linux/container/CDN release checks remain open in
-`STATE.md` and the phase verification reports. No deployment was published.
+Phases 4–7 are implemented locally. The workstation supports atomic text/style editing,
+all-page find/replace, browser-local page tools/PDF-image merge, and mixed Undo.
+Phase 7 adds browser-local PNG/JPEG/split exports and explicit server compression,
+flattening and shared-index text/Markdown/HTML exports. Prepared downloads use the
+current materialized PDF without replacing the working document or its history.
+
+Evidence is in `phases/06-page-ops-and-merge/06-G5-RESULTS.md` and
+`phases/07-exports/07-G6-RESULTS.md`. Literal contract-specimen coverage and
+Linux/container/CDN release checks remain open. Production HEIC conversion stays
+disabled until Linux confinement is verified. No deployment was published.
 
 ## Core Value
 
@@ -29,7 +32,7 @@ happened.** If everything else on this list fails, this one capability must work
 
 ### Validated
 
-Validated locally in Phases 1–6 (public release remains gated):
+Validated locally in Phases 1–7 (public release remains gated):
 
 - Open and render PDFs in the browser, including password-protected files.
 - Classify text and select server-issued text boxes before editing.
@@ -42,6 +45,10 @@ Validated locally in Phases 1–6 (public release remains gated):
 
 - Insert, move, rotate and delete pages locally; merge PDFs with preserved independent
   fonts/forms/bookmarks; add or place images with visible aspect locking and mixed Undo.
+
+- Export PNG/JPEG pages at chosen DPI or as ZIP; split PDFs; compress losslessly by
+  default or explicitly reduce supported images with exact preview; flatten supported
+  appearances; export text/Markdown/HTML through one shared block/index model.
 
 Evidence: `phases/04-web-tier-walking-skeleton-hardening/04-VERIFICATION.md` and
 `phases/05-find-and-replace-across-all-pages/05-G4-RESULTS.md`.
@@ -60,9 +67,10 @@ Font-size changes are explicitly unsupported; later-phase features remain active
 - [ ] Classify every page and every text run for editability *before* the user types — scanned,
       OCR'd scan, vector-outlined text, unwritable font — name the reason in plain language, and
       keep every other operation available on pages that can't be edited
-- [ ] Export to PDF variants — flatten, compress, split, PDF/A
-- [ ] Export pages as images (PNG/JPEG) at a chosen DPI
-- [ ] Export to HTML, plain text, and Markdown
+- [x] Export to PDF variants — flatten, compress, split (local Phase 7)
+- [ ] Export PDF/A (Phase 8)
+- [x] Export pages as images (PNG/JPEG) at a chosen DPI (local Phase 7)
+- [x] Export to HTML, plain text, and Markdown (local Phase 7)
 - [ ] Export to DOCX (best-effort fidelity — see Constraints)
 - [ ] Verify production ephemerality: memory-only evictable source cache, per-operation tmpfs
       scratch cleanup, browser-held original recovery, and no queue/object store or content logs
