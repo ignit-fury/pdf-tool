@@ -18,7 +18,7 @@ import sys
 import zipfile
 
 import pikepdf
-from PIL import Image
+from PIL import Image, ImageChops
 import pytest
 
 from harness.export_fixture import (
@@ -113,6 +113,8 @@ def test_fixtures_production_archive_and_structure(gate):
     assert_archive((directory / 'split.zip').read_bytes(), entries)
     for source in data['sources']:
         assert hashlib.sha256((directory / source['file']).read_bytes()).hexdigest() == source['sha256']
+    corpus_sha = next(source['sha256'] for source in data['sources'] if source['file'] == 'corpus.pdf')
+    assert hashlib.sha256(Path(data['corpusSource']).read_bytes()).hexdigest() == corpus_sha
     for output in data['outputs']:
         path = directory / output['file']
         assert hashlib.sha256(path.read_bytes()).hexdigest() == output['sha256']
@@ -134,6 +136,7 @@ def test_fixtures_production_archive_and_structure(gate):
                 assert output['after_bytes'] < output['before_bytes']
                 image = actual.pages[0].Resources.XObject.Im
                 assert (int(image.Width), int(image.Height)) == (1600, 800)
+                assert image_samples(actual) != image_samples(source)
             if output['kind'] in ('split', 'compress'):
                 for page, index in zip(actual.pages, output['mapping'], strict=True):
                     assert resource_fingerprint(page) == resource_fingerprint(source.pages[index])
@@ -204,25 +207,38 @@ def test_native_three_engine_export_fidelity(gate):
                         geometry = data['geometry'][str(source_page)] if output['kind'] == 'flatten' else data['image_geometry']
                         from harness.export_fixture import physical_regions
                         regions = physical_regions(geometry, raster.size)
+                    coverage = (rendered('image-region.pdf', 0)[engine] if output['kind'] == 'downsample'
+                                else rendered('annotation-regions.pdf', source_page)[engine])
                     assert_region_pixels(expected if output['kind'] == 'flatten' else a, b, regions,
-                                         check_inside=output['kind'] == 'flatten')
-                    assert_region_pixels(a, b, regions, check_inside=False)
+                                         check_inside=output['kind'] == 'flatten', coverage=coverage)
+                    assert_region_pixels(a, b, regions, check_inside=False, coverage=coverage)
                     confined += 1
                     if output['kind'] == 'flatten':
                         # Full independent painted reference catches dropped APs
                         # even if the source engine did not display annotations.
                         assert_exact_pixels(expected, b)
                         inside += len(regions)
+                    else:
+                        with Image.open(a) as source_image, Image.open(b) as output_image:
+                            assert ImageChops.difference(source_image.convert('RGB'), output_image.convert('RGB')).getbbox(), 'nonvacuous downsample'
                 else:
                     assert_exact_pixels(a, b)
                 same_engine += 1
             for left, right in ((0, 1), (0, 2), (1, 2)):
                 baseline_ok, baseline_detail = _cross_engine_pair_ok('source', reference[left], reference[right])
                 ok, detail = _cross_engine_pair_ok('output', after[left], after[right])
-                if output['kind'] != 'downsample':
+                if output['kind'] == 'downsample':
+                    assert ok, detail
+                else:
                     assert ok or (not baseline_ok and baseline_detail.removeprefix('source:') == detail.removeprefix('output:')), detail
+                sizes = [Image.open(after[index]).size for index in (left, right)]
+                baseline_sizes = [Image.open(reference[index]).size for index in (left, right)]
+                if sizes[0] != sizes[1]:
+                    assert sizes == baseline_sizes, 'new cross-engine physical-size disagreement'
                 cross.append({'file': output['file'], 'page': page, 'engines': [left, right],
                               'passed': ok, 'baselinePassed': baseline_ok,
+                              'sizeAgreement': sizes[0] == sizes[1],
+                              'sizes': sizes, 'baselineSizes': baseline_sizes,
                               'detail': detail, 'baselineDetail': baseline_detail})
     # Every source remains byte-identical after native and client output paths.
     for source in data['sources']:

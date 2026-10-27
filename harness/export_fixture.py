@@ -1,12 +1,13 @@
 """Deliberate G6 fixtures and independent output oracles (dev/test only).
 
-The painted reference never calls flatten or reuses annotation appearance streams.
+The painted reference never calls flatten or copies annotation appearance streams.
 Exact region unions are derived from crop/rotation and each engine's actual raster
 extent, preserving the known UserUnit renderer disagreement without tolerances.
 """
 from __future__ import annotations
 
 import hashlib
+from fractions import Fraction
 import io
 import json
 import math
@@ -32,7 +33,7 @@ def _font(pdf):
         Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name.Helvetica))
 
 
-def _annotation_source(path, *, painted=False):
+def _annotation_source(path, *, painted=False, coverage=False):
     with pikepdf.Pdf.new() as pdf:
         font = _font(pdf)
         resources = pdf.make_indirect(pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font)))
@@ -47,13 +48,34 @@ def _annotation_source(path, *, painted=False):
                 page.obj.UserUnit = 1.25
             base = (f'q .9 .9 .9 rg 12 108 192 12 re f '
                     f'0 0 {0.2 + index * 0.3:.1f} rg 12 12 6 6 re f Q\n').encode()
+            if coverage:
+                base = b''
             if index < 2 and painted:
-                # Written directly in page space, independently of native AP math.
-                base += (b'q 1 0 0 rg 24 24 48 24 re f Q\n'
-                         b'q 0 1 0 rg 96 72 72 24 re f 0 0 0 rg '
-                         b'BT /F1 9 Tf 100 80 Td (FILLED) Tj ET Q\n'
-                         b'q 0 0 1 rg 144 24 48 24 re f '
-                         b'0 0 0 rg 168 24 24 12 re f Q\n')
+                # Independently specified Form geometry and explicit placements.
+                # Form clipping matters: MuPDF antialiases its last edge pixel
+                # differently from a direct page-space rectangle. No tolerance.
+                references = [
+                    ('Red', b'1 0 0 rg 0 0 48 24 re f', [0, 0, 48, 24], None),
+                    ('Field', b'0 1 0 rg 0 0 72 24 re f 0 0 0 rg BT /F1 9 Tf 4 8 Td (FILLED) Tj ET',
+                     [0, 0, 72, 24], None),
+                    ('State', b'0 0 1 rg 0 0 24 24 re f 0 0 0 rg 0 0 12 12 re f',
+                     [0, 0, 24, 24], [0, 1, -1, 0, 24, 0]),
+                ]
+                forms = pikepdf.Dictionary()
+                for key, content, bbox, matrix in references:
+                    if coverage:
+                        content = f'0 0 0 rg 0 0 {bbox[2]} {bbox[3]} re f'.encode()
+                    form = pdf.make_stream(content)
+                    form.update(pikepdf.Dictionary(Type=pikepdf.Name.XObject,
+                        Subtype=pikepdf.Name.Form, BBox=bbox,
+                        Resources=pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font))))
+                    if matrix:
+                        form.Matrix = matrix
+                    forms['/' + key] = form
+                page.obj.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font), XObject=forms)
+                base += (b'q 1 0 0 1 24 24 cm /Red Do Q\n'
+                         b'q 1 0 0 1 96 72 cm /Field Do Q\n'
+                         b'q 2 0 0 1 144 24 cm /State Do Q\n')
             page.obj.Contents = pdf.make_stream(base)
             if index >= 2 or painted:
                 continue
@@ -100,6 +122,7 @@ def build_fixtures(directory: Path) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     _annotation_source(directory / 'annotations.pdf')
     _annotation_source(directory / 'painted-reference.pdf', painted=True)
+    _annotation_source(directory / 'annotation-regions.pdf', painted=True, coverage=True)
     for filename, unsafe in [('missing-appearance.pdf', False), ('unsafe-appearance.pdf', True)]:
         with pikepdf.open(directory / 'annotations.pdf') as pdf:
             if unsafe:
@@ -116,11 +139,19 @@ def build_fixtures(directory: Path) -> Path:
         page.obj.Contents = pdf.make_stream(b'q 0 0 1 rg 12 12 12 12 re f '
                                           b'144 0 0 72 36 48 cm /Im Do Q')
         _save(pdf, directory / 'image.pdf')
+    with pikepdf.Pdf.new() as pdf:
+        page = pdf.add_blank_page(page_size=(216, 144))
+        coverage = pdf.make_stream(bytes(2048 * 1024 * 3))
+        coverage.update(pikepdf.Dictionary(Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Image,
+            Width=2048, Height=1024, BitsPerComponent=8, ColorSpace=pikepdf.Name.DeviceRGB))
+        page.obj.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Coverage=coverage))
+        page.obj.Contents = pdf.make_stream(b'q 144 0 0 72 36 48 cm /Coverage Do Q')
+        _save(pdf, directory / 'image-region.pdf')
     # Two-page public form: bounded real structural-compression coverage, all pages.
     corpus = ROOT / 'corpus/public/irs_form_1040.pdf'
     shutil.copyfile(corpus, directory / 'corpus.pdf')
-    sources = ['annotations.pdf', 'painted-reference.pdf', 'missing-appearance.pdf',
-               'unsafe-appearance.pdf', 'image.pdf', 'corpus.pdf']
+    sources = ['annotations.pdf', 'painted-reference.pdf', 'annotation-regions.pdf', 'missing-appearance.pdf',
+               'unsafe-appearance.pdf', 'image.pdf', 'image-region.pdf', 'corpus.pdf']
     data = {'sources': [{'file': file, 'sha256': hashlib.sha256((directory / file).read_bytes()).hexdigest()}
                         for file in sources],
             'corpusSource': str(corpus),
@@ -148,11 +179,16 @@ def assert_exact_pixels(expected, actual):
 
 
 def physical_regions(geometry, raster_size):
-    x0, y0, x1, y1 = geometry['crop']
+    x0, y0, x1, y1 = map(lambda value: Fraction(str(value)), geometry['crop'])
     w, h = x1 - x0, y1 - y0
     rotation = geometry['rotation'] % 360
     width, height = (h, w) if rotation % 180 else (w, h)
-    sx, sy = raster_size[0] / width, raster_size[1] / height
+    # Select the engine's observed UserUnit behavior, never stretch coordinates
+    # to its rounded bitmap extent. Fractions avoid floating-point extra pixels.
+    candidates = {Fraction(150, 72), Fraction(150, 72) * Fraction(str(geometry['userUnit']))}
+    scale = min(candidates, key=lambda value: abs(width * value - raster_size[0])
+                + abs(height * value - raster_size[1]))
+    sx = sy = scale
     def point(x, y):
         x, y = x - x0, y - y0
         if rotation == 90:
@@ -171,7 +207,7 @@ def physical_regions(geometry, raster_size):
     return result
 
 
-def assert_region_pixels(expected, actual, regions, *, check_inside=True):
+def assert_region_pixels(expected, actual, regions, *, check_inside=True, coverage=None):
     a, b = _rgb(expected), _rgb(actual)
     assert a.size == b.size, f'raster size: {a.size} != {b.size}'
     diff = ImageChops.difference(a, b)
@@ -180,6 +216,15 @@ def assert_region_pixels(expected, actual, regions, *, check_inside=True):
     for left, top, right, bottom in regions:
         assert right > left and bottom > top, 'appearance region must be nonempty'
         draw.rectangle((left, top, right - 1, bottom - 1), fill=255)
+    if coverage is not None:
+        # Independently rasterized exact Form/image support. Some engines include
+        # a boundary pixel; geometric padding would conceal that fact. The black
+        # oracle records only pixels actually painted by the exact region union.
+        region = _rgb(coverage)
+        assert region.size == a.size, 'coverage raster size'
+        channels = ImageChops.difference(region, Image.new('RGB', region.size, 'white')).split()
+        mask = ImageChops.lighter(ImageChops.lighter(*channels[:2]), channels[2]).point(lambda value: 255 if value else 0)
+        assert (mask.getbbox() is not None) == bool(regions), 'nonvacuous exact region coverage'
     outside = ImageChops.composite(Image.new('RGB', a.size), diff, mask)
     assert outside.getbbox() is None, 'pixels differ outside exact annotation/image region union'
     if check_inside:
