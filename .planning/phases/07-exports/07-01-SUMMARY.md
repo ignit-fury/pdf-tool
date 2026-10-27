@@ -73,3 +73,10 @@ No tracked files were deleted. No dependencies installed.
 ## Self-Check: PASSED
 
 All eleven owned implementation/test files and this summary exist. All eight listed task commits exist. Final focused regression and typing results above are from the committed implementation.
+
+## Review addendum
+
+- Added frozen `ExportResult(text: str, has_text: bool)` and `export_document_result(index: RunIndex, format: str) -> ExportResult`. Format validation precedes indexing; the function builds one `DocumentBlocks`, checks its actual spans/table cells for non-whitespace text, then serializes that same model. `export_document` remains a compatible string-returning wrapper. HTML wrappers and Markdown page separators cannot make scanned-only pages appear to contain extracted text.
+- Corrected the client source guard to include the production `.mjs`/`.jsx` extensions alongside `.ts`/`.tsx`. Forbidden-call negative controls demonstrate rejection for both production extensions and acceptance after removing the call.
+- RED `28e5fa6` recorded both gaps before implementation. Focused GREEN verification: `.venv/bin/python -m pytest tests/test_export_text.py tests/test_export_single_path.py -q -x` — **18 passed**. `.venv/bin/python -m mypy engine/export/text.py` — **1 file clean**. Added tests cover scanned-only two-page HTML/Markdown, normal text, whitespace-only content, table-cell text, same-model serialization, and repeated result/wrapper exports with one parser open and one parse per page.
+- Root owns wiring `NO_EXTRACTABLE_TEXT` to `result.has_text`; no worker or shared planning metadata was modified here.
