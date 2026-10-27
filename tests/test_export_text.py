@@ -66,3 +66,45 @@ def test_markdown_escapes_markers_and_table_breaks() -> None:
     value = serialize_markdown(doc)
     assert '\\# title' in value and '1\\. item' in value
     assert 'A\\|B<br>C' in value and '\\[x\\]\\(url\\)' in value
+
+
+@pytest.mark.parametrize('format', ['html', 'markdown'])
+def test_empty_scanned_exports_report_no_actual_text(tmp_path: Path, format: str) -> None:
+    import pikepdf
+    import engine.export.text as module
+    path = tmp_path / 'scanned.pdf'
+    build_export_fixture(path)
+    with pikepdf.open(path,allow_overwriting_input=True) as pdf:
+        del pdf.pages[0]
+        del pdf.pages[0]
+        pdf.pages.append(pdf.pages[0])
+        pdf.save(path)
+    with RunIndex(path) as index:
+        result = module.export_document_result(index,format)
+    assert result.text.strip()  # Complete HTML/page separators are not source text.
+    assert result.has_text is False
+
+
+@pytest.mark.parametrize('spans, rows, expected', [
+    ((Span('  \n\t'),), (), False),
+    ((Span('Actual text'),), (), True),
+    ((), (((Span('Cell text'),),),), True),
+    ((), (((Span(' \n'),),),), False),
+])
+def test_result_uses_same_model_and_actual_spans(monkeypatch: pytest.MonkeyPatch, spans: tuple, rows: tuple, expected: bool) -> None:
+    import engine.export.text as module
+    document = DocumentBlocks((PageBlocks(0,(Block('table' if rows else 'paragraph',(),spans,rows=rows),)),))
+    builds: list[object] = []
+    serialized: list[DocumentBlocks] = []
+    def building(index: object) -> DocumentBlocks:
+        builds.append(index)
+        return document
+    def serializing(model: DocumentBlocks) -> str:
+        serialized.append(model)
+        return 'serialized'
+    monkeypatch.setattr(module,'build_document',building)
+    monkeypatch.setattr(module,'serialize_html',serializing)
+    index = object()
+    result = module.export_document_result(index,'html')
+    assert result.text == 'serialized' and result.has_text is expected
+    assert builds == [index] and serialized == [document]

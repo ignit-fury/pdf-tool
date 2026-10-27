@@ -36,15 +36,31 @@ def violations(path: Path, *, exporter: bool) -> list[str]:
     return problems
 
 
+def client_violations(directory: Path) -> list[Path]:
+    return [path for path in directory.rglob('*')
+            if path.suffix in {'.ts','.tsx'}
+            and ('exports' in path.parts or path.stem.lower().startswith('export'))
+            and re.search(r'\b(?:getTextContent|extractText|extract_text)\s*\(',path.read_text())]
+
+
+@pytest.mark.parametrize('suffix', ['.mjs', '.jsx'])
+def test_client_guard_rejects_actual_module_extensions(tmp_path: Path, suffix: str) -> None:
+    directory = tmp_path / 'exports'
+    directory.mkdir()
+    bad = directory / ('controller'+suffix)
+    bad.write_text('const text = page.getTextContent();\n')
+    assert client_violations(tmp_path) == [bad]
+    bad.write_text('const text = indexedBlocks;\n')
+    assert client_violations(tmp_path) == []
+
+
 def test_production_has_one_parser_boundary_and_no_export_extractors(tmp_path: Path) -> None:
     for directory in (Path('engine'), Path('server')):
         for path in directory.rglob('*.py'):
             exporter = 'export' in path.parts or path.name == 'exports.py'
             assert not violations(path,exporter=exporter), str(path)
     # Viewer selection uses getTextContent deliberately; only export modules are gated.
-    for path in Path('client/src').rglob('*'):
-        if path.suffix in {'.ts','.tsx'} and ('exports' in path.parts or path.stem.lower().startswith('export')):
-            assert not re.search(r'\b(?:getTextContent|extractText|extract_text)\s*\(',path.read_text()), str(path)
+    assert not client_violations(Path('client/src'))
     bad = tmp_path / 'bad.py'
     bad.write_text('from pdfminer.high_level import extract_text as hidden\nhidden("x")\n')
     assert set(violations(bad,exporter=True)) == {'parser-import','alternate-extractor-import','alternate-extractor-call'}
@@ -54,7 +70,7 @@ def test_production_has_one_parser_boundary_and_no_export_extractors(tmp_path: P
 
 def test_repeated_exports_open_one_index_and_parse_each_page_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import engine.index as module
-    from engine.export.text import export_document
+    from engine.export.text import export_document, export_document_result
     path = tmp_path / 'in.pdf'
     build_export_fixture(path)
     opens: list[int] = []
@@ -72,6 +88,8 @@ def test_repeated_exports_open_one_index_and_parse_each_page_once(tmp_path: Path
         for _ in range(2):
             for format in ('text','markdown','html'):
                 assert 'Export heading' in export_document(index,format)
+                result = export_document_result(index,format)
+                assert result.has_text and 'Export heading' in result.text
         assert parses == Counter({0:1,1:1,2:1})
         assert len(opens) == 1
 
