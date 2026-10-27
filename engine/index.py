@@ -52,6 +52,7 @@ message carries counts only -- never document content (T-02-04).
 from __future__ import annotations
 
 import hashlib
+import math
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
@@ -77,6 +78,114 @@ CACHE_GLYPH_BUDGET = 1_900_000
 # RunIndex's lifetime (see module docstring), not just what is currently cached.
 MAX_DOCUMENT_GLYPHS = 10_000_000
 
+Matrix = tuple[float, float, float, float, float, float]
+Ruling = tuple[float, float, float, float]
+MAX_RULING_OPERATORS = 100_000
+MAX_RULINGS = 4096
+
+
+@dataclass(frozen=True, slots=True)
+class PageGeometry:
+    media_box: tuple[float, float, float, float]
+    crop_box: tuple[float, float, float, float]
+    rotation: int
+    user_unit: float
+    page_ctm: Matrix
+
+
+def _page_geometry(page: pikepdf.Page, ctm: Matrix) -> PageGeometry | None:
+    try:
+        media = tuple(float(v) for v in page.mediabox)
+        crop = tuple(float(v) for v in page.cropbox)
+        unit = float(page.obj.get('/UserUnit', 1))
+        rotation = int(page.obj.get('/Rotate', 0)) % 360
+        if len(media) != 4 or len(crop) != 4 or unit <= 0 or rotation % 90:
+            return None
+        if not all(math.isfinite(v) for v in (*media, *crop, unit, *ctm)):
+            return None
+        return PageGeometry((media[0], media[1], media[2], media[3]),
+                            (crop[0], crop[1], crop[2], crop[3]), rotation, unit, ctm)
+    except (ValueError, TypeError, OverflowError, pikepdf.PdfError):
+        return None
+
+
+def _stroked_rulings(page: pikepdf.Page, page_ctm: Matrix) -> tuple[Ruling, ...]:
+    """Bounded vector-only scan. Unsupported paths/clips/forms yield no invented grid.
+
+    q/Q/cm are applied at construction time, exactly like glyph device coordinates.
+    Curves and non-axis-aligned segments discard their whole path. Clipping disables
+    collection within its graphics-state scope. Form paths are deliberately unsupported.
+    """
+    ctm = page_ctm
+    clipped = False
+    stack: list[tuple[Matrix, bool]] = []
+    path: list[Ruling] = []
+    result: list[Ruling] = []
+    current: tuple[float, float] | None = None
+    start: tuple[float, float] | None = None
+    supported = True
+
+    def point(x: float, y: float) -> tuple[float, float]:
+        a,b,c,d,e,f = ctm
+        return a*x+c*y+e, b*x+d*y+f
+
+    def line(end: tuple[float, float]) -> None:
+        nonlocal current, supported
+        if current is None:
+            supported = False
+        else:
+            x,y = current
+            u,v = end
+            if not all(math.isfinite(n) for n in (x,y,u,v)) or (abs(x-u) > .01 and abs(y-v) > .01):
+                supported = False
+            elif (x,y) != (u,v):
+                path.append((x,y,u,v))
+        current = end
+
+    try:
+        for count, instruction in enumerate(pikepdf.parse_content_stream(page)):
+            if count >= MAX_RULING_OPERATORS or len(path) + len(result) > MAX_RULINGS:
+                return ()
+            op = str(instruction.operator)
+            args = instruction.operands
+            if op == 'q':
+                if len(stack) >= 128:
+                    return ()
+                stack.append((ctm, clipped))
+            elif op == 'Q':
+                if not stack:
+                    return ()
+                ctm, clipped = stack.pop()
+            elif op == 'cm':
+                a,b,c,d,e,f = (float(n) for n in args)
+                g,h,i,j,k,l = ctm
+                ctm = (a*g+b*i, a*h+b*j, c*g+d*i, c*h+d*j, e*g+f*i+k, e*h+f*j+l)
+            elif op == 'm':
+                current = start = point(float(args[0]), float(args[1]))
+            elif op == 'l':
+                line(point(float(args[0]), float(args[1])))
+            elif op == 're':
+                x,y,w,h = (float(n) for n in args)
+                current = start = point(x,y)
+                for end in (point(x+w,y), point(x+w,y+h), point(x,y+h), point(x,y)):
+                    line(end)
+            elif op == 'h':
+                if start is not None:
+                    line(start)
+            elif op in {'c', 'v', 'y'}:
+                supported = False
+            elif op in {'W', 'W*'}:
+                clipped = True
+            elif op in {'S', 's', 'B', 'B*', 'b', 'b*', 'n', 'f', 'F', 'f*'}:
+                if op in {'s', 'b', 'b*'} and start is not None:
+                    line(start)
+                if op in {'S', 's', 'B', 'B*', 'b', 'b*'} and supported and not clipped:
+                    result.extend(path)
+                path, current, start, supported = [], None, None, True
+    except (ValueError, TypeError, IndexError, OverflowError, pikepdf.PdfError):
+        return ()
+    return tuple(result)
+
 
 class DocumentTooLargeError(Exception):
     """T-02-01: raised once a `RunIndex`'s cumulative walked glyph count exceeds
@@ -94,6 +203,8 @@ class PageIndex:
     bucket: Bucket
     runs: list[tuple[RunRecord, RunVerdict]]
     glyph_count: int
+    geometry: PageGeometry | None = None
+    rulings: tuple[Ruling, ...] = ()
 
 
 class RunIndex:
@@ -161,7 +272,10 @@ class RunIndex:
                 f"cumulative walked glyph count {self._total_glyphs_walked} exceeds "
                 f"MAX_DOCUMENT_GLYPHS={MAX_DOCUMENT_GLYPHS}"
             )
-        return PageIndex(bucket=bucket, runs=runs, glyph_count=glyph_count)
+        geometry = _page_geometry(self._pdf.pages[page_index], page.ctm)
+        rulings = _stroked_rulings(self._pdf.pages[page_index], page.ctm) if geometry is not None else ()
+        return PageIndex(bucket=bucket, runs=runs, glyph_count=glyph_count,
+                         geometry=geometry, rulings=rulings)
 
     def page(self, page_index: int) -> PageIndex:
         """Page `page_index`'s `PageIndex`, from cache if this page was parsed before and

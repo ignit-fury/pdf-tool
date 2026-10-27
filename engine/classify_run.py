@@ -44,6 +44,7 @@ distinct fonts) and a run's own verdict, after clustering, is simply its first g
 from __future__ import annotations
 
 import hashlib
+import io
 from bisect import bisect_right
 from functools import lru_cache
 import re
@@ -53,6 +54,7 @@ from pathlib import Path
 from typing import Literal
 
 import pikepdf
+from fontTools.ttLib import TTFont
 
 from engine.classify_page import Bucket, classify_page
 from engine.clusterer import cluster_page
@@ -175,6 +177,52 @@ def _resolve_font_for_glyph(
     return cache[cache_key]
 
 
+def _font_style(font: pikepdf.Object) -> tuple[str | None, bool | None, bool | None]:
+    """Descriptor/program evidence wins. Only exact Base-14 names are trusted names.
+
+    Subset prefixes are removed for display only; arbitrary names containing 'Bold'
+    are not evidence. Unsupported font programs leave optional style unknown.
+    """
+    name = str(font.get('/BaseFont', '')).lstrip('/') or None
+    if name is not None:
+        name = re.sub(r'^[A-Z]{6}\+', '', name)
+    descendant = font.get('/DescendantFonts')
+    physical = descendant[0] if descendant else font
+    descriptor = physical.get('/FontDescriptor')
+    bold: bool | None = None
+    italic: bool | None = None
+    if descriptor is not None:
+        flags = descriptor.get('/Flags')
+        weight = descriptor.get('/FontWeight')
+        angle = descriptor.get('/ItalicAngle')
+        if flags is not None:
+            italic = bool(int(flags) & 64)
+            if int(flags) & 262144:
+                bold = True
+        if weight is not None:
+            bold = float(weight) >= 700
+        if angle is not None:
+            italic = float(angle) != 0
+        program = descriptor.get('/FontFile2')
+        if program is not None:
+            try:
+                with TTFont(io.BytesIO(program.read_bytes()), lazy=True) as tt:
+                    if 'OS/2' in tt:
+                        selection = tt['OS/2'].fsSelection
+                        bold, italic = bool(selection & 32), bool(selection & 1)
+            except Exception:
+                pass  # Malformed/unsupported programs do not manufacture style.
+    base14 = {'Helvetica', 'Helvetica-Bold', 'Helvetica-Oblique', 'Helvetica-BoldOblique',
+              'Times-Roman', 'Times-Bold', 'Times-Italic', 'Times-BoldItalic',
+              'Courier', 'Courier-Bold', 'Courier-Oblique', 'Courier-BoldOblique', 'Symbol', 'ZapfDingbats'}
+    if name in base14:
+        if bold is None:
+            bold = 'Bold' in name
+        if italic is None:
+            italic = 'Italic' in name or 'Oblique' in name
+    return name, bold, italic
+
+
 def _is_rtl(display_text: str) -> bool:
     """02-RESEARCH.md Section 3: PDF has no RTL text state, so a producer emits RTL
     glyphs in visual (already-correct) stream order -- detection is purely a property of
@@ -284,6 +332,9 @@ def _classify_one_page(
     # nested streams, annotations and patterns never share an address by accident.
     streams: dict[tuple[StreamPath, int], tuple[bytes, pikepdf.Object | None]] = {}
     operator_fonts: dict[tuple[StreamPath, int, int], FontVerdict] = {}
+    styles: dict[tuple[StreamPath, int, bytes], tuple[str | None, bool | None, bool | None]] = {}
+    glyph_style: dict[int, tuple[str | None, bool | None, bool | None]] = {}
+    glyph_identity: dict[int, tuple[tuple[int, ...], int, tuple[int, int], tuple[int, int], bytes]] = {}
     for stream_path, record, _attrs in located:
         stream_key = (stream_path, record.stream_id)
         operator_key = (*stream_key, record.operator_byte_offset)
@@ -297,6 +348,16 @@ def _classify_one_page(
             )
         glyph_font[id(record)] = operator_fonts[operator_key]
         glyph_path[id(record)] = stream_path.xobj_path
+        raw, resources = streams[stream_key]
+        name = _find_active_font_name(raw, record.operator_byte_offset)
+        fonts = resources.get('/Font') if resources is not None else None
+        font = fonts.get('/' + name.decode('latin-1')) if fonts is not None and name is not None else None
+        if font is not None and name is not None and resources is not None:
+            style_key = (*stream_key, name)
+            if style_key not in styles:
+                styles[style_key] = _font_style(font)
+            glyph_style[id(record)] = styles[style_key]
+            glyph_identity[id(record)] = (stream_path.xobj_path, record.stream_id, resources.objgen, font.objgen, name)
 
     def _verdict_fn(record: GlyphRecord) -> GlyphVerdict:
         return glyph_verdict(glyph_font[id(record)], record)
@@ -310,6 +371,8 @@ def _classify_one_page(
         run.page_ctm = page.ctm
         run.effective_em = geometry[first_glyph_id].effective_em
         run.direction = geometry[first_glyph_id].direction
+        run.font_name, run.bold, run.italic = glyph_style.get(first_glyph_id, (None, None, None))
+        run.font_identity = glyph_identity.get(first_glyph_id)
         run_font_verdict = glyph_font.get(first_glyph_id)
         run_xobj_path = glyph_path.get(first_glyph_id, ())
         if run_font_verdict is None:

@@ -73,3 +73,8 @@ class RunRecord:
     page_ctm: tuple[float, float, float, float, float, float] | None = None
     effective_em: float | None = None
     direction: tuple[float, float] | None = None
+    font_name: str | None = None
+    bold: bool | None = None
+    italic: bool | None = None
+    # Actual owning stream/resource/font address, never a display-name identity.
+    font_identity: tuple[tuple[int, ...], int, tuple[int, int], tuple[int, int], bytes] | None = None
