@@ -77,4 +77,4 @@ class RunRecord:
     bold: bool | None = None
     italic: bool | None = None
     # Actual owning stream/resource/font address, never a display-name identity.
-    font_identity: tuple[tuple[int, ...], int, tuple[int, int], tuple[int, int], bytes] | None = None
+    font_identity: tuple[int, tuple[int, ...], int, tuple[int, int], tuple[int, int], bytes] | None = None

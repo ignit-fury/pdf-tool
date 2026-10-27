@@ -334,7 +334,7 @@ def _classify_one_page(
     operator_fonts: dict[tuple[StreamPath, int, int], FontVerdict] = {}
     styles: dict[tuple[StreamPath, int, bytes], tuple[str | None, bool | None, bool | None]] = {}
     glyph_style: dict[int, tuple[str | None, bool | None, bool | None]] = {}
-    glyph_identity: dict[int, tuple[tuple[int, ...], int, tuple[int, int], tuple[int, int], bytes]] = {}
+    glyph_identity: dict[int, tuple[int, tuple[int, ...], int, tuple[int, int], tuple[int, int], bytes]] = {}
     for stream_path, record, _attrs in located:
         stream_key = (stream_path, record.stream_id)
         operator_key = (*stream_key, record.operator_byte_offset)
@@ -357,7 +357,8 @@ def _classify_one_page(
             if style_key not in styles:
                 styles[style_key] = _font_style(font)
             glyph_style[id(record)] = styles[style_key]
-            glyph_identity[id(record)] = (stream_path.xobj_path, record.stream_id, resources.objgen, font.objgen, name)
+            # Direct dictionaries all have objgen=(0,0); retain page/stream ownership.
+            glyph_identity[id(record)] = (page_index, stream_path.xobj_path, record.stream_id, resources.objgen, font.objgen, name)
 
     def _verdict_fn(record: GlyphRecord) -> GlyphVerdict:
         return glyph_verdict(glyph_font[id(record)], record)
