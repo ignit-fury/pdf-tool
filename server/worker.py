@@ -143,7 +143,7 @@ def _preflight(pdf: object, page: int | None = None) -> None:
 
 def _execute(request: dict[str, object]) -> dict[str, object]:
     import pikepdf
-    from engine.index import RunIndex
+    from engine.index import DocumentTooLargeError, RunIndex
     from engine.recipe import RecipeTooLargeError, apply_recipe, parse_recipe, plan_recipe, source_font_info
 
     action = request.get("action")
@@ -204,7 +204,7 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
         _preflight(pdf)
         if action == 'export':
             from engine.export.pdf import ExportRefusal, MAX_EXPORT_BYTES, export_pdf
-            from engine.export.text import export_document
+            from engine.export.text import ExportLimitError, export_document_result
             operation = request.get('export_operation')
             downsample = request.get('downsample', False)
             if (operation not in ('compress', 'flatten', 'text', 'markdown', 'html')
@@ -228,10 +228,13 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
                 filename = 'compressed.pdf' if operation == 'compress' else 'flattened.pdf'
                 media_type = 'application/pdf'
             else:
-                with RunIndex(path, password=secret.get_secret_value()) as index:
-                    text = export_document(index, operation)
-                data = text.encode('utf-8')
-                if not text.strip():
+                try:
+                    with RunIndex(path, password=secret.get_secret_value()) as index:
+                        text_result = export_document_result(index, operation)
+                except (ExportLimitError, DocumentTooLargeError):
+                    raise WorkerRefusal('EXPORT_LIMIT') from None
+                data = text_result.text.encode('utf-8')
+                if not text_result.has_text:
                     notices.append('NO_EXTRACTABLE_TEXT')
                 extension = {'text': 'txt', 'markdown': 'md', 'html': 'html'}[operation]
                 filename = 'document.' + extension

@@ -39,8 +39,64 @@ def _save(pdf: pikepdf.Pdf) -> bytes:
     return output.getvalue()
 
 
+def _protected_image_roles(pdf: pikepdf.Pdf) -> set[tuple[int, int]]:
+    """Opacity/alternative roles take precedence over ordinary image aliases."""
+    pending: list[pikepdf.Object] = []
+    discovery_count = 0
+    for index, obj in enumerate(pdf.objects):
+        if index > 100_000:
+            raise ExportRefusal('EXPORT_LIMIT')
+        # Indirect objects appear in pdf.objects. Direct nested containers do
+        # not: discover roles inside resources/ExtGState and direct arrays too.
+        direct = [obj]
+        while direct:
+            owner = direct.pop()
+            discovery_count += 1
+            if discovery_count > 100_000:
+                raise ExportRefusal('EXPORT_LIMIT')
+            if isinstance(owner, (pikepdf.Dictionary, pikepdf.Stream)):
+                for key, value in owner.items():
+                    discovery_count += 1
+                    if discovery_count > 100_000:
+                        raise ExportRefusal('EXPORT_LIMIT')
+                    if key in ('/Mask', '/SMask', '/Alternates', '/OPI'):
+                        pending.append(value)
+                    if isinstance(value, (pikepdf.Dictionary, pikepdf.Stream, pikepdf.Array)) and value.objgen == (0, 0):
+                        direct.append(value)
+            elif isinstance(owner, pikepdf.Array):
+                discovery_count += len(owner)
+                if discovery_count > 100_000:
+                    raise ExportRefusal('EXPORT_LIMIT')
+                direct.extend(value for value in owner
+                    if isinstance(value, (pikepdf.Dictionary, pikepdf.Stream, pikepdf.Array)) and value.objgen == (0, 0))
+    protected: set[tuple[int, int]] = set()
+    seen: set[tuple[int, int]] = set()
+    count = 0
+    while pending:
+        obj = pending.pop()
+        count += 1
+        if count + len(pending) > 100_000:
+            raise ExportRefusal('EXPORT_LIMIT')
+        if not isinstance(obj, (pikepdf.Dictionary, pikepdf.Stream, pikepdf.Array)):
+            continue
+        if obj.objgen != (0, 0):
+            if obj.objgen in seen:
+                continue
+            seen.add(obj.objgen)
+        if isinstance(obj, pikepdf.Stream) and obj.get('/Subtype') == pikepdf.Name.Image:
+            protected.add(obj.objgen)
+        if isinstance(obj, pikepdf.Array):
+            if len(obj) + len(pending) + count > 100_000:
+                raise ExportRefusal('EXPORT_LIMIT')
+            pending.extend(obj)
+        else:
+            pending.extend(value for key, value in obj.items() if key not in ('/Parent', '/P', '/Pg'))
+    return protected
+
+
 def _reduce_images(pdf: pikepdf.Pdf) -> tuple[int, int]:
     changed = skipped = count = 0
+    protected = _protected_image_roles(pdf)
     # pdf.objects visits each actual object once; shared page resources do not
     # cause the same image to be resampled repeatedly.
     for stream in pdf.objects:
@@ -49,6 +105,9 @@ def _reduce_images(pdf: pikepdf.Pdf) -> tuple[int, int]:
         count += 1
         if count > 1000:
             raise ExportRefusal('EXPORT_LIMIT')
+        if stream.objgen in protected:
+            skipped += 1
+            continue
         try:
             width, height = int(stream.get('/Width', 0)), int(stream.get('/Height', 0))
         except (TypeError, ValueError, OverflowError):
@@ -62,7 +121,7 @@ def _reduce_images(pdf: pikepdf.Pdf) -> tuple[int, int]:
             allowed_filters = filters is None or str(filters) in {'/FlateDecode', '/DCTDecode'}
         if (stream.get('/ColorSpace') not in (pikepdf.Name.DeviceRGB, pikepdf.Name.DeviceGray)
                 or stream.get('/BitsPerComponent') != 8 or not allowed_filters
-                or any(key in stream for key in ('/Decode', '/Mask', '/SMask', '/Alternates', '/OPI', '/ImageMask'))):
+                or any(key in stream for key in ('/Decode', '/Mask', '/SMask', '/SMaskInData', '/Alternates', '/OPI', '/ImageMask'))):
             skipped += 1
             continue
         if max(width, height) <= MAX_IMAGE_EDGE:

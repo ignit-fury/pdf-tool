@@ -18,7 +18,8 @@ const abortError=()=>new DOMException('Export cancelled or document changed','Ab
 const fail=()=>{throw exportError('EXPORT_RESPONSE_INVALID');};
 export function explainExportError(error) {
   const messages={EXPORT_OPTIONS_INVALID:'Check the page ranges, format and DPI before trying again.',EXPORT_LIMIT:'This export exceeds the browser or output limit. Choose fewer pages, lower DPI or a smaller PDF.',TRANSIENT_LIMIT:'This export exceeds the browser memory limit. Download the current PDF and reopen it to release Undo memory.',LOCAL_PDF_TOO_LARGE:'Local exports support PDFs up to 50 MiB.',FLATTEN_APPEARANCE_REQUIRED:'Some annotations lack usable appearances. This PDF cannot be flattened safely.',EXPORT_UNSUPPORTED:'This document uses content that cannot be exported safely in this format.',EXPORT_RESPONSE_INVALID:'The export response was invalid. No download was prepared.',SIGNATURE_ACK_REQUIRED:'Acknowledge the signature warning before rewriting a signed PDF.',SIGNATURE_UNKNOWN:'Document signatures could not be checked safely.',CATALOG_UNSAFE:'This PDF contains page links or forms that cannot be split safely.',PASSWORD_REQUIRED:'A password is required to export this PDF.',PASSWORD_INVALID:'The document password was not accepted.',PDF_JOB_TIMEOUT:'The export took too long. Try fewer pages or a smaller document.',WORKER_TIMEOUT:'The export took too long. Try a smaller document.',WORKER_BUSY:'The server is busy. Try the export again shortly.'};
-  return messages[error?.code]||'This export could not be completed. Your current document and Undo history are unchanged.';
+  const aliases={PASSWORD_INCORRECT:'PASSWORD_INVALID',SIGNATURE_ACKNOWLEDGEMENT_REQUIRED:'SIGNATURE_ACK_REQUIRED'};
+  return messages[aliases[error?.code]||error?.code]||'This export could not be completed. Your current document and Undo history are unchanged.';
 }
 export function validateServerExport(data,format,beforeBytes,{retainedBytes=0}={}) {
   const spec=formats[format];

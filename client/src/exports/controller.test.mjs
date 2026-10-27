@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createExportController,validateServerExport} from './controller.mjs';
+import {createExportController,validateServerExport,explainExportError} from './controller.mjs';
 const response=(overrides={})=>({data:btoa('%PDF-test'),media_type:'application/pdf',filename:'compressed.pdf',before_bytes:3,after_bytes:9,notices:[],changed_images:0,location:'server',...overrides});
+test('actual server password and signature codes have specific guidance',()=>{
+  assert.match(explainExportError({code:'PASSWORD_INCORRECT'}),/password was not accepted/);
+  assert.match(explainExportError({code:'SIGNATURE_ACKNOWLEDGEMENT_REQUIRED'}),/Acknowledge the signature/);
+});
 function fixture(overrides={}) {
   const bytes=new Uint8Array([1,2,3]),session={password:'π',history:['untouched']},current={session,bytes,version:1,retainedBytes:3},calls=[],revoked=[],states=[];
   const controller=createExportController({getCurrent:()=>current,request:async(path,options)=>{calls.push({path,...options});return response();},createUrl:()=>`blob:${calls.length}:${Math.random()}`,revokeUrl:url=>revoked.push(url),onState:s=>states.push(s),...overrides});

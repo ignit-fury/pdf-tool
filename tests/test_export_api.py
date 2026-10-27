@@ -123,3 +123,26 @@ def test_export_preflight_and_missing_appearance_fail_closed():
                              content=output.getvalue(), headers=HEADERS)
         assert unsafe.status_code == 422
         assert unsafe.json()['detail']['code'] == 'FLATTEN_APPEARANCE_REQUIRED'
+
+
+@pytest.mark.parametrize('operation', ['html', 'markdown'])
+def test_empty_multpage_formats_report_no_text_despite_markup(operation):
+    with pikepdf.Pdf.new() as pdf:
+        pdf.add_blank_page()
+        pdf.add_blank_page()
+        source = io.BytesIO()
+        pdf.save(source)
+    with TestClient(create_app()) as client:
+        response = client.post('/exports?operation=' + operation, content=source.getvalue(), headers=HEADERS)
+        assert response.status_code == 200, response.json()
+        assert 'NO_EXTRACTABLE_TEXT' in response.json()['notices']
+
+
+def test_index_limits_are_reported_as_export_limits(monkeypatch, tmp_path):
+    import engine.index
+    from server.worker import WorkerRefusal, _execute
+    monkeypatch.setenv('PDF_TOOL_WORKER_SCRATCH', str(tmp_path))
+    monkeypatch.setattr(engine.index, 'MAX_DOCUMENT_GLYPHS', 0)
+    with pytest.raises(WorkerRefusal, match='^EXPORT_LIMIT$'):
+        _execute({'action':'export', 'export_operation':'text',
+                  'source':base64.b64encode(text_pdf()).decode()})

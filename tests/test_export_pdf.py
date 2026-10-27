@@ -164,3 +164,30 @@ def test_compress_soft_mask_stream_is_never_resampled_even_with_normal_alias():
         assert image.SMask.read_bytes() == alpha
         assert image.SMask.objgen == pdf.pages[0].Resources.XObject.AlsoNormal.objgen
     assert result.changed_images == 0 and 'IMAGES_SKIPPED' in result.notices
+
+
+def test_compress_discovers_direct_extgstate_soft_mask_form():
+    alpha = random.Random(10).randbytes(2048 * 1024)
+    with pikepdf.Pdf.new() as pdf:
+        page = pdf.add_blank_page(page_size=(200, 160))
+        mask = pdf.make_stream(alpha)
+        mask.update(pikepdf.Dictionary(Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Image,
+            Width=2048, Height=1024, ColorSpace=pikepdf.Name.DeviceGray, BitsPerComponent=8))
+        form = pdf.make_stream(b'q 200 0 0 160 0 0 cm /Alpha Do Q')
+        form.update(pikepdf.Dictionary(Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Form,
+            BBox=[0, 0, 200, 160], Resources=pikepdf.Dictionary(XObject=pikepdf.Dictionary(Alpha=mask)),
+            Group=pikepdf.Dictionary(S=pikepdf.Name.Transparency, CS=pikepdf.Name.DeviceGray)))
+        page.obj.Resources = pikepdf.Dictionary(ExtGState=pikepdf.Dictionary(
+            GS=pikepdf.Dictionary(SMask=pikepdf.Dictionary(S=pikepdf.Name.Luminosity, G=form))))
+        page.obj.Contents = pdf.make_stream(b'q /GS gs 0 0 1 rg 0 0 200 160 re f Q')
+        output = io.BytesIO()
+        pdf.save(output)
+        source = output.getvalue()
+    result = perform(source, downsample=True)
+    with pikepdf.open(io.BytesIO(result.data)) as pdf:
+        state = pdf.pages[0].Resources.ExtGState.GS
+        assert state.objgen == (0, 0)
+        image = state.SMask.G.Resources.XObject.Alpha
+        assert (image.Width, image.Height) == (2048, 1024)
+        assert image.read_bytes() == alpha
+    assert result.changed_images == 0 and 'IMAGES_SKIPPED' in result.notices
