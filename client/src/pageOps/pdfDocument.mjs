@@ -1,4 +1,5 @@
 import {PDFDocument, PDFName, PDFDict, PDFArray, PDFNumber, PDFRef, PDFNull, PDFString, PDFHexString, PDFParser, PDFStream, PDFRawStream, PDFInvalidObject, degrees} from '@cantoo/pdf-lib';
+import {MAX_EXPORT_BYTES,admitExport} from '../exports/zip.mjs';
 
 export const MAX_LOCAL_PDF_BYTES=50*1024*1024;
 export const GRAPH_MAX_DEPTH=64;
@@ -304,4 +305,43 @@ export async function transformPages(bytes,command,{password,acknowledged=false}
   if(encrypted)notices.push({code:'ENCRYPTED_COPY_UNLOCKED'});
   const output=await pdf.save({updateFieldAppearances:false});checkBytes(output);
   return {bytes:output,selectedPage,notices,localMetadata:{pageCount:pdf.getPageCount(),pages:pdf.getPages().map((_,i)=>describePage(pdf,i)),signed,encrypted:false}};
+}
+
+export function validateSubsetGroups(groups,pageCount) {
+  if(!Array.isArray(groups)||!groups.length||groups.length>1000)refuse('EXPORT_OPTIONS_INVALID');
+  let previous=-1;
+  for(const group of groups) {
+    if(!Array.isArray(group)||!group.length)refuse('EXPORT_OPTIONS_INVALID');
+    for(const index of group) {
+      if(!Number.isInteger(index)||index<=previous||index>=pageCount)refuse('EXPORT_OPTIONS_INVALID');
+      previous=index;
+    }
+  }
+}
+/** Each subset owns an independent parsed source, reuses deletion graph planning and saves
+ * once. Atomic aggregate refusal: no output is published until every group succeeds. */
+export async function subsetPages(bytes,groups,{password,acknowledged=false,retainedBytes=0}={}) {
+  checkBytes(bytes);validateSubsetGroups(groups,Number.MAX_SAFE_INTEGER);
+  const sourceSize=bytes instanceof Uint8Array?bytes.buffer.byteLength:bytes.byteLength;
+  admitExport(retainedBytes,sourceSize*2+MAX_EXPORT_BYTES*3);
+  const files=[],notices=new Set();let total=0;
+  for(const [ordinal,group] of groups.entries()) {
+    const pdf=await loadLocalPdf(bytes,{password});validateSubsetGroups(groups,pdf.getPageCount());
+    const signed=inspectSignatures(pdf),encrypted=!!(pdf.isEncrypted||pdf.context.isDecrypted),localNotices=[];
+    if(signed&&!acknowledged)refuse('SIGNATURE_ACK_REQUIRED');
+    const retained=new Set(group);
+    for(let index=pdf.getPageCount()-1;index>=0;index--)if(!retained.has(index)) {
+      let deletion;
+      try{deletion=planDeletion(pdf,index);}catch(error){if(error.code==='CATALOG_UNSAFE')throw error;refuse('CATALOG_UNSAFE');}
+      deletion.apply();localNotices.push(...deletion.notices);pdf.removePage(index);
+    }
+    if(signed){notices.add('SIGNATURES_INVALIDATED');localNotices.push('SIGNATURES_INVALIDATED');}
+    if(encrypted){notices.add('UNLOCKED_COPY');localNotices.push('UNLOCKED_COPY');}
+    admitExport(retainedBytes,sourceSize*2+total*3+MAX_EXPORT_BYTES);
+    const output=await pdf.save({updateFieldAppearances:false});total+=output.byteLength;
+    if(total>MAX_EXPORT_BYTES)refuse('EXPORT_LIMIT');
+    admitExport(retainedBytes,sourceSize*2+total*3);
+    files.push({bytes:output,filename:`split-${String(ordinal+1).padStart(4,'0')}.pdf`,mediaType:'application/pdf',notices:localNotices});
+  }
+  return {files,notices:[...notices]};
 }
