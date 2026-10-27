@@ -192,3 +192,34 @@ structural compression. Both exist, are documented, and are called by **no** `.s
 today. `pypdfium2`'s `page.render(scale=DPI/72)` is the same call `harness/render_diff.py`'s
 `render_pdfium()` already makes — EXPO-01 is a new caller, not new capability. Do not re-derive the
 annotation-appearance-to-page-content compositing math a second time.
+
+### 2026-10-26 — local execution authorization and current architecture
+
+The user instructed: “Start the next phase 7.” The earlier instruction not to deploy
+remains active. Phase 6 is locally verified (`688462b`); G3 Linux/container/CDN,
+Phase 5 literal-contract coverage and production HEIC confinement remain open.
+This phase does not close or bypass those release checks.
+
+The following are implementation choices within the existing discretionary scope,
+not claims of additional user-confirmed preferences:
+
+- PNG/JPEG page export uses the installed browser PDF.js renderer, sequentially at
+  chosen DPI (150 screen / 300 print), with explicit pixel/output limits. Split
+  reuses the browser's tested page-tree/graph removal and disposable worker. Their
+  fixed-name files use a bounded stored ZIP32 writer, independently checked with
+  Python zipfile; no new client dependency is required.
+- Compression and flatten use installed pikepdf native methods in the existing
+  disposable server worker. Structural compression is lossless by default and
+  retains original bytes if no reduction is achieved. Optional lossy image reduction
+  is labeled, bounded, restricted to safe image shapes, and previewed before download.
+- Plain text/Markdown/HTML use the single RunIndex and renderer-agnostic blocks.
+  Existing effective_em/page_ctm/direction fields are reused; missing style/page
+  context is added where the current pipeline already knows it. No second extractor.
+- All exports consume the current materialized PDF, including preceding text/page
+  changes. Export never replaces the working document or changes its Undo stack.
+  Server choices disclose uploading the current PDF; PDF rewrites honor signature
+  acknowledgement and report unlocked-copy behavior.
+- No PDF/A, DOCX, OCR, deployment, new runtime package or container-tool installation.
+
+Native method reference (checked against installed pikepdf 10.11.0):
+https://pikepdf.readthedocs.io/en/stable/api/main.html

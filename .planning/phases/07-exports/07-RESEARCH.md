@@ -621,7 +621,10 @@ def render_page_png(pdf_path: str, page_index: int, dpi: int) -> bytes:
 | A3 | `/FontDescriptor /Flags` bit 6 (ForceBold) + `/ItalicAngle != 0` is a sufficiently reliable bold/italic signal across the corpus's real-world font population, without needing a BaseFont-name-substring fallback | Architecture Patterns, Pattern 1 | If descriptor flags are frequently absent or wrong (plausible — `03-RESEARCH.md`'s own Pitfall 11 already documents that font metadata fields, `fsType` specifically, "frequently contradict" the actual truth), bold/italic detection degrades silently rather than refusing visibly, which conflicts with this project's own established "refuse visibly, never guess" discipline (EDIT-04, CLAS-04). Should be corpus-measured, not assumed, before committing to descriptor-flags-only |
 | A4 | The block-structure layer's exact clustering thresholds (what font-size ratio distinguishes a heading from body text; what horizontal-position pattern indicates a list) are learnable without a dedicated research pass, using the same corpus-measurement discipline Phase 2 used for `K_EM`/`BREAK_EM` | Summary, Architecture Patterns | If real-world heading/body-text size ratios are less consistent than assumed (unlike Phase 2's space-threshold tuning, which had 91k measured gaps to converge against), the layer may need more iteration than a single Wave-0 pass budgets for. This research does not attempt the corpus measurement itself — flagged as MEDIUM confidence and Claude's Discretion for the planner to size |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+Historical questions below were settled by CONTEXT amendments A-7.2/A-7.3/A-7.4
+and the current `07-RESEARCH-UPDATE.md`. They remain as provenance, not blockers.
 
 1. **Should `engine.blocks`'s output type be shared verbatim with Phase 8's DOCX writer, or does DOCX need a superset?**
    - What we know: D-7.2 explicitly requires this layer be planned "as its own module with its own

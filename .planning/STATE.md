@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
-status: ready_to_plan
-stopped_at: Phase 6 verified locally; next Phase 7 Exports
-last_updated: "2026-10-26"
-last_activity: Completed six Phase 6 plans, browser/native fidelity proof, review fixes and local goal verification
+status: executing
+stopped_at: Phase 7 plans checked; wave 1 and independent native helper execution starting
+last_updated: "2026-10-27"
+last_activity: Started Phase 7 under user instruction; four scoped export plans prepared
 progress:
   total_phases: 8
   completed_phases: 4
@@ -14,7 +14,7 @@ progress:
 # Project State
 
 **Core value:** Replace existing PDF text while preserving the surrounding document.
-**Current focus:** Phase 06 complete locally; next is Phase 07 — Exports.
+**Current focus:** Phase 07 — Exports, local planning and implementation.
 
 Phases 1–3 are complete. The Phase 3 engine and its fonts, CLI and regression gates are
 now present in this checkout; the original source worktree and local edits are preserved.
@@ -31,6 +31,10 @@ Execution record: `.planning/PHASE-4-EXECUTION.md`.
 Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04-VERIFICATION.md`.
 
 ## Current work
+
+- On 2026-10-26 the user instructed: “Start the next phase 7.” Four export plans
+  cover EXPO-01 through EXPO-05; prior local-only and release-gate boundaries persist.
+  Plan check passed; local execution is starting.
 
 - The user's local-only authorization remains in force. All six Phase 6 plans and
   PAGE-01 through PAGE-09 are verified locally. See `06-VERIFICATION.md` and
@@ -50,7 +54,8 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
 - G3 Linux/container/live-CDN checks, G4 literal contract-specimen coverage and Linux
   HEIC confinement remain open. Production HEIC stays disabled until confined.
   No deployment, dependency installation or container-tool setup occurred.
-- Next: Phase 7 — Exports. No Phase 7 plan has been executed.
+- Phase 7 starts from the completed Phase 6 baseline; its execution records live
+  under `phases/07-exports/`.
 
 ### Delivered Phase 5 baseline
 

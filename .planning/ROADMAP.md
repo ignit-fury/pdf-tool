@@ -259,7 +259,15 @@ and Linux HEIC confinement checks remain open; no deployment occurred.
   3. Compress is lossless and structural by default, with image downsampling as an explicit labeled choice that shows before/after size and a preview
   4. Split and flatten produce outputs that pass `qpdf --check` and a masked differential diff confined to the intended change in all three engines
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+- [ ] 07-01-PLAN.md — Extend the shared run index and build reusable blocks/text serializers
+- [ ] 07-02-PLAN.md — Native compression/flatten and bounded current-byte server exports
+- [ ] 07-03-PLAN.md — Local page images/split and immutable Export panel controls
+- [ ] 07-04-PLAN.md — Independent G6 native/browser/privacy/regression proof
+
+**Local authorization (2026-10-26):** The user instructed Phase 7 to start. No deployment,
+container/dependency installation or earlier release-gate closure is included.
 **Research**: no — `pypdfium2` and Pillow are solved problems; `pdftopdfa` 0.9.0 is a working reference for the pikepdf/fontTools shape.
 **Parallel**: yes — independent of Phases 5 and 6 after G3
 **UI hint**: yes
@@ -353,7 +361,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → (5 ∥ 6 ∥ 7) → 8
 | 4. Web Tier Walking Skeleton + Hardening | Consolidated execution | Implemented locally; release verification pending | - |
 | 5. Find and Replace Across All Pages | 4/4 | Implemented/verified locally; contract-specimen G4 coverage pending | - |
 | 6. Page Ops and Merge | 6/6 | Complete locally; G5 verified with disclosed source-baseline renderer limits | 2026-10-26 |
-| 7. Exports | 0/TBD | Planning | - |
+| 7. Exports | 0/4 | Planning locally; independent plan check | - |
 | 8. PDF/A, then DOCX | 0/TBD | Planning | - |
 
 **Table corrected 2026-08-30.** The rows for Phases 2 and 3 read "Not started" until this date
