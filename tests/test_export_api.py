@@ -1,0 +1,117 @@
+"""Current-byte export transport through real disposable PDF workers."""
+from __future__ import annotations
+
+import base64
+import io
+
+from fastapi.testclient import TestClient
+import pikepdf
+import pytest
+
+from server.app import create_app
+from tools.build_security_fixtures import password_pdf, signed_pdf, text_pdf
+
+HEADERS = {'content-type': 'application/pdf'}
+
+
+@pytest.mark.parametrize('operation,filename,mime', [
+    ('compress', 'compressed.pdf', 'application/pdf'),
+    ('flatten', 'flattened.pdf', 'application/pdf'),
+    ('text', 'document.txt', 'text/plain'),
+    ('markdown', 'document.md', 'text/markdown'),
+    ('html', 'document.html', 'text/html'),
+])
+def test_current_byte_exports_real_worker_without_cache(operation, filename, mime):
+    source = text_pdf(b'Current materialized text')
+    app = create_app()
+    with TestClient(app) as client:
+        response = client.post('/exports', params={'operation': operation}, content=source, headers=HEADERS)
+        assert response.status_code == 200, response.json()
+        result = response.json()
+        output = base64.b64decode(result['data'], validate=True)
+        assert result['before_bytes'] == len(source)
+        assert result['after_bytes'] == len(output)
+        assert result['filename'] == filename and result['media_type'] == mime
+        assert result['location'] == 'server'
+        assert app.state.sources.total_bytes == 0
+        assert response.headers['cache-control'] == 'no-store, private'
+        assert response.headers['x-content-type-options'] == 'nosniff'
+        if mime == 'application/pdf':
+            with pikepdf.open(io.BytesIO(output)) as pdf:
+                assert len(pdf.pages) == 1
+        else:
+            assert 'Current materialized text' in output.decode('utf-8')
+
+
+def test_encrypted_export_unicode_password_and_unlocked_copy():
+    password = '密碼'
+    headers = {**HEADERS, 'X-PDF-Password-B64': base64.b64encode(password.encode()).decode()}
+    with TestClient(create_app()) as client:
+        source = password_pdf(password)
+        missing = client.post('/exports?operation=flatten', content=source, headers=HEADERS)
+        assert missing.status_code == 422
+        assert missing.json()['detail']['code'] == 'PASSWORD_REQUIRED'
+        response = client.post('/exports?operation=flatten', content=source, headers=headers)
+        assert response.status_code == 200, response.json()
+        result = response.json()
+        with pikepdf.open(io.BytesIO(base64.b64decode(result['data']))) as pdf:
+            assert not pdf.is_encrypted
+        assert 'UNLOCKED_COPY' in result['notices']
+
+
+def test_signature_acknowledgement_only_for_pdf_rewrites():
+    source = signed_pdf()
+    with TestClient(create_app()) as client:
+        refused = client.post('/exports?operation=compress', content=source, headers=HEADERS)
+        assert refused.status_code == 409
+        assert refused.json()['detail']['code'] == 'SIGNATURE_ACKNOWLEDGEMENT_REQUIRED'
+        accepted = client.post('/exports?operation=compress&acknowledge_signature=true', content=source, headers=HEADERS)
+        assert accepted.status_code == 200, accepted.json()
+        text = client.post('/exports?operation=text', content=source, headers=HEADERS)
+        assert text.status_code == 200, text.json()
+
+
+@pytest.mark.parametrize('query', [
+    '', 'operation=unknown', 'operation=flatten&downsample=true',
+    'operation=compress&downsample=maybe', 'operation=compress&acknowledge_signature=1',
+    'operation=text&operation=html', 'operation=text&unexpected=secret',
+])
+def test_invalid_options_are_fixed_errors_before_worker(monkeypatch, query):
+    from server import isolation
+    def no_worker(*args, **kwargs):
+        raise AssertionError('invalid option reached PDF worker')
+    monkeypatch.setattr(isolation, 'run_worker', no_worker)
+    with TestClient(create_app()) as client:
+        response = client.post('/exports?' + query, content=text_pdf(), headers=HEADERS)
+        assert response.status_code == 400, response.json()
+        assert response.json() == {'detail': {'code': 'EXPORT_OPTIONS_INVALID'}}
+
+
+def test_export_ingest_is_bounded_and_import_is_parser_free():
+    with TestClient(create_app(max_upload_bytes=12)) as client:
+        assert client.post('/exports?operation=text', content=b'%PDF-' + b'x' * 20, headers=HEADERS).status_code == 413
+        response = client.post('/exports?operation=text', content=b'not pdf', headers=HEADERS)
+        assert response.status_code == 400 and response.json()['detail']['code'] == 'INVALID_PDF_MAGIC'
+        assert client.post('/exports?operation=text', content=b'%PDF-', headers={'content-type':'text/plain'}).status_code == 415
+    import subprocess
+    import sys
+    code = 'import server.app,sys; assert not any(n.startswith("engine.") or n=="pikepdf" or n=="PIL" for n in sys.modules)'
+    assert subprocess.run([sys.executable, '-c', code], capture_output=True).returncode == 0
+
+
+def test_export_parent_validates_options_without_spawning():
+    from server.isolation import run_worker
+    for options in [{'export_operation':'invalid'}, {'export_operation':'text','downsample':True}]:
+        assert run_worker('export', text_pdf(), **options) == {'error':'EXPORT_OPTIONS_INVALID'}
+
+
+def test_export_preflight_and_missing_appearance_fail_closed():
+    from tools.build_security_fixtures import decompression_bomb
+    with TestClient(create_app()) as client:
+        limited = client.post('/exports?operation=text', content=decompression_bomb(), headers=HEADERS)
+        assert limited.status_code == 422
+        assert limited.json()['detail']['code'] == 'DOCUMENT_LIMIT'
+        unsafe = client.post('/exports?operation=flatten&acknowledge_signature=true',
+                             content=signed_pdf(), headers=HEADERS)
+        assert unsafe.status_code == 422
+        assert unsafe.json()['detail']['code'] == 'FLATTEN_APPEARANCE_REQUIRED'
