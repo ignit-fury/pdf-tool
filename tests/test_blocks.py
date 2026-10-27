@@ -61,3 +61,31 @@ def test_bounds_fail_with_content_free_error(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(blocks, 'MAX_BLOCK_PAGES', 1)
     with pytest.raises(ValueError, match='page-limit'):
         build_document(SimpleNamespace(page_count=2))
+
+
+def test_fixture_contains_actual_sizes_fonts_and_closed_grid(tmp_path: Path) -> None:
+    import pikepdf
+    path = tmp_path / 'layout.pdf'
+    build_export_fixture(path)
+    with pikepdf.open(path) as pdf:
+        assert len(pdf.pages) == 3
+        raw = pdf.pages[0].Contents.read_bytes()
+        assert b'/F2 24 Tf' in raw and b'/F1 12 Tf' in raw
+        assert str(pdf.pages[0].Resources.Font.F3.BaseFont) == '/Helvetica-Oblique'
+        grid = pdf.pages[1].Contents.read_bytes()
+        assert b'240 100 re S' in grid and b'160 500 l S' in grid and b'280 450 l S' in grid
+        assert pdf.pages[2].Resources.XObject.Im.Subtype == pikepdf.Name.Image
+
+
+def test_run_limit_and_grid_work_limit_are_conservative(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import engine.blocks as blocks
+    path = tmp_path / 'layout.pdf'
+    build_export_fixture(path)
+    with RunIndex(path) as index:
+        monkeypatch.setattr(blocks, 'MAX_GRID_COMPARISONS', 1)
+        table = build_document(index).pages[1]
+        assert 'table-work-limit' in table.warnings
+        assert all(b.kind != 'table' for b in table.blocks)
+        monkeypatch.setattr(blocks, 'MAX_BLOCK_RUNS', 1)
+        with pytest.raises(ValueError, match='run-limit'):
+            build_document(index)
