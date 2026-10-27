@@ -108,3 +108,46 @@ def test_result_uses_same_model_and_actual_spans(monkeypatch: pytest.MonkeyPatch
     result = module.export_document_result(index,'html')
     assert result.text == 'serialized' and result.has_text is expected
     assert builds == [index] and serialized == [document]
+
+
+def test_font_split_list_marker_preserves_body_style_and_provenance(tmp_path: Path) -> None:
+    import pikepdf
+    from engine.blocks import build_document
+    from engine.export.text import _list_body
+    path = tmp_path / 'split-marker.pdf'
+    with pikepdf.Pdf.new() as pdf:
+        page = pdf.add_blank_page(page_size=(300,200))
+        fonts = pikepdf.Dictionary()
+        for key,name in [('F1','Helvetica'),('F2','Helvetica-Bold'),('F3','Helvetica-Oblique')]:
+            fonts['/'+key] = pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.Font,Subtype=pikepdf.Name.Type1,BaseFont=pikepdf.Name('/'+name)))
+        page.Resources = pikepdf.Dictionary(Font=fonts)
+        page.Contents = pdf.make_stream(b'BT /F1 12 Tf 40 100 Td (-) Tj /F2 12 Tf ( ) Tj /F3 12 Tf (First item) Tj ET')
+        pdf.save(path)
+    with RunIndex(path) as index:
+        document = build_document(index)
+    block = document.pages[0].blocks[0]
+    assert block.kind == 'list'
+    assert len(block.spans) >= 2 and ''.join(s.text for s in block.spans) == '- First item'
+    original = next(s for s in block.spans if 'First item' in s.text)
+    body = _list_body(block)
+    assert ''.join(s.text for s in body) == 'First item'
+    assert body[-1].source_runs == original.source_runs and body[-1].italic is True
+    assert serialize_markdown(document) == '- *First item*\n\n'
+    assert '<li><em>First item</em></li>' in serialize_html(document)
+    assert serialize_text(document) == '- First item\n'
+
+
+def test_named_limit_errors_cover_output_and_block_bounds(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+    import engine.blocks as blocks
+    import engine.export.text as text
+    monkeypatch.setattr(text,'MAX_OUTPUT_CHARS',10)
+    doc = DocumentBlocks((PageBlocks(0,(Block('paragraph',(),(Span('x'*11),)),)),))
+    with pytest.raises(text.ExportLimitError,match='export-output-limit'):
+        serialize_text(doc)
+    monkeypatch.setattr(blocks,'MAX_BLOCK_PAGES',1)
+    with pytest.raises(text.ExportLimitError,match='export-page-limit'):
+        blocks.build_document(SimpleNamespace(page_count=2))
+    monkeypatch.setattr(blocks,'MAX_BLOCK_RUNS',0)
+    with pytest.raises(text.ExportLimitError,match='export-run-limit'):
+        blocks.build_document(SimpleNamespace(page_count=1,page=lambda _:SimpleNamespace(runs=[object()])))
