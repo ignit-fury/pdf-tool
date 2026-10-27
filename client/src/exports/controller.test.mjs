@@ -35,3 +35,12 @@ test('strict server schema rejects hostile MIME, base64, size, filename and unkn
 test('admission blocks work before dispatch and cancellation rejects even ignored aborts',async()=>{
   const f=fixture();f.current.retainedBytes=300*1024*1024;await assert.rejects(f.controller.prepare({format:'compress'}),{code:'EXPORT_LIMIT'});assert.equal(f.calls.length,0);
 });
+test('all-pages ZIP exists for a one-page document and text/empty text are downloadable',async()=>{
+  const file={bytes:new Uint8Array([1]),filename:'page-0001.png',mediaType:'image/png',notices:[]};
+  const f=fixture({renderImages:async()=>({files:[file],notices:[]})});
+  assert.ok((await f.controller.prepare({format:'png',pages:[1],dpi:150,archive:true},{pdf:{numPages:1}})).archive);
+  for(const [format,media_type,filename] of [['text','text/plain','document.txt'],['markdown','text/markdown','document.md'],['html','text/html','document.html']]) {
+    const g=fixture({request:async()=>response({data:'',after_bytes:0,media_type,filename,notices:['NO_EXTRACTABLE_TEXT']})});
+    assert.equal((await g.controller.prepare({format})).files[0].bytes.length,0);
+  }
+});
