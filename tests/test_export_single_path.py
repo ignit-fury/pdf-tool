@@ -38,7 +38,7 @@ def violations(path: Path, *, exporter: bool) -> list[str]:
 
 def client_violations(directory: Path) -> list[Path]:
     return [path for path in directory.rglob('*')
-            if path.suffix in {'.ts','.tsx'}
+            if path.suffix in {'.ts','.tsx','.mjs','.jsx'}
             and ('exports' in path.parts or path.stem.lower().startswith('export'))
             and re.search(r'\b(?:getTextContent|extractText|extract_text)\s*\(',path.read_text())]
 

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import html
 import re
+from dataclasses import dataclass
 
 from engine.blocks import Block, DocumentBlocks, Span, build_document
 from engine.index import RunIndex
@@ -14,6 +15,12 @@ from engine.index import RunIndex
 # At most 32 MiB UTF-8, below the worker's 48 MiB artifact cap even for astral text.
 MAX_OUTPUT_CHARS = 8 * 1024 * 1024
 _MARKDOWN = re.compile(r'([\\`*_{}\[\]()#+.!|>~\-])')
+
+
+@dataclass(frozen=True, slots=True)
+class ExportResult:
+    text: str
+    has_text: bool
 
 
 class _Output:
@@ -135,9 +142,22 @@ def serialize_html(document: DocumentBlocks) -> str:
     return out.finish()
 
 
-def export_document(index: RunIndex, format: str) -> str:
+def export_document_result(index: RunIndex, format: str) -> ExportResult:
+    """Serialize once and report real block content independently of format markup."""
     serializers = {'text': serialize_text, 'markdown': serialize_markdown, 'html': serialize_html}
     serializer = serializers.get(format)
     if serializer is None:
         raise ValueError('unsupported-export-format')
-    return serializer(build_document(index))
+    document = build_document(index)
+    has_text = any(
+        span.text.strip()
+        for page in document.pages
+        for block in page.blocks
+        for spans in (block.spans, *(cell for row in block.rows for cell in row))
+        for span in spans
+    )
+    return ExportResult(serializer(document),has_text)
+
+
+def export_document(index: RunIndex, format: str) -> str:
+    return export_document_result(index,format).text
