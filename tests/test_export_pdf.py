@@ -141,3 +141,26 @@ def test_output_limit_stops_native_writes(monkeypatch):
     monkeypatch.setattr(exports, 'MAX_EXPORT_BYTES', 100)
     with pytest.raises(ExportRefusal, match='^EXPORT_LIMIT$'):
         perform(source_pdf())
+
+
+def test_compress_soft_mask_stream_is_never_resampled_even_with_normal_alias():
+    source = source_pdf(image=True)
+    alpha = random.Random(9).randbytes(2048 * 1024)
+    with pikepdf.open(io.BytesIO(source)) as pdf:
+        mask = pdf.make_stream(alpha)
+        mask.update(pikepdf.Dictionary(Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Image,
+            Width=2048, Height=1024, ColorSpace=pikepdf.Name.DeviceGray, BitsPerComponent=8))
+        pdf.pages[0].Resources.XObject.Im.SMask = mask
+        # Identity wins over a second ordinary-resource role for the same image.
+        pdf.pages[0].Resources.XObject.AlsoNormal = mask
+        output = io.BytesIO()
+        pdf.save(output)
+        source = output.getvalue()
+    result = perform(source, downsample=True)
+    with pikepdf.open(io.BytesIO(result.data)) as pdf:
+        image = pdf.pages[0].Resources.XObject.Im
+        assert (image.Width, image.Height) == (2048, 1024)
+        assert (image.SMask.Width, image.SMask.Height) == (2048, 1024)
+        assert image.SMask.read_bytes() == alpha
+        assert image.SMask.objgen == pdf.pages[0].Resources.XObject.AlsoNormal.objgen
+    assert result.changed_images == 0 and 'IMAGES_SKIPPED' in result.notices
