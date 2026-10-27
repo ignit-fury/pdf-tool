@@ -28,6 +28,10 @@ MAX_GRID_COMPARISONS = 1_000_000
 LIST_MARKER = re.compile(r'^(?:[-*•]|\d+[.)])\s+')
 
 
+class ExportLimitError(ValueError):
+    """A named layout/serialization work bound, not malformed PDF content."""
+
+
 @dataclass(frozen=True, slots=True)
 class Span:
     text: str
@@ -233,13 +237,13 @@ def _page(index: int, page: PageIndex) -> PageBlocks:
 
 def build_document(index: RunIndex) -> DocumentBlocks:
     if index.page_count > MAX_BLOCK_PAGES:
-        raise ValueError('export-page-limit')
+        raise ExportLimitError('export-page-limit')
     pages: list[PageBlocks] = []
     count = 0
     for number in range(index.page_count):
         page = index.page(number)
         count += len(page.runs)
         if count > MAX_BLOCK_RUNS:
-            raise ValueError('export-run-limit')
+            raise ExportLimitError('export-run-limit')
         pages.append(_page(number,page))
     return DocumentBlocks(tuple(pages))

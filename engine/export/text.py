@@ -10,6 +10,7 @@ import re
 from dataclasses import dataclass
 
 from engine.blocks import Block, DocumentBlocks, Span, build_document
+from engine.blocks import ExportLimitError as ExportLimitError
 from engine.index import RunIndex
 
 # At most 32 MiB UTF-8, below the worker's 48 MiB artifact cap even for astral text.
@@ -31,7 +32,7 @@ class _Output:
     def add(self, text: str) -> None:
         self.size += len(text)
         if self.size > MAX_OUTPUT_CHARS:
-            raise ValueError('export-output-limit')
+            raise ExportLimitError('export-output-limit')
         self.parts.append(text)
 
     def finish(self) -> str:
@@ -72,13 +73,23 @@ def _markdown(spans: tuple[Span, ...], *, cell: bool = False) -> str:
 
 
 def _list_body(block: Block) -> tuple[Span, ...]:
-    # Only the explicit source marker is stripped. Keep style and provenance.
-    spans = list(block.spans)
-    if spans:
-        first = spans[0]
-        text = re.sub(r'^(?:[-*•]|\d+[.)])\s+','',first.text,count=1)
-        spans[0] = Span(text,first.bold,first.italic,first.source_runs)
-    return tuple(spans)
+    # Font changes can split the marker and whitespace across several spans.
+    # Match the complete prefix once, then consume only its characters while
+    # retaining original style and source runs for every remaining character.
+    match = re.match(r'^(?:[-*•]|\d+[.)])\s+',_plain(block.spans))
+    if match is None:
+        return block.spans
+    remaining = match.end()
+    body: list[Span] = []
+    for span in block.spans:
+        if remaining >= len(span.text):
+            remaining -= len(span.text)
+        elif remaining:
+            body.append(Span(span.text[remaining:],span.bold,span.italic,span.source_runs))
+            remaining = 0
+        else:
+            body.append(span)
+    return tuple(body)
 
 
 def serialize_markdown(document: DocumentBlocks) -> str:
