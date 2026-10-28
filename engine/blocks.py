@@ -14,6 +14,7 @@ from typing import Literal
 
 from engine.index import PageIndex, RunIndex
 from engine.records import RunRecord
+from engine.image_index import ImagePlacement
 
 HEADING_RATIO = 1.35
 LARGE_HEADING_RATIO = 1.8
@@ -50,10 +51,20 @@ class Block:
 
 
 @dataclass(frozen=True, slots=True)
+class LayoutFact:
+    code: str
+    pages: tuple[int, ...]
+    count: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class PageBlocks:
     page_index: int
     blocks: tuple[Block, ...]
     warnings: tuple[str, ...] = ()
+    images: tuple[ImagePlacement, ...] = ()
+    facts: tuple[LayoutFact, ...] = ()
+    image_analysis_complete: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,8 +214,14 @@ def _ordered(lines: list[_Line], body: float, warnings: list[str]) -> list[_Line
 def _page(index: int, page: PageIndex) -> PageBlocks:
     runs = [run for run,_ in page.runs if run.display_text]
     warnings: list[str] = []
+    facts: list[LayoutFact] = []
+    if not page.image_analysis_complete:
+        facts.append(LayoutFact('IMAGE_UNSUPPORTED', (index,), page.image_unsupported_count))
+    if page.annotation_count:
+        facts.append(LayoutFact('ANNOTATIONS_OMITTED', (index,), page.annotation_count))
     if not runs:
-        return PageBlocks(index, (), ('no-indexed-text',))
+        facts.append(LayoutFact('NO_EXTRACTABLE_TEXT', (index,), 1))
+        return PageBlocks(index, (), ('no-indexed-text',), page.images, tuple(facts), page.image_analysis_complete)
     if any(r.direction is not None and (abs(r.direction[1]) > .01 or r.direction[0] <= 0) for r in runs):
         warnings.append('unsupported-text-direction')
     sizes: dict[float,int] = defaultdict(int)
@@ -232,7 +249,14 @@ def _page(index: int, page: PageIndex) -> PageBlocks:
         table_y = min(_bounds(r)[1] for r in table.source_runs)
         position = next((n for n,b in enumerate(blocks) if min(_bounds(r)[1] for r in b.source_runs) > table_y),len(blocks))
         blocks.insert(position,table)
-    return PageBlocks(index,tuple(blocks),tuple(dict.fromkeys(warnings)))
+    codes = {'columns-inferred-unruled-tables-unsupported': 'COLUMN_LAYOUT',
+             'unsupported-text-direction': 'UNSUPPORTED_DIRECTION'}
+    for warning in dict.fromkeys(warnings):
+        code = codes.get(warning, 'AMBIGUOUS_TABLE' if 'table' in warning else None)
+        if code:
+            facts.append(LayoutFact(code, (index,)))
+    return PageBlocks(index, tuple(blocks), tuple(dict.fromkeys(warnings)), page.images,
+                      tuple(facts), page.image_analysis_complete)
 
 
 def build_document(index: RunIndex) -> DocumentBlocks:

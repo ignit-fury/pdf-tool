@@ -64,6 +64,7 @@ from engine.classify_run import RunVerdict, _classify_one_page
 from engine.encoding_table import FontVerdict
 from engine.playa_boundary import Document, open_document
 from engine.records import RunRecord
+from engine.image_index import ImagePlacement, ImageLimitError, page_images
 from engine.shared_xobjects import shared_form_xobjects
 
 # 02-RESEARCH.md Section 10, memory profile table: columnar storage of a 400-page
@@ -205,6 +206,10 @@ class PageIndex:
     glyph_count: int
     geometry: PageGeometry | None = None
     rulings: tuple[Ruling, ...] = ()
+    images: tuple[ImagePlacement, ...] = ()
+    image_analysis_complete: bool = False
+    image_unsupported_count: int | None = None
+    annotation_count: int | None = None
 
 
 class RunIndex:
@@ -220,7 +225,7 @@ class RunIndex:
     manager, or call `close()` directly, to release both handles.
     """
 
-    def __init__(self, path: str | Path, password: str = "") -> None:
+    def __init__(self, path: str | Path, password: str = "", *, include_images: bool = False) -> None:
         self._pdf = pikepdf.open(path, password=password)
         try:
             self._doc: Document = open_document(path, password=password)
@@ -236,6 +241,8 @@ class RunIndex:
         self._cache: OrderedDict[int, PageIndex] = OrderedDict()
         self._cached_glyphs = 0
         self._total_glyphs_walked = 0
+        self._include_images = include_images
+        self._image_totals: dict[int, tuple[int, int, int]] = {}
 
     def __enter__(self) -> RunIndex:
         return self
@@ -274,8 +281,25 @@ class RunIndex:
             )
         geometry = _page_geometry(self._pdf.pages[page_index], page.ctm)
         rulings = _stroked_rulings(self._pdf.pages[page_index], page.ctm) if geometry is not None else ()
+        images: tuple[ImagePlacement, ...] = ()
+        complete = False
+        unsupported = None
+        annotation_count = None
+        if self._include_images:
+            annotations = self._pdf.pages[page_index].obj.get('/Annots', pikepdf.Array())
+            annotation_count = len(annotations) if isinstance(annotations, pikepdf.Array) else None
+            used = tuple(sum(values[n] for key, values in self._image_totals.items()
+                             if key != page_index) for n in range(3))
+            try:
+                images, complete, unsupported, usage = page_images(self._pdf.pages[page_index], page.ctm,
+                    page_index, (200-used[0], 64_000_000-used[1], 32*1024*1024-used[2]))
+            except ImageLimitError:
+                raise DocumentTooLargeError('export-image-limit') from None
+            self._image_totals[page_index] = usage
         return PageIndex(bucket=bucket, runs=runs, glyph_count=glyph_count,
-                         geometry=geometry, rulings=rulings)
+                         geometry=geometry, rulings=rulings, images=images,
+                         image_analysis_complete=complete, image_unsupported_count=unsupported,
+                         annotation_count=annotation_count)
 
     def page(self, page_index: int) -> PageIndex:
         """Page `page_index`'s `PageIndex`, from cache if this page was parsed before and
