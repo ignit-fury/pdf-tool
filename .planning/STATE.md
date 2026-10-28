@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
 status: executing
-stopped_at: Phase 8 plan 08-01 complete; next 08-02 PDF/A converter and G7a
+stopped_at: Phase 8 plans 08-01 through 08-03 complete locally; next 08-04 DOCX model/writer
 last_updated: "2026-10-28"
-last_activity: Completed frozen 31-input baseline, authenticated validator and 38 focused controls
+last_activity: Verified native PDF/A gate and actual API/browser export; DOCX model and writer next
 progress:
   total_phases: 8
   completed_phases: 5
@@ -14,7 +14,7 @@ progress:
 # Project State
 
 **Core value:** Replace existing PDF text while preserving the surrounding document.
-**Current focus:** Phase 08 — PDF/A, then DOCX; validator foundation complete, converter next.
+**Current focus:** Phase 08 — PDF/A delivered locally; next DOCX within its fixed ceiling.
 
 Phases 1–3 are complete. The Phase 3 engine and its fonts, CLI and regression gates are
 now present in this checkout; the original source worktree and local edits are preserved.
@@ -47,6 +47,16 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
   33 runner controls and five fixture/baseline checks pass. All baseline results
   remain honest: one compliant, 29 noncompliant and one intentional malformed
   parser failure. This is not a converted-output or hosted-CI pass.
+- Plans 08-02/03 are complete locally: all twelve frozen positives plus a public
+  vector PDF and three supplementary cases validate at PDF/A-2b. Sixteen outputs,
+  19 pages, 57 exact native comparisons and 32 structural checks pass. Two cross-
+  engine differences match source baselines. The final converter/gate run passes
+  47 tests. Primitive/nesting/font-length and absent-Contents issues were fixed.
+- The isolated PDF/A API/UI preserves current bytes/history, maps finite refusals,
+  and passes 33 API tests, nine controller tests, build and strict typing (36 files).
+  Actual browser downloads validate, including an edited two-page source; Undo,
+  held-response cancellation, safe refusal and 320/760px layout/focus are observed.
+  Evidence: `08-G7A-RESULTS.md`, `08-03-SUMMARY.md`. Hosted G7a CI remains pending.
 - Phase 7 is complete locally under the user's start/continue instructions. All four
   plans and EXPO-01 through EXPO-05 pass goal verification: 12/12 merged must-haves.
   Evidence: `phases/07-exports/07-VERIFICATION.md` and `07-G6-RESULTS.md`.
@@ -66,7 +76,7 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
 - G3 Linux/container/live-CDN, G4 literal contract-specimen coverage and production
   HEIC confinement remain open. Production HEIC stays disabled until confined.
   No deployment, dependency installation or container-tool setup occurred.
-- Phase 8 progress: 1/6 plans complete. Next is 08-02; DOCX work waits for local G7a.
+- Phase 8 progress: 3/6 plans complete locally. Next is 08-04; local G7a is proved.
 
 ### Delivered Phase 6 baseline
 
