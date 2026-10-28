@@ -49,4 +49,5 @@ safe reasons. Existing worker limits apply; the validator never runs in a reques
 Hosted CI has not run; its mandatory job is authored. This is a conservative
 support policy and fixture corpus, not universal certification of arbitrary PDFs.
 Acrobat is unavailable. G3 Linux/CDN, G4 literal-contract coverage and production
-HEIC confinement remain open. Nothing deployed; DOCX is a later plan.
+HEIC confinement remain open. Nothing deployed. DOCX was subsequently delivered
+and integration/removal reverified on 2026-10-29; see `08-G7-RESULTS.md`.

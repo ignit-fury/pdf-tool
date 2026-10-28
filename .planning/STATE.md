@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
-status: executing
-stopped_at: Phase 8 plans 08-01 through 08-04 complete locally; next DOCX review/conversion API
-last_updated: "2026-10-28"
-last_activity: Verified bounded shared image/fact model and direct deterministic OOXML writer
+status: verification_pending
+stopped_at: All six Phase 8 plans delivered and verified locally; hosted G7a CI and earlier release gates remain open
+last_updated: "2026-10-29"
+last_activity: Verified DOCX two-action UI, actual downloads, literal writer removal and full selected regressions
 progress:
   total_phases: 8
   completed_phases: 5
@@ -14,7 +14,7 @@ progress:
 # Project State
 
 **Core value:** Replace existing PDF text while preserving the surrounding document.
-**Current focus:** Phase 08 — DOCX writer verified; review/conversion API and UI next.
+**Current focus:** Phase 08 — six plans delivered/verified locally; external release verification remains. No deployment.
 
 Phases 1–3 are complete. The Phase 3 engine and its fonts, CLI and regression gates are
 now present in this checkout; the original source worktree and local edits are preserved.
@@ -36,15 +36,15 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
   committed before implementation (`60dd243`). Research/UI contract and the actual
   13-file unchanged-source validator baseline are recorded (`794710e`).
 - veraPDF 1.30.3 is authenticated and installed only in `/private/tmp` for dev/CI;
-  existing Java works. Raw baseline: 1 compliant / 12 noncompliant, no infrastructure
-  errors. This is not a converter or hosted CI result. No product code changed yet.
-- Six sequential plans passed independent review after one revision; execution
-  starts with the frozen baseline/validator foundation. Evidence: `08-PLAN-CHECK.md`.
+  existing Java works. Initial 13-file baseline and subsequent frozen 31-file
+  baseline are retained separately from converted-output results.
+- Six sequential plans passed independent plan review after one revision.
+  Evidence: `08-PLAN-CHECK.md`.
   The conservative PDF/A converter and fixed positive corpus gate precede DOCX;
   existing release gates and no-deployment instruction remain in force.
 - Plan 08-01 is complete: 31 frozen inputs, twelve required successes, actual raw
   baseline, fail-closed veraPDF runner and authenticated CLI installer/CI wiring.
-  33 runner controls and five fixture/baseline checks pass. All baseline results
+  37 runner controls and five fixture/baseline checks pass. All baseline results
   remain honest: one compliant, 29 noncompliant and one intentional malformed
   parser failure. This is not a converted-output or hosted-CI pass.
 - Plans 08-02/03 are complete locally: all twelve frozen positives plus a public
@@ -80,7 +80,28 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
   facts feed an immutable, deterministic direct OOXML projection. 38 focused
   DOCX/block/text/single-path tests and strict typing (38 files) pass. macOS
   textutil reads the package; Word visual verification remains unperformed.
-- Phase 8 progress: 4/6 plans complete locally. Next is 08-05.
+- Plans 08-05/06 are complete locally: document-specific DOCX review and separate
+  conversion bind current source/full-snapshot/policy. The worker rechecks before
+  serializing; no receipt secret/cache or second extraction path exists. All 45
+  API tests and actual browser Unicode-password/signature journeys pass.
+- Actual DOCX downloads preserve source/current PDF bytes and Undo history;
+  four-page local insertion changes the review, and Undo invalidates it. Held
+  review/conversion responses publish no links after cancel. Focus/wrapping pass
+  at 320/760px; unavailable DOCX leaves PNG enabled. Five downloaded packages pass
+  CRC/XML checks, including headings/emphasis/images/table and column fallback.
+- Literal scratch deletion of the optional writer preserves startup and all other
+  exports: 134 Python export/G6/G7a tests, 22 client export tests and build pass;
+  a deliberate unconditional-import negative control fails as intended.
+- Final selected regression: 754 Python passes plus six sandbox-denied OS checks;
+  both affected complete files pass all 26 tests outside the sandbox (760 unique
+  selected tests covered; 39 deselected). All 147 client tests, 38-file strict
+  typing, build, license closures/controls and Unicode data check pass. The
+  integrated G7a/removal command passes seven tests. Raw failures remain recorded.
+- Phase 8 progress: 6/6 plans delivered and verified locally. EXPO-07/08 complete
+  locally; EXPO-06 retains the explicit hosted-CI acceptance item. Word/Acrobat
+  visual observations remain unperformed; textutil is not a substitute. No next
+  numbered feature phase is defined. See `08-VERIFICATION.md`, `08-G7-RESULTS.md`
+  and `08-REVIEW.md`; no deployment, install or container setup occurred.
 
 ### Delivered Phase 6 baseline
 
@@ -135,7 +156,8 @@ Server-issued run addresses; one atomic recipe against immutable original bytes;
 editing; no runtime AGPL; no persistent server document/session history; browser-held
 originals recover evicted memory cache. Phase 5 full-document find/replace is
 delivered locally; its literal contract-specimen gate remains open. Phase 6 page
-operations and scoped exports are delivered locally; PDF/A and DOCX remain next.
+operations, scoped exports, supported PDF/A and best-effort DOCX are delivered
+locally. Hosted G7a CI remains open alongside the earlier release gates.
 
 ## Decisions made during execution
 

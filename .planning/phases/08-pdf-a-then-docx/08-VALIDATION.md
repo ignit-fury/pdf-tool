@@ -77,6 +77,6 @@ Deferred PDF/A-1/3, wider DOCX reconstruction, round-trip and DOCX→PDF stay ex
 - [x] Every requirement/locked decision has an owning plan and automated check.
 - [x] Every new test/scaffold has an owning task; no test is assumed passing.
 - [x] No per-task verification is manual-only.
-- [ ] Frozen baseline and full gates actually executed.
-- [ ] Browser/native/client results recorded with honest unavailable checks.
+- [x] Frozen baseline and full local gates actually executed (`08-G7-RESULTS.md`).
+- [x] Browser/native/client results recorded with honest unavailable checks.
 - [ ] Actual hosted G7a CI observed before release.

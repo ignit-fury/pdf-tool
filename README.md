@@ -1,6 +1,6 @@
 # PDF Tool
 
-A browser-based PDF editor that edits the **actual existing content** of a PDF — replacing text inside the page's content stream rather than pasting annotations or white boxes on top. The current browser supports opening a PDF, editing individual text runs, finding and replacing text across all pages, changing colour or font style, organizing pages, merging PDFs and images, undoing changes and exporting PDFs, page images, plain text, Markdown or HTML. PDF/A and DOCX are planned for Phase 8. It is aimed at people who need to change a document that already exists and want the result to look untouched.
+A browser-based PDF editor that edits the **actual existing content** of a PDF — replacing text inside the page's content stream rather than pasting annotations or white boxes on top. The current browser supports opening a PDF, editing individual text runs, finding and replacing text across all pages, changing colour or font style, organizing pages, merging PDFs and images, undoing changes and exporting PDFs, page images, plain text, Markdown, HTML, supported PDF/A-2b copies and best-effort DOCX. It is aimed at people who need to change a document that already exists and want the result to look untouched.
 
 It is a real product for other people, used anonymously — no signup to edit a file.
 
@@ -10,7 +10,7 @@ It is a real product for other people, used anonymously — no signup to edit a 
 
 Hybrid client/server — rendering, text selection, original-byte retention and downloads run in the browser. Content indexing, text rewrites and font work run in isolated server workers. Page insertion, reorder, rotation, deletion, PDF merge and PNG/JPEG/WebP placement run in the browser. HEIC conversion is a separate, explicitly chosen image-only server action; production conversion remains disabled until Linux confinement is verified.
 
-Page-image export and splitting also run in the browser. Compression, annotation/form flattening, and text/Markdown/HTML exports use isolated server workers after an explicit export action. Exports use the current edited PDF and preserve its Undo history.
+Page-image export and splitting also run in the browser. Compression, annotation/form flattening, text/Markdown/HTML, PDF/A and DOCX use isolated server workers after explicit actions. DOCX review and conversion each upload the current PDF separately; reviewing does not create a download. Exports preserve the working PDF and its Undo history.
 
 Editing is **content-stream only**. No white-box overlays. No reflow across lines or pages — replaced text occupies the original text run's space.
 
@@ -76,6 +76,7 @@ Phase 5 adds all-page search, per-occurrence exclusions, exact replacement revie
 one atomic batch apply and one-step undo through the same content-stream engine.
 Phase 6 adds local page tools, PDF merge with independent embedded fonts and preserved forms/bookmarks, image placement, and one mixed page/text Undo history. Opening and organizing a PDF do not upload it; text analysis starts only when chosen.
 Phase 7 adds page-image exports at chosen DPI, PDF splitting, structural compression with optional previewed image reduction, annotation/form flattening, and text/Markdown/HTML from the shared run index.
+Phase 8 adds conservative native PDF/A-2b conversion and optional direct OOXML DOCX export. PDF/A refuses unsupported content rather than substituting fonts or rasterizing pages. DOCX first shows findings for the current document, then requires a separate conversion action. It supports single-column body text, detected headings, bold/italic, supported inline images and ruled tables. Complex layouts become plain paragraphs; fonts and pagination may change. It does not reconstruct headers/footers or perform OCR.
 The editor uses the actual content stream. Unsupported edits are refused explicitly.
 
 Implemented: password-protected PDFs, signature warnings, server-issued edit boxes,
@@ -87,7 +88,7 @@ following text's position; they do not need to be stretched to the original widt
 Edits using stateful quote operators or unsupported Unicode shaping are also refused to
 preserve layout and searchable text. Precomposed accents such as `é` remain supported.
 
-PDF/A, DOCX and built-in OCR are later milestones. The current screen links to OCRmyPDF's external guide without uploading the
+Built-in OCR remains deferred. The current screen links to OCRmyPDF's external guide without uploading the
 PDF there. The OCR interest counter collects no document or contact data.
 
 ## How to run
@@ -178,6 +179,11 @@ npm --prefix client run build
 uv run --frozen python tools/build_search_unicode.py --check
 ```
 
+The full PDF/A and optional-module removal gates also require the authenticated
+dev/CI veraPDF CLI and Java. Set `VERAPDF_CMD` to its executable; the mandatory
+`Harness / pdfa-g7a` workflow installs the pinned CLI with digest/signature checks
+and runs both complete gate files. The validator is never called by a served request.
+
 Full corpus checks require `qpdf`, `pdftoppm` and `mutool`; these test renderers belong
 only in CI/dev. The OpenType Sanitizer dev wheel supplies the font gate executable.
 `Dockerfile.ci` provides pinned renderer versions. Linux-only tests are explicit skips
@@ -191,6 +197,9 @@ coverage. Phase 6 browser/network and independent native fidelity evidence is in
 unchanged source-baseline renderer discrepancies and production HEIC limitations.
 Phase 7 implementation, browser downloads and independent native export proof are in
 [07-G6-RESULTS.md](.planning/phases/07-exports/07-G6-RESULTS.md).
+Phase 8 local conformance, actual DOCX downloads and literal writer-removal proof are in
+[08-G7-RESULTS.md](.planning/phases/08-pdf-a-then-docx/08-G7-RESULTS.md).
+Hosted G7a CI and Word/Acrobat observations remain unperformed.
 No deployment or public-release sign-off is implied.
 
 ## Corpus testing
@@ -229,19 +238,19 @@ pdf-tool/
 └── client/                # React/Vite SPA (separate repo or subdirectory)
 ```
 
-## Planned export paths — honest quality
+## Implemented export paths and limits
 
 | Export | Tool | Quality |
 |---|---|---|
-| PDF → PNG/JPEG @ DPI | pypdfium2 | Excellent (Chrome's renderer) |
-| PDF split / merge / rotate | pikepdf | Excellent |
+| PDF → PNG/JPEG @ DPI | PDF.js in the browser | Rendered pages at selected DPI |
+| PDF split / merge / rotate | @cantoo/pdf-lib in the browser | Native page content; conservative safety checks |
 | PDF compress | pikepdf + Pillow | Good |
 | PDF flatten | pikepdf | Good |
 | PDF → text | playa-pdf | Good (free; same run map the editor uses) |
 | PDF → Markdown | run map + heuristics | Fair — be honest in the UI |
-| PDF → HTML | run map → absolutely-positioned spans | Fair to Good |
-| PDF → PDF/A | pikepdf + fontTools, validate with veraPDF | Good, but the most work of any export |
-| PDF → DOCX | python-docx + run map | Poor to Fair — best-effort, explicitly not pixel-faithful |
+| PDF → HTML | shared blocks → semantic HTML | Best effort; complex layouts may degrade |
+| PDF → PDF/A-2b | pikepdf + fontTools; veraPDF in dev/CI | Audited embedded-font/RGB-gray subset; other content refused; hosted gate pending |
+| PDF → DOCX | shared blocks → direct stdlib OOXML | Best effort within the written ceiling; explicit review before conversion |
 
 ## What NOT to use
 

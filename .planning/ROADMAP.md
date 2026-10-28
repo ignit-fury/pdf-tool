@@ -33,7 +33,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 5: Find and Replace Across All Pages** - All six FIND requirements implemented and verified locally; literal contract-specimen G4 coverage pending (05-VERIFICATION.md)
 - [x] **Phase 6: Page Ops and Merge** - Verified locally 2026-10-26; browser-local page/PDF/native-image operations, explicit image-only HEIC server exception (06-VERIFICATION.md)
 - [x] **Phase 7: Exports** - Verified locally 2026-10-27; current-byte images, compress, split, flatten and shared-index text/Markdown/HTML (07-VERIFICATION.md)
-- [ ] **Phase 8: PDF/A, then DOCX** - Validator-gated PDF/A, then best-effort DOCX within a written ceiling, independently cuttable
+- [ ] **Phase 8: PDF/A, then DOCX** - Six plans delivered/verified locally; hosted G7a CI pending (08-VERIFICATION.md)
 
 ## Phase Details
 
@@ -291,14 +291,14 @@ baselines. Earlier release/specimen/Linux HEIC checks stay open. No deployment o
   4. The pre-conversion warning names what will degrade in *this specific document* ("3 tables and a 2-column section detected"), which is cheap because the layout analysis already ran
   5. DOCX can be cut without touching anything else — deleting it leaves every other export still passing its gate
 
-**Plans**: 6 sequential plans (4/6 executed locally; updated 2026-10-28)
+**Plans**: 6 sequential plans (6/6 executed and verified locally; updated 2026-10-29). Hosted G7a CI remains pending.
 
 - [x] 08-01 — Scope ceiling, frozen corpus baseline and veraPDF runner
 - [x] 08-02 — Conservative PDF/A-2b conversion and real local G7a proof
 - [x] 08-03 — PDF/A worker/API and export UI
 - [x] 08-04 — Shared image/warning facts and direct OOXML writer
-- [ ] 08-05 — DOCX review/conversion API and current-projection acknowledgement
-- [ ] 08-06 — DOCX UI, removal proof and integrated verification
+- [x] 08-05 — DOCX review/conversion API and current-projection acknowledgement
+- [x] 08-06 — DOCX UI, removal proof and integrated verification
 
 **Research**: yes — `/gsd:plan-phase --research-phase`. PDF/A conformance levels and font-embedding rules that only a validator catches; DOCX layout inference is heuristics all the way down.
 **Parallel**: no — strictly last
@@ -374,12 +374,12 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → (5 ∥ 6 ∥ 7) → 8
 | 5. Find and Replace Across All Pages | 4/4 | Implemented/verified locally; contract-specimen G4 coverage pending | - |
 | 6. Page Ops and Merge | 6/6 | Complete locally; G5 verified with disclosed source-baseline renderer limits | 2026-10-26 |
 | 7. Exports | 4/4 | Complete locally; G6 verified with disclosed source-baseline renderer limits | 2026-10-27 |
-| 8. PDF/A, then DOCX | 0/TBD | Planning | - |
+| 8. PDF/A, then DOCX | 6/6 | Implemented/verified locally; hosted G7a CI pending | - |
 
 **Table corrected 2026-08-30.** The rows for Phases 2 and 3 read "Not started" until this date
 while both were in fact complete — Phase 2 closed 2026-08-17 (Gate G1, `02-VERIFICATION.md`) and
-Phase 3 closed 2026-08-28 (Gate G2b, `G2B-GATE-RESULTS.md`). Phase 8 remains
-in planning with its plan count `TBD`. Phase 6 has six delivered, locally verified
+Phase 3 closed 2026-08-28 (Gate G2b, `G2B-GATE-RESULTS.md`). Phase 8 has six
+delivered, locally verified plans; its hosted G7a CI gate remains open. Phase 6 has six delivered, locally verified
 plans; Phase 7 has four delivered and locally verified plans. Phase 5 now has four delivered local plans, with
 literal contract-specimen G4 verification retained separately.
 

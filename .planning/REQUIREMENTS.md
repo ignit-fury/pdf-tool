@@ -124,11 +124,13 @@ Production HEIC confinement, G3 release checks and G4 literal-specimen coverage 
 - [x] **EXPO-04**: User can flatten a PDF
 - [x] **EXPO-05**: User can export plain text, Markdown, and HTML, all consuming the same run index — a second extraction path anywhere is a signal the text model is under-specified
 - [ ] **EXPO-06**: User can export PDF/A, gated on veraPDF passing against a fixture corpus in CI rather than on spot checks
-- [ ] **EXPO-07**: User can export DOCX, generated as OOXML directly from the text model, within a written scope ceiling: single-column body text, headings by font-size clustering, bold/italic, inline images, ruled tables only
-- [ ] **EXPO-08**: DOCX export shows a pre-conversion warning naming what will degrade in *this specific document*
+- [x] **EXPO-07**: User can export DOCX, generated as OOXML directly from the text model, within a written scope ceiling: single-column body text, headings by font-size clustering, bold/italic, inline images, ruled tables only
+- [x] **EXPO-08**: DOCX export shows a pre-conversion warning naming what will degrade in *this specific document*
 
 EXPO-01 through EXPO-05 are verified locally in Phase 7; see
-`phases/07-exports/07-VERIFICATION.md`. EXPO-06 through EXPO-08 remain Phase 8 work.
+`phases/07-exports/07-VERIFICATION.md`. EXPO-07/08 are verified locally in
+`phases/08-pdf-a-then-docx/08-VERIFICATION.md`. EXPO-06 is implemented and its
+fixed corpus validates locally; its explicit hosted-CI requirement remains pending.
 Earlier release/specimen/Linux HEIC checks remain open.
 
 ### Privacy and Trust
@@ -262,9 +264,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EXPO-03 | Phase 7 — Exports | Complete locally |
 | EXPO-04 | Phase 7 — Exports | Complete locally |
 | EXPO-05 | Phase 7 — Exports | Complete locally |
-| EXPO-06 | Phase 8 — PDF/A, then DOCX | Pending |
-| EXPO-07 | Phase 8 — PDF/A, then DOCX | Pending |
-| EXPO-08 | Phase 8 — PDF/A, then DOCX | Pending |
+| EXPO-06 | Phase 8 — PDF/A, then DOCX | Implemented/validated locally; hosted G7a CI pending |
+| EXPO-07 | Phase 8 — PDF/A, then DOCX | Complete locally |
+| EXPO-08 | Phase 8 — PDF/A, then DOCX | Complete locally |
 
 **Coverage:**
 - v1 requirements: 72 total
