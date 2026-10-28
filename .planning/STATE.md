@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
 status: executing
-stopped_at: Phase 8 plans 08-01 through 08-03 complete locally; next 08-04 DOCX model/writer
+stopped_at: Phase 8 plans 08-01 through 08-04 complete locally; next DOCX review/conversion API
 last_updated: "2026-10-28"
-last_activity: Verified native PDF/A gate and actual API/browser export; DOCX model and writer next
+last_activity: Verified bounded shared image/fact model and direct deterministic OOXML writer
 progress:
   total_phases: 8
   completed_phases: 5
@@ -14,7 +14,7 @@ progress:
 # Project State
 
 **Core value:** Replace existing PDF text while preserving the surrounding document.
-**Current focus:** Phase 08 — PDF/A delivered locally; next DOCX within its fixed ceiling.
+**Current focus:** Phase 08 — DOCX writer verified; review/conversion API and UI next.
 
 Phases 1–3 are complete. The Phase 3 engine and its fonts, CLI and regression gates are
 now present in this checkout; the original source worktree and local edits are preserved.
@@ -76,7 +76,11 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
 - G3 Linux/container/live-CDN, G4 literal contract-specimen coverage and production
   HEIC confinement remain open. Production HEIC stays disabled until confined.
   No deployment, dependency installation or container-tool setup occurred.
-- Phase 8 progress: 3/6 plans complete locally. Next is 08-04; local G7a is proved.
+- Plan 08-04 is complete: opt-in bounded image discovery and shared degradation
+  facts feed an immutable, deterministic direct OOXML projection. 38 focused
+  DOCX/block/text/single-path tests and strict typing (38 files) pass. macOS
+  textutil reads the package; Word visual verification remains unperformed.
+- Phase 8 progress: 4/6 plans complete locally. Next is 08-05.
 
 ### Delivered Phase 6 baseline
 
