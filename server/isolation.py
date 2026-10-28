@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import os
 from pathlib import Path
 import selectors
@@ -112,14 +113,22 @@ def _exchange(process: subprocess.Popen[bytes], payload: bytes, timeout: float) 
 def run_worker(action: str, source: bytes, *, password: str = "", page: int = 0,
                recipe: bytes = b"[]", dry_run: bool = False,
                acknowledge_signature: bool = False, timeout: float = 30,
-               export_operation: str = "", downsample: bool = False) -> dict[str, object]:
+               export_operation: str = "", downsample: bool = False,
+               reviewed_source_sha256: str = '', reviewed_snapshot_sha256: str = '',
+               reviewed_policy_version: int = 0) -> dict[str, object]:
     """Run one operation. Failures are fixed codes, never exception messages."""
     code: str | None = None
     if action not in ACTIONS:
         code = "INVALID_ACTION"
-    elif action == 'export' and (export_operation not in ('compress', 'flatten', 'text', 'markdown', 'html', 'pdfa')
+    elif action == 'export' and (export_operation not in ('compress', 'flatten', 'text', 'markdown', 'html', 'pdfa', 'docx-review', 'docx')
             or not isinstance(downsample, bool) or (downsample and export_operation != 'compress')):
         code = 'EXPORT_OPTIONS_INVALID'
+    elif export_operation == 'docx' and (type(reviewed_policy_version) is not int
+            or reviewed_policy_version != 1 or not isinstance(reviewed_source_sha256, str)
+            or not isinstance(reviewed_snapshot_sha256, str)
+            or not re.fullmatch('[0-9a-f]{64}', reviewed_source_sha256)
+            or not re.fullmatch('[0-9a-f]{64}', reviewed_snapshot_sha256)):
+        code = 'DOCX_REVIEW_REQUIRED'
     elif len(source) > MAX_SOURCE_BYTES:
         code = "SOURCE_TOO_LARGE"
     elif len(recipe) > MAX_RECIPE_BYTES:
@@ -137,6 +146,10 @@ def run_worker(action: str, source: bytes, *, password: str = "", page: int = 0,
                 "recipe": base64.b64encode(recipe).decode("ascii"), "dry_run": dry_run,
                 "acknowledge_signature": acknowledge_signature,
                 "export_operation": export_operation, "downsample": downsample}
+            if export_operation == 'docx':
+                request.update(reviewed_source_sha256=reviewed_source_sha256,
+                               reviewed_snapshot_sha256=reviewed_snapshot_sha256,
+                               reviewed_policy_version=reviewed_policy_version)
             payload = json.dumps(request, separators=(",", ":")).encode()
             # Never give an untrusted-document parser cloud/service credentials,
             # import-path overrides, dynamic-loader hooks, or proxy secrets.

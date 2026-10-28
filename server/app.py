@@ -10,7 +10,9 @@ import asyncio
 import base64
 import binascii
 import hashlib
+import json
 import os
+import re
 import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, suppress
@@ -39,6 +41,37 @@ _PRIVACY_HEADERS = (
     (b'referrer-policy', b'no-referrer'),
     (b'x-frame-options', b'DENY'),
 )
+
+
+def _docx_available() -> bool:
+    return (Path(__file__).resolve().parents[1] / 'engine/export/docx.py').is_file()
+
+
+def _docx_acknowledgement(request: Request, source: bytes) -> dict[str, Any]:
+    values = request.headers.getlist('x-docx-review')
+    def unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError('duplicate')
+            result[key] = value
+        return result
+    try:
+        if len(values) != 1 or not 0 < len(values[0].encode('ascii')) <= 256:
+            raise ValueError('header')
+        value = json.loads(values[0], object_pairs_hook=unique)
+        if (not isinstance(value, dict)
+                or set(value) != {'source_sha256','snapshot_sha256','policy_version'}
+                or type(value['policy_version']) is not int or value['policy_version'] != 1
+                or any(not isinstance(value[k], str) or not re.fullmatch('[0-9a-f]{64}',value[k])
+                       for k in ('source_sha256','snapshot_sha256'))):
+            raise ValueError('schema')
+    except (ValueError, UnicodeError, TypeError):
+        raise HTTPException(409, {'code':'DOCX_REVIEW_REQUIRED'}) from None
+    if value['source_sha256'] != hashlib.sha256(source).hexdigest():
+        raise HTTPException(409, {'code':'DOCX_REVIEW_MISMATCH'})
+    return {'reviewed_source_sha256':value['source_sha256'],
+            'reviewed_snapshot_sha256':value['snapshot_sha256'], 'reviewed_policy_version':1}
 
 
 class _PrivacyHeaders:
@@ -186,7 +219,7 @@ def create_app(*, max_upload_bytes: int = MAX_UPLOAD_BYTES,
     # CORS wraps synthesized admission/transport errors as well as route replies.
     api.add_middleware(CORSMiddleware, allow_origins=origins,
                        allow_methods=['GET', 'POST'],
-                       allow_headers=['Content-Type', 'X-PDF-Password', 'X-PDF-Password-B64'])
+                       allow_headers=['Content-Type', 'X-PDF-Password', 'X-PDF-Password-B64', 'X-DOCX-Review'])
     api.add_middleware(_PrivacyHeaders)
 
     def require_source(job_id: str) -> bytes:
@@ -231,6 +264,10 @@ def create_app(*, max_upload_bytes: int = MAX_UPLOAD_BYTES,
                       'PAGE_OUT_OF_RANGE': 400, 'INVALID_RECIPE': 400,
                       'RECIPE_TOO_LARGE': 413, 'WORKER_TIMEOUT': 422,
                       'WORKER_LIMIT_EXCEEDED': 422}.get(str(error), 422)
+            if error in ('DOCX_REVIEW_REQUIRED','DOCX_REVIEW_MISMATCH'):
+                status = 409
+            elif error == 'DOCX_UNAVAILABLE':
+                status = 503
             raise HTTPException(status, {'code': error})
         return result
 
@@ -252,25 +289,32 @@ def create_app(*, max_upload_bytes: int = MAX_UPLOAD_BYTES,
             raise HTTPException(413, {'code': 'BODY_TOO_LARGE'}) from None
         return {**result, 'job_id': token, 'source_hash': hashlib.sha256(source).hexdigest()}
 
+    @api.get('/exports/capabilities')
+    async def export_capabilities() -> dict[str, bool]:
+        return {'docx':_docx_available()}
+
     @api.post('/exports')
     async def export_current(request: Request, operation: str = Query(default=''),
                              downsample: str = Query(default='false'),
                              acknowledge_signature: str = Query(default='false')) -> dict[str, Any]:
         allowed = {'operation', 'downsample', 'acknowledge_signature'}
-        if (operation not in ('compress', 'flatten', 'text', 'markdown', 'html', 'pdfa')
+        if (operation not in ('compress', 'flatten', 'text', 'markdown', 'html', 'pdfa', 'docx-review', 'docx')
                 or downsample not in ('true', 'false') or acknowledge_signature not in ('true', 'false')
                 or (downsample == 'true' and operation != 'compress')
                 or any(key not in allowed or len(request.query_params.getlist(key)) != 1
                        for key in request.query_params)):
             raise HTTPException(400, {'code': 'EXPORT_OPTIONS_INVALID'})
+        if operation in ('docx-review','docx') and not _docx_available():
+            raise HTTPException(503, {'code':'DOCX_UNAVAILABLE'})
         if request.headers.get('content-type', '').split(';')[0] != 'application/pdf':
             raise HTTPException(415, {'code': 'PDF_CONTENT_TYPE_REQUIRED'})
         source = await _body(request, max_upload_bytes, body_timeout)
         if not source.startswith(b'%PDF-'):
             raise HTTPException(400, {'code': 'INVALID_PDF_MAGIC'})
+        review_options = _docx_acknowledgement(request, source) if operation == 'docx' else {}
         result = await dispatch('export', source, request, export_operation=operation,
                                 downsample=downsample == 'true',
-                                acknowledge_signature=acknowledge_signature == 'true')
+                                acknowledge_signature=acknowledge_signature == 'true', **review_options)
         return {**result, 'location': 'server'}
 
     @api.post('/images/heic-decode')

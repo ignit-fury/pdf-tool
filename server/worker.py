@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import binascii
 import io
+import hashlib
 import json
 import logging
 import os
@@ -207,12 +208,49 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
             from engine.export.text import ExportLimitError, export_document_result
             operation = request.get('export_operation')
             downsample = request.get('downsample', False)
-            if (operation not in ('compress', 'flatten', 'text', 'markdown', 'html', 'pdfa')
+            if (operation not in ('compress', 'flatten', 'text', 'markdown', 'html', 'pdfa', 'docx-review', 'docx')
                     or not isinstance(operation, str) or not isinstance(downsample, bool)
                     or (downsample and operation != 'compress')):
                 raise WorkerRefusal('EXPORT_OPTIONS_INVALID')
             notices: list[str] = []
             changed_images = 0
+            if operation in ('docx-review','docx'):
+                try:
+                    from engine.export.docx import (DocxRefusal, POLICY_VERSION, prepare_docx,
+                                                    serialize_docx, snapshot_digest)
+                except ImportError:
+                    raise WorkerRefusal('DOCX_UNAVAILABLE') from None
+                from engine.blocks import build_document
+                try:
+                    with RunIndex(path, password=secret.get_secret_value(), include_images=True) as index:
+                        snapshot = prepare_docx(build_document(index))
+                    source_hash = hashlib.sha256(source).hexdigest()
+                    digest = snapshot_digest(snapshot)
+                    if operation == 'docx-review':
+                        return {'source_sha256':source_hash, 'snapshot_sha256':digest,
+                                'policy_version':POLICY_VERSION, 'review':snapshot.review}
+                    if (type(request.get('reviewed_policy_version')) is not int
+                            or request.get('reviewed_policy_version') != POLICY_VERSION
+                            or request.get('reviewed_source_sha256') != source_hash
+                            or request.get('reviewed_snapshot_sha256') != digest):
+                        raise WorkerRefusal('DOCX_REVIEW_MISMATCH')
+                    data = serialize_docx(snapshot)
+                except (ExportLimitError, DocumentTooLargeError):
+                    raise WorkerRefusal('EXPORT_LIMIT') from None
+                except DocxRefusal:
+                    raise WorkerRefusal('DOCX_UNSUPPORTED') from None
+                if len(data) > MAX_EXPORT_BYTES:
+                    raise WorkerRefusal('EXPORT_LIMIT')
+                if signed:
+                    notices.append('DOCX_SIGNATURES_NOT_PRESERVED')
+                if pdf.is_encrypted:
+                    notices.append('UNLOCKED_COPY')
+                if not snapshot.review['has_text']:
+                    notices.append('NO_EXTRACTABLE_TEXT')
+                return {'data':base64.b64encode(data).decode('ascii'),
+                    'media_type':'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    'filename':'document.docx','before_bytes':len(source),'after_bytes':len(data),
+                    'notices':notices,'changed_images':0}
             if operation in ('compress', 'flatten', 'pdfa'):
                 if signed and request.get('acknowledge_signature') is not True:
                     raise WorkerRefusal('SIGNATURE_ACKNOWLEDGEMENT_REQUIRED')
@@ -298,6 +336,10 @@ def main() -> None:
         import engine.export.pdf  # noqa: F401
         import engine.export.text  # noqa: F401
         import engine.export.pdfa  # noqa: F401
+        try:
+            import engine.export.docx  # noqa: F401
+        except ImportError:
+            pass  # Optional writer removal must not affect other operations.
         from PIL import Image
         Image.init()  # Trusted codec plugins load before irreversible filtering.
         from engine.playa_boundary import PDFSyntaxError
