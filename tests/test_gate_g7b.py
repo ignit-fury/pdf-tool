@@ -63,3 +63,18 @@ def test_manifest_rejects_missing_duplicate_changed_or_lowered_cases(tmp_path: P
         mutate(bad)
         with pytest.raises(ValueError):
             materialize_manifest(bad, tmp_path)
+
+
+def test_frozen_baseline_measures_every_input_before_converter_exists() -> None:
+    manifest = json.loads((ROOT / 'harness/pdfa-manifest.json').read_text())
+    baseline = json.loads((ROOT / 'harness/pdfa-baseline.json').read_text())
+    assert baseline['measurement_complete'] is True
+    assert baseline['converter_existed_at_measurement'] is False
+    assert baseline['validator_version'] == '1.30.3'
+    assert {r['id']: r['sha256'] for r in baseline['records']} == {
+        case['id']: case['sha256'] for case in manifest['fixtures']}
+    malformed = [r for r in baseline['records'] if r['infrastructure_errors']]
+    assert len(malformed) == 1 and malformed[0]['id'] == 'refuse-malformed'
+    assert malformed[0]['returncode'] == 7 and malformed[0]['verdicts'] == []
+    assert sum(v['compliant'] for r in baseline['records'] for v in r['verdicts']) == 1
+    assert baseline['passed'] is False  # Preserve the real CLI result; not a conversion gate.
