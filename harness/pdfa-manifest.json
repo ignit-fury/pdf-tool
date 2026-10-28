@@ -1,0 +1,362 @@
+{
+  "schema_version": 1,
+  "ceiling_commit": "60dd243",
+  "created": "2026-10-28",
+  "minimum_successes": 12,
+  "positive_ids": [
+    "text-sans",
+    "text-serif",
+    "text-mono",
+    "text-bold",
+    "text-italic",
+    "text-bold-italic",
+    "image-rgb",
+    "image-gray",
+    "image-only",
+    "resources-inherited",
+    "geometry-rotate-crop",
+    "multipage-mixed"
+  ],
+  "fixture_count": 31,
+  "fixtures": [
+    {
+      "id": "text-sans",
+      "kind": "generated",
+      "fixture": "text-sans",
+      "sha256": "16303566376a745c64006860554de7b4d6cfd2d8486cd5e3b4e217155234c0b4",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "success"
+    },
+    {
+      "id": "text-serif",
+      "kind": "generated",
+      "fixture": "text-serif",
+      "sha256": "939bd8fb2df5f039db767a05357c2da6addf9ee326dedf5d685188ebad931903",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "success"
+    },
+    {
+      "id": "text-mono",
+      "kind": "generated",
+      "fixture": "text-mono",
+      "sha256": "82934313a867067d40e0635e2aee171decec92450e7615a792842796c7fa25de",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "success"
+    },
+    {
+      "id": "text-bold",
+      "kind": "generated",
+      "fixture": "text-bold",
+      "sha256": "bdfe5b434954d266585918b62e2bf9943c2f77cfb5bda5f40004ecb5e88043c3",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "success"
+    },
+    {
+      "id": "text-italic",
+      "kind": "generated",
+      "fixture": "text-italic",
+      "sha256": "afef6daeb2808ec0f77fb6b12bf6d551140123a8fb55682cf51ca1d2e49860a9",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "success"
+    },
+    {
+      "id": "text-bold-italic",
+      "kind": "generated",
+      "fixture": "text-bold-italic",
+      "sha256": "a5d036ae1db2f8d18e9bf90497470f2ac545c0963bab66f6544027a88e4c1d82",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "success"
+    },
+    {
+      "id": "image-rgb",
+      "kind": "generated",
+      "fixture": "image-rgb",
+      "sha256": "bc2afabdd5cb22e525281b1d7fb517095a60183d7c3066a25f76a1b074e91b24",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "success"
+    },
+    {
+      "id": "image-gray",
+      "kind": "generated",
+      "fixture": "image-gray",
+      "sha256": "4fbbe80cdf8de3a1014f918194ee934f8765822f1e90de6a4a0e1b02bfe79cce",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "success"
+    },
+    {
+      "id": "image-only",
+      "kind": "generated",
+      "fixture": "image-only",
+      "sha256": "e7e40404774672839cfc3ed12d63edc268ae45cf3ebda0b5f1c3f4f7dae3dc27",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "success"
+    },
+    {
+      "id": "resources-inherited",
+      "kind": "generated",
+      "fixture": "resources-inherited",
+      "sha256": "2ed77a26e10ae1fa51d692f41afce206ecea0138b162aa37b387f62434abf832",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "success"
+    },
+    {
+      "id": "geometry-rotate-crop",
+      "kind": "generated",
+      "fixture": "geometry-rotate-crop",
+      "sha256": "838cf76d8f9849d235f468d6f10c4fd6ace0f2d1676ebadef7633a1ee5d92830",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "success"
+    },
+    {
+      "id": "multipage-mixed",
+      "kind": "generated",
+      "fixture": "multipage-mixed",
+      "sha256": "a53a988a89c3784b3c610a220bc61e93ed71edb1c9e12eb688983c2bfb2e2ea0",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "success"
+    },
+    {
+      "id": "refuse-missing-font",
+      "kind": "generated",
+      "fixture": "refuse-missing-font",
+      "sha256": "5e418c658fe6f9c19104b37d4b004f5eb79689ef20005c42c06eb39e72739f3e",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "refusal"
+    },
+    {
+      "id": "refuse-cmyk",
+      "kind": "generated",
+      "fixture": "refuse-cmyk",
+      "sha256": "b9e0a04e798ecf0328d1d8c513cda9f6a519d787dbd84e6b6c4a5ba9a525d33d",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "refusal"
+    },
+    {
+      "id": "refuse-active-content",
+      "kind": "generated",
+      "fixture": "refuse-active-content",
+      "sha256": "9cf7f9f52429a6372e6e4ed9b6a04d09ced8f96bdd1f49641106b506a52a94c8",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "refusal"
+    },
+    {
+      "id": "refuse-unknown-operator",
+      "kind": "generated",
+      "fixture": "refuse-unknown-operator",
+      "sha256": "5cfd84221bd9c3c915a663876656f01f31ea4ffa844ac6e1b7fffbd2d0d61632",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "refusal"
+    },
+    {
+      "id": "refuse-malformed",
+      "kind": "generated",
+      "fixture": "refuse-malformed",
+      "sha256": "0ba31fda4aed6fcd3af7609bce9d2fb8636a2c58c8cfb10bc2e5a1ead3934673",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "refusal"
+    },
+    {
+      "id": "refuse-inline-lzw",
+      "kind": "generated",
+      "fixture": "refuse-inline-lzw",
+      "sha256": "a0e71dea9ab1983424cf369f8e2e316467069b7ca738482c1874a79df0b12477",
+      "categories": [
+        "constructed"
+      ],
+      "expectation": "refusal"
+    },
+    {
+      "id": "public-irs_form_1040",
+      "kind": "public",
+      "source": "corpus/public/irs_form_1040.pdf",
+      "sha256": "3d31c226df0d189ced80e039d01cf0f8820c1019681a0f0ca6264de277b7e982",
+      "categories": [
+        "subset_fonts",
+        "annotation_appearance_streams",
+        "contents_array",
+        "justified_right_aligned"
+      ],
+      "expectation": "probe"
+    },
+    {
+      "id": "public-irs_form_w9",
+      "kind": "public",
+      "source": "corpus/public/irs_form_w9.pdf",
+      "sha256": "2d420cbb4123dcf1fb82595b2359cfbb5d81f00b9df9d359fcc7af361d093f53",
+      "categories": [
+        "subset_fonts",
+        "annotation_appearance_streams",
+        "contents_array"
+      ],
+      "expectation": "probe"
+    },
+    {
+      "id": "public-irs_form_w4",
+      "kind": "public",
+      "source": "corpus/public/irs_form_w4.pdf",
+      "sha256": "92444d8856ce55d9e25dca8b6d1420634fc68b11e1ab1f760916ea29ddd312b2",
+      "categories": [
+        "subset_fonts",
+        "symbolic_fonts",
+        "cid_keyed_cff",
+        "annotation_appearance_streams",
+        "contents_array"
+      ],
+      "expectation": "probe"
+    },
+    {
+      "id": "public-verapdf_type3_font_fixture",
+      "kind": "public",
+      "source": "corpus/public/verapdf_type3_font_fixture.pdf",
+      "sha256": "c77ba0dd71e43823e1fb6a087889a1774ae8c3ea127a8e6861b7b0180eaf2c94",
+      "categories": [
+        "type3"
+      ],
+      "expectation": "probe"
+    },
+    {
+      "id": "public-govdocs1_000_000135",
+      "kind": "public",
+      "source": "corpus/public/govdocs1_000_000135.pdf",
+      "sha256": "677d1055b3490d275fb9abfadc03d0b5be9d9ae5f17e89e0aed6935a59c1bce7",
+      "categories": [
+        "contents_array",
+        "subset_fonts",
+        "symbolic_fonts",
+        "type0_identity_h",
+        "type3"
+      ],
+      "expectation": "probe"
+    },
+    {
+      "id": "public-govdocs1_002_002145",
+      "kind": "public",
+      "source": "corpus/public/govdocs1_002_002145.pdf",
+      "sha256": "248bde7e3d07bf0a696c84b64e86a06c92a2284a5a93d3645ad8610e621f4739",
+      "categories": [
+        "inline_images",
+        "subset_fonts",
+        "symbolic_fonts",
+        "type3"
+      ],
+      "expectation": "probe"
+    },
+    {
+      "id": "public-irs_1040_tax_tables",
+      "kind": "public",
+      "source": "corpus/public/irs_1040_tax_tables.pdf",
+      "sha256": "8ae019bd3b28b07b37e46e18597d8e899222a2224ce7482c015b130033403532",
+      "categories": [
+        "subset_fonts",
+        "type0_identity_h",
+        "cid_keyed_cff",
+        "form_xobjects",
+        "contents_array",
+        "tables"
+      ],
+      "expectation": "probe"
+    },
+    {
+      "id": "public-wikipedia_zh_monthly_magazine",
+      "kind": "public",
+      "source": "corpus/public/wikipedia_zh_monthly_magazine.pdf",
+      "sha256": "a6a4b43e49d44dd5629bf437bd19b2c267cc6aa0b190630dcb82b007f545be3b",
+      "categories": [
+        "subset_fonts",
+        "type0_identity_h",
+        "cid_keyed_cff"
+      ],
+      "expectation": "probe"
+    },
+    {
+      "id": "public-govdocs1_000_000019",
+      "kind": "public",
+      "source": "corpus/public/govdocs1_000_000019.pdf",
+      "sha256": "dc738585d318b2992a41b12832788b24fed94d318ef962103fbeaa613c7ca93c",
+      "categories": [
+        "subset_fonts",
+        "symbolic_fonts",
+        "type0_identity_h"
+      ],
+      "expectation": "probe"
+    },
+    {
+      "id": "public-verapdf_inline_image_fixture",
+      "kind": "public",
+      "source": "corpus/public/verapdf_inline_image_fixture.pdf",
+      "sha256": "a0e71dea9ab1983424cf369f8e2e316467069b7ca738482c1874a79df0b12477",
+      "categories": [
+        "inline_images"
+      ],
+      "expectation": "probe"
+    },
+    {
+      "id": "public-govdocs1_000_000009",
+      "kind": "public",
+      "source": "corpus/public/govdocs1_000_000009.pdf",
+      "sha256": "3fcfd899850be006b2d6616f8161e49479bc41424fa80e404f41233b77256ff3",
+      "categories": [
+        "contents_array",
+        "inline_images",
+        "subset_fonts",
+        "symbolic_fonts"
+      ],
+      "expectation": "probe"
+    },
+    {
+      "id": "public-govdocs1_000_000013",
+      "kind": "public",
+      "source": "corpus/public/govdocs1_000_000013.pdf",
+      "sha256": "76c4dfb49667db90af7acdfba9e1d366fe14c4af6197d9f1daacb39a6511d0a1",
+      "categories": [
+        "inline_images",
+        "subset_fonts"
+      ],
+      "expectation": "probe"
+    },
+    {
+      "id": "public-vector_outlined_text_sample",
+      "kind": "public",
+      "source": "corpus/public/vector_outlined_text_sample.pdf",
+      "sha256": "3af7b52a6d5f10bda66aa77180ab95aff1a9c9d8f878592e9bbc07d874d31980",
+      "categories": [
+        "vector_outlined_text"
+      ],
+      "expectation": "probe"
+    }
+  ]
+}
