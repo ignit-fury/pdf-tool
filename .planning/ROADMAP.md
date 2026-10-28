@@ -291,7 +291,15 @@ baselines. Earlier release/specimen/Linux HEIC checks stay open. No deployment o
   4. The pre-conversion warning names what will degrade in *this specific document* ("3 tables and a 2-column section detected"), which is cheap because the layout analysis already ran
   5. DOCX can be cut without touching anything else — deleting it leaves every other export still passing its gate
 
-**Plans**: TBD
+**Plans**: 6 sequential plans (0/6 executed; planned 2026-10-28)
+
+- [ ] 08-01 — Scope ceiling, frozen corpus baseline and veraPDF runner
+- [ ] 08-02 — Conservative PDF/A-2b conversion and real local G7a proof
+- [ ] 08-03 — PDF/A worker/API and export UI
+- [ ] 08-04 — Shared image/warning facts and direct OOXML writer
+- [ ] 08-05 — DOCX review/conversion API and current-projection acknowledgement
+- [ ] 08-06 — DOCX UI, removal proof and integrated verification
+
 **Research**: yes — `/gsd:plan-phase --research-phase`. PDF/A conformance levels and font-embedding rules that only a validator catches; DOCX layout inference is heuristics all the way down.
 **Parallel**: no — strictly last
 **UI hint**: no

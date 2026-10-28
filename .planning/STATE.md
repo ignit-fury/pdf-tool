@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
-status: ready_to_plan
-stopped_at: Phase 7 verified locally; next Phase 8 PDF/A then DOCX
-last_updated: "2026-10-27"
-last_activity: Completed four Phase 7 export plans, integrated G6 proof and local goal verification
+status: executing
+stopped_at: Phase 8 six plans verified; starting 08-01 validator foundation
+last_updated: "2026-10-28"
+last_activity: Verified six sequential Phase 8 plans; corrected CORS/refusal/CI wiring before execution
 progress:
   total_phases: 8
   completed_phases: 5
@@ -14,7 +14,7 @@ progress:
 # Project State
 
 **Core value:** Replace existing PDF text while preserving the surrounding document.
-**Current focus:** Phase 07 complete locally; next is Phase 08 — PDF/A, then DOCX.
+**Current focus:** Phase 08 — PDF/A, then DOCX; planning and validator foundation.
 
 Phases 1–3 are complete. The Phase 3 engine and its fonts, CLI and regression gates are
 now present in this checkout; the original source worktree and local edits are preserved.
@@ -32,6 +32,16 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
 
 ## Current work
 
+- Phase 8 started under the user's continue instruction. G7b's scope document is
+  committed before implementation (`60dd243`). Research/UI contract and the actual
+  13-file unchanged-source validator baseline are recorded (`794710e`).
+- veraPDF 1.30.3 is authenticated and installed only in `/private/tmp` for dev/CI;
+  existing Java works. Raw baseline: 1 compliant / 12 noncompliant, no infrastructure
+  errors. This is not a converter or hosted CI result. No product code changed yet.
+- Six sequential plans passed independent review after one revision; execution
+  starts with the frozen baseline/validator foundation. Evidence: `08-PLAN-CHECK.md`.
+  The conservative PDF/A converter and fixed positive corpus gate precede DOCX;
+  existing release gates and no-deployment instruction remain in force.
 - Phase 7 is complete locally under the user's start/continue instructions. All four
   plans and EXPO-01 through EXPO-05 pass goal verification: 12/12 merged must-haves.
   Evidence: `phases/07-exports/07-VERIFICATION.md` and `07-G6-RESULTS.md`.
@@ -51,7 +61,7 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
 - G3 Linux/container/live-CDN, G4 literal contract-specimen coverage and production
   HEIC confinement remain open. Production HEIC stays disabled until confined.
   No deployment, dependency installation or container-tool setup occurred.
-- Next: Phase 8 — PDF/A, then DOCX. No Phase 8 plan has been executed.
+- No Phase 8 plan has been executed yet.
 
 ### Delivered Phase 6 baseline
 
