@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
 status: executing
-stopped_at: Phase 8 six plans verified; starting 08-01 validator foundation
+stopped_at: Phase 8 plan 08-01 complete; next 08-02 PDF/A converter and G7a
 last_updated: "2026-10-28"
-last_activity: Verified six sequential Phase 8 plans; corrected CORS/refusal/CI wiring before execution
+last_activity: Completed frozen 31-input baseline, authenticated validator and 38 focused controls
 progress:
   total_phases: 8
   completed_phases: 5
@@ -14,7 +14,7 @@ progress:
 # Project State
 
 **Core value:** Replace existing PDF text while preserving the surrounding document.
-**Current focus:** Phase 08 — PDF/A, then DOCX; planning and validator foundation.
+**Current focus:** Phase 08 — PDF/A, then DOCX; validator foundation complete, converter next.
 
 Phases 1–3 are complete. The Phase 3 engine and its fonts, CLI and regression gates are
 now present in this checkout; the original source worktree and local edits are preserved.
@@ -42,6 +42,11 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
   starts with the frozen baseline/validator foundation. Evidence: `08-PLAN-CHECK.md`.
   The conservative PDF/A converter and fixed positive corpus gate precede DOCX;
   existing release gates and no-deployment instruction remain in force.
+- Plan 08-01 is complete: 31 frozen inputs, twelve required successes, actual raw
+  baseline, fail-closed veraPDF runner and authenticated CLI installer/CI wiring.
+  33 runner controls and five fixture/baseline checks pass. All baseline results
+  remain honest: one compliant, 29 noncompliant and one intentional malformed
+  parser failure. This is not a converted-output or hosted-CI pass.
 - Phase 7 is complete locally under the user's start/continue instructions. All four
   plans and EXPO-01 through EXPO-05 pass goal verification: 12/12 merged must-haves.
   Evidence: `phases/07-exports/07-VERIFICATION.md` and `07-G6-RESULTS.md`.
@@ -61,7 +66,7 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
 - G3 Linux/container/live-CDN, G4 literal contract-specimen coverage and production
   HEIC confinement remain open. Production HEIC stays disabled until confined.
   No deployment, dependency installation or container-tool setup occurred.
-- No Phase 8 plan has been executed yet.
+- Phase 8 progress: 1/6 plans complete. Next is 08-02; DOCX work waits for local G7a.
 
 ### Delivered Phase 6 baseline
 
