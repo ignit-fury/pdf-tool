@@ -32,10 +32,13 @@ jobs:
           tests/test_isolation.py tests/test_hostile_input.py tests/test_linux_sandbox.py
 
       - name: Complete regression suite
+        # The mandatory Harness PDF/A job owns these two complete test files:
+        # they need its authenticated veraPDF/JRE mounts as well as native tools.
         run: >-
           docker run --rm --tmpfs /tmp:rw,nosuid,nodev,size=256m
           --tmpfs /dev/shm:rw,nosuid,nodev,size=1536m
           pdf-tool-tests:ci uv run --frozen pytest -q
+          --ignore=tests/test_gate_g7a.py --ignore=tests/test_docx_cuttable.py
 
       - name: Strict engine and server types
         run: docker run --rm pdf-tool-tests:ci uv run --frozen mypy engine/ server/

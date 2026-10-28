@@ -56,7 +56,7 @@ jobs:
               "$VERAPDF_CMD" --version
               for tool in pdftoppm mutool qpdf pdfcpu ots-sanitize; do command -v "$tool"; done
               uv run --frozen python -c "import pypdfium2"
-              uv run --frozen pytest -q -m corpus tests/test_gate_g7a.py
+              uv run --frozen pytest -q tests/test_gate_g7a.py tests/test_docx_cuttable.py
             '
 
       - name: Preserve G7a evidence even on failure
