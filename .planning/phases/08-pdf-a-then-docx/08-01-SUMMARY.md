@@ -36,6 +36,9 @@ constructed refusal cases include malformed input and inline LZW.
 - Runner tests: **33 passed**, including actual installed positive/negative PDFs.
   Synthetic controls cover exit-zero noncompliance, false/missing counts, wrong
   profile/filenames, parser/OOM failures, timeout and output bounds.
+- Subsequent non-vacuity review added three RED zero-check cases (`8be81d3`),
+  required executed checks (`03100f9`) and passed **37** runner tests. The
+  pre-conversion baseline was not rerun or altered for that tightening.
 - Actual authenticated unattended CLI-only installation passes `--version` at
   1.30.3; tampered archive and wrong publisher fingerprint are rejected.
 - All **31** immutable inputs measured: **1 compliant, 29 noncompliant, 1 malformed
