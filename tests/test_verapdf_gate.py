@@ -41,6 +41,14 @@ def test_compliant_report_requires_executed_rules_and_checks(passed_rules, passe
     assert result.infrastructure_errors and not result.passed
 
 
+def test_noncompliant_report_can_have_only_failed_rules_and_checks():
+    data = report(compliant=False)
+    data["report"]["jobs"][0]["validationResult"][0]["details"].update(
+        passedRules=0, passedChecks=0)
+    result = parse_report(json.dumps(data), 1)
+    assert result.valid_report and not result.passed
+
+
 @pytest.mark.parametrize("mutation", [
     lambda r: r["report"].update(jobs=[]),
     lambda r: r["report"]["jobs"].append(copy.deepcopy(r["report"]["jobs"][0])),

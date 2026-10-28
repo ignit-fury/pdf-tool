@@ -84,8 +84,10 @@ def parse_report(payload: str | bytes, expected_count: int) -> ValidatorReport:
             require(result["profileName"] == PROFILE, "unexpected validation profile")
             require(result["jobEndStatus"] == "normal", "abnormal validation status")
             details = result["details"]
-            counter(details, "passedRules")
-            counter(details, "passedChecks")
+            passed_rules = counter(details, "passedRules")
+            passed_checks = counter(details, "passedChecks")
+            require(not compliant or (passed_rules > 0 and passed_checks > 0),
+                    "compliant report has no executed rules or checks")
             failed = counter(details, "failedRules")
             failed_checks = counter(details, "failedChecks")
             rules = details["ruleSummaries"]
