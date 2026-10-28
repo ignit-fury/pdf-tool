@@ -32,6 +32,15 @@ def test_positive_and_negative_have_typed_verdicts():
     assert negative.verdicts[0].failed_rule_ids == ("6.1.10-1",)
 
 
+@pytest.mark.parametrize("passed_rules,passed_checks", [(0, 0), (0, 235), (143, 0)])
+def test_compliant_report_requires_executed_rules_and_checks(passed_rules, passed_checks):
+    data = report()
+    data["report"]["jobs"][0]["validationResult"][0]["details"].update(
+        passedRules=passed_rules, passedChecks=passed_checks)
+    result = parse_report(json.dumps(data), 1)
+    assert result.infrastructure_errors and not result.passed
+
+
 @pytest.mark.parametrize("mutation", [
     lambda r: r["report"].update(jobs=[]),
     lambda r: r["report"]["jobs"].append(copy.deepcopy(r["report"]["jobs"][0])),
