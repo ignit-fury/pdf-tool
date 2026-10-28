@@ -207,25 +207,40 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
             from engine.export.text import ExportLimitError, export_document_result
             operation = request.get('export_operation')
             downsample = request.get('downsample', False)
-            if (operation not in ('compress', 'flatten', 'text', 'markdown', 'html')
+            if (operation not in ('compress', 'flatten', 'text', 'markdown', 'html', 'pdfa')
                     or not isinstance(operation, str) or not isinstance(downsample, bool)
                     or (downsample and operation != 'compress')):
                 raise WorkerRefusal('EXPORT_OPTIONS_INVALID')
             notices: list[str] = []
             changed_images = 0
-            if operation in ('compress', 'flatten'):
+            if operation in ('compress', 'flatten', 'pdfa'):
                 if signed and request.get('acknowledge_signature') is not True:
                     raise WorkerRefusal('SIGNATURE_ACKNOWLEDGEMENT_REQUIRED')
-                try:
-                    exported = export_pdf(pdf, source, operation, downsample=downsample)
-                except ExportRefusal as error:
-                    raise WorkerRefusal(str(error)) from None
-                data = exported.data
-                notices.extend(exported.notices)
-                changed_images = exported.changed_images
+                if operation == 'pdfa':
+                    from engine.export.pdfa import PdfaRefusal, export_pdfa
+                    from server.errors import PDFA_REASON_CODES
+                    try:
+                        archival = export_pdfa(pdf, source)
+                    except PdfaRefusal as error:
+                        code = next((code for code, reason in PDFA_REASON_CODES.items()
+                                     if reason == error.reason_id), 'PDFA_CONTENT_UNSUPPORTED')
+                        raise WorkerRefusal(code) from None
+                    data = archival.data
+                    notices.extend(archival.notices)
+                    if pdf.is_encrypted:
+                        notices.append('UNLOCKED_COPY')
+                else:
+                    try:
+                        exported = export_pdf(pdf, source, operation, downsample=downsample)
+                    except ExportRefusal as error:
+                        raise WorkerRefusal(str(error)) from None
+                    data = exported.data
+                    notices.extend(exported.notices)
+                    changed_images = exported.changed_images
                 if signed and data != source:
                     notices.append('SIGNATURES_INVALIDATED')
-                filename = 'compressed.pdf' if operation == 'compress' else 'flattened.pdf'
+                filename = {'compress': 'compressed.pdf', 'flatten': 'flattened.pdf',
+                            'pdfa': 'archival.pdf'}[operation]
                 media_type = 'application/pdf'
             else:
                 try:
@@ -282,6 +297,7 @@ def main() -> None:
         import engine.boxes  # noqa: F401
         import engine.export.pdf  # noqa: F401
         import engine.export.text  # noqa: F401
+        import engine.export.pdfa  # noqa: F401
         from PIL import Image
         Image.init()  # Trusted codec plugins load before irreversible filtering.
         from engine.playa_boundary import PDFSyntaxError

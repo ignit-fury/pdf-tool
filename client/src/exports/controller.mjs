@@ -9,14 +9,22 @@ export const NOTICE_TEXT={
   SIGNATURES_INVALIDATED:'Rewriting this copy invalidates its digital signatures.',
   ANNOTATIONS_FLATTENED:'Annotation appearances are now page content; supported fields are no longer interactive.',
   NO_EXTRACTABLE_TEXT:'No extractable text was found. Scanned pages need OCR, which is not included.',
+  PDFA_METADATA_ADDED:'Archival PDF/A-2b identification metadata was added.',
+  PDFA_OUTPUT_INTENT_ADDED:'An sRGB output profile was added for supported RGB and gray content.',
+  PDFA_RESOURCES_NORMALIZED:'Page resources were made explicit for archival output.',
   DESTINATIONS_REDIRECTED:'Destinations to removed pages were redirected to a retained page.',
   FORM_WIDGETS_REMOVED:'Form widgets on excluded pages were removed.',
 };
-const serverNotices=new Set(['NO_SIZE_REDUCTION','IMAGES_SKIPPED','UNLOCKED_COPY','SIGNATURES_INVALIDATED','ANNOTATIONS_FLATTENED','NO_EXTRACTABLE_TEXT']);
-const formats={compress:['application/pdf','compressed.pdf'],flatten:['application/pdf','flattened.pdf'],text:['text/plain','document.txt'],markdown:['text/markdown','document.md'],html:['text/html','document.html']};
+const serverNotices=new Set(['NO_SIZE_REDUCTION','IMAGES_SKIPPED','UNLOCKED_COPY','SIGNATURES_INVALIDATED','ANNOTATIONS_FLATTENED','NO_EXTRACTABLE_TEXT','PDFA_METADATA_ADDED','PDFA_OUTPUT_INTENT_ADDED','PDFA_RESOURCES_NORMALIZED']);
+const formats={compress:['application/pdf','compressed.pdf'],flatten:['application/pdf','flattened.pdf'],text:['text/plain','document.txt'],markdown:['text/markdown','document.md'],html:['text/html','document.html'],pdfa:['application/pdf','archival.pdf']};
 const abortError=()=>new DOMException('Export cancelled or document changed','AbortError');
 const fail=()=>{throw exportError('EXPORT_RESPONSE_INVALID');};
 export function explainExportError(error) {
+  if(error?.code==='PDFA_UNSUPPORTED') {
+    const reasons={'font-missing':'A required font is not embedded.','font-unsupported':'This document uses an unsupported font format.','font-invalid':'An embedded font cannot be used safely.','color-unsupported':'This document uses unsupported color features.','content-unsupported':'This document contains unsupported content.','structure-unsupported':'This document uses unsupported PDF structures.','metadata-unsupported':'This document contains unsupported metadata.','pdf-version':'This PDF version is not supported for archival conversion.','limit':'This document exceeds the archival conversion limits.'};
+    const reason=Object.hasOwn(reasons,error.detail?.reason_id)?reasons[error.detail.reason_id]:reasons['content-unsupported'];
+    return `This PDF cannot be converted safely to PDF/A-2b. ${reason} Download the current PDF or try another document.`;
+  }
   const messages={EXPORT_OPTIONS_INVALID:'Check the page ranges, format and DPI before trying again.',EXPORT_LIMIT:'This export exceeds the browser or output limit. Choose fewer pages, lower DPI or a smaller PDF.',TRANSIENT_LIMIT:'This export exceeds the browser memory limit. Download the current PDF and reopen it to release Undo memory.',LOCAL_PDF_TOO_LARGE:'Local exports support PDFs up to 50 MiB.',FLATTEN_APPEARANCE_REQUIRED:'Some annotations lack usable appearances. This PDF cannot be flattened safely.',EXPORT_UNSUPPORTED:'This document uses content that cannot be exported safely in this format.',EXPORT_RESPONSE_INVALID:'The export response was invalid. No download was prepared.',SIGNATURE_ACK_REQUIRED:'Acknowledge the signature warning before rewriting a signed PDF.',SIGNATURE_UNKNOWN:'Document signatures could not be checked safely.',CATALOG_UNSAFE:'This PDF contains page links or forms that cannot be split safely.',PASSWORD_REQUIRED:'A password is required to export this PDF.',PASSWORD_INVALID:'The document password was not accepted.',PDF_JOB_TIMEOUT:'The export took too long. Try fewer pages or a smaller document.',WORKER_TIMEOUT:'The export took too long. Try a smaller document.',WORKER_BUSY:'The server is busy. Try the export again shortly.'};
   const aliases={PASSWORD_INCORRECT:'PASSWORD_INVALID',SIGNATURE_ACKNOWLEDGEMENT_REQUIRED:'SIGNATURE_ACK_REQUIRED'};
   return messages[aliases[error?.code]||error?.code]||'This export could not be completed. Your current document and Undo history are unchanged.';
@@ -26,6 +34,7 @@ export function validateServerExport(data,format,beforeBytes,{retainedBytes=0}={
   if(!spec||!data||typeof data!=='object'||Array.isArray(data)||Object.keys(data).sort().join(',')!=='after_bytes,before_bytes,changed_images,data,filename,location,media_type,notices')fail();
   if(data.location!=='server'||data.media_type!==spec[0]||data.filename!==spec[1]||data.before_bytes!==beforeBytes||!Number.isSafeInteger(data.after_bytes)||data.after_bytes<0||data.after_bytes>MAX_EXPORT_BYTES||!Number.isSafeInteger(data.changed_images)||data.changed_images<0||!Array.isArray(data.notices)||data.notices.length>20||data.notices.some(n=>!serverNotices.has(n)))fail();
   const size=data.after_bytes;
+  if(format==='pdfa'&&data.changed_images!==0)fail();
   if(typeof data.data!=='string'||data.data.length!==4*Math.ceil(size/3)||/[^A-Za-z0-9+/=]/.test(data.data))fail();
   const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
   if(size%3===1&&(!data.data.endsWith('==')||(alphabet.indexOf(data.data.at(-3))&15)!==0)||size%3===2&&(!data.data.endsWith('=')||(alphabet.indexOf(data.data.at(-2))&3)!==0)||size%3===0&&data.data.includes('='))fail();

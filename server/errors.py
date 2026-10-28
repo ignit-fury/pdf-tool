@@ -5,7 +5,16 @@ from collections.abc import Callable
 
 ErrorReporter = Callable[[dict[str, str]], None]
 _reporter: ErrorReporter | None = None
+PDFA_REASON_CODES = {
+    'PDFA_FONT_MISSING': 'font-missing', 'PDFA_FONT_UNSUPPORTED': 'font-unsupported',
+    'PDFA_FONT_INVALID': 'font-invalid', 'PDFA_COLOR_UNSUPPORTED': 'color-unsupported',
+    'PDFA_CONTENT_UNSUPPORTED': 'content-unsupported',
+    'PDFA_STRUCTURE_UNSUPPORTED': 'structure-unsupported',
+    'PDFA_METADATA_UNSUPPORTED': 'metadata-unsupported',
+    'PDFA_VERSION_UNSUPPORTED': 'pdf-version', 'PDFA_LIMIT': 'limit',
+}
 ERROR_CODES = frozenset({
+    *PDFA_REASON_CODES,
     "INVALID_ACTION", "INVALID_INPUT", "SOURCE_TOO_LARGE", "RECIPE_TOO_LARGE",
     "SCRATCH_UNSAFE", "WORKER_TIMEOUT", "WORKER_OUTPUT_LIMIT", "WORKER_FAILED",
     "PDF_INVALID", "PASSWORD_REQUIRED", "PASSWORD_INCORRECT", "PAGE_OUT_OF_RANGE",

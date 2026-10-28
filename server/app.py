@@ -222,6 +222,10 @@ def create_app(*, max_upload_bytes: int = MAX_UPLOAD_BYTES,
         result = await asyncio.shield(worker)
         error = result.get('error')
         if error:
+            from server.errors import PDFA_REASON_CODES
+            if error in PDFA_REASON_CODES:
+                raise HTTPException(422, {'code': 'PDFA_UNSUPPORTED',
+                                          'reason_id': PDFA_REASON_CODES[error]})
             status = {'PASSWORD_REQUIRED': 422, 'PASSWORD_INCORRECT': 422,
                       'SIGNATURE_ACKNOWLEDGEMENT_REQUIRED': 409,
                       'PAGE_OUT_OF_RANGE': 400, 'INVALID_RECIPE': 400,
@@ -253,7 +257,7 @@ def create_app(*, max_upload_bytes: int = MAX_UPLOAD_BYTES,
                              downsample: str = Query(default='false'),
                              acknowledge_signature: str = Query(default='false')) -> dict[str, Any]:
         allowed = {'operation', 'downsample', 'acknowledge_signature'}
-        if (operation not in ('compress', 'flatten', 'text', 'markdown', 'html')
+        if (operation not in ('compress', 'flatten', 'text', 'markdown', 'html', 'pdfa')
                 or downsample not in ('true', 'false') or acknowledge_signature not in ('true', 'false')
                 or (downsample == 'true' and operation != 'compress')
                 or any(key not in allowed or len(request.query_params.getlist(key)) != 1

@@ -6,6 +6,22 @@ test('actual server password and signature codes have specific guidance',()=>{
   assert.match(explainExportError({code:'PASSWORD_INCORRECT'}),/password was not accepted/);
   assert.match(explainExportError({code:'SIGNATURE_ACKNOWLEDGEMENT_REQUIRED'}),/Acknowledge the signature/);
 });
+test('PDF/A posts current bytes and validates its exact artifact and notices',async()=>{
+  let sent;
+  const f=fixture({request:async(path,options)=>{sent={path,...options};return response({filename:'archival.pdf',notices:['PDFA_METADATA_ADDED','PDFA_OUTPUT_INTENT_ADDED']});}});
+  const result=await f.controller.prepare({format:'pdfa'});
+  assert.match(sent.path,/operation=pdfa/);assert.strictEqual(sent.body,f.bytes);
+  assert.equal(result.files[0].filename,'archival.pdf');
+  assert.strictEqual(f.current.bytes,f.bytes);assert.deepEqual(f.session.history,['untouched']);
+  assert.throws(()=>validateServerExport(response({filename:'compressed.pdf'}),'pdfa',3),{code:'EXPORT_RESPONSE_INVALID'});
+  assert.throws(()=>validateServerExport(response({filename:'archival.pdf',notices:['source text']}),'pdfa',3),{code:'EXPORT_RESPONSE_INVALID'});
+  assert.throws(()=>validateServerExport(response({filename:'archival.pdf',changed_images:1}),'pdfa',3),{code:'EXPORT_RESPONSE_INVALID'});
+});
+test('PDF/A reasons use bounded safe copy and unknown reasons cannot be echoed',()=>{
+  assert.match(explainExportError({code:'PDFA_UNSUPPORTED',detail:{reason_id:'font-missing'}}),/required font is not embedded/);
+  const text=explainExportError({code:'PDFA_UNSUPPORTED',detail:{reason_id:'<source text>'}});
+  assert.match(text,/unsupported content/);assert.ok(!text.includes('<source text>'));
+});
 function fixture(overrides={}) {
   const bytes=new Uint8Array([1,2,3]),session={password:'π',history:['untouched']},current={session,bytes,version:1,retainedBytes:3},calls=[],revoked=[],states=[];
   const controller=createExportController({getCurrent:()=>current,request:async(path,options)=>{calls.push({path,...options});return response();},createUrl:()=>`blob:${calls.length}:${Math.random()}`,revokeUrl:url=>revoked.push(url),onState:s=>states.push(s),...overrides});

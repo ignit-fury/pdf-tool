@@ -14,6 +14,73 @@ from tools.build_security_fixtures import password_pdf, signed_pdf, text_pdf
 HEADERS = {'content-type': 'application/pdf'}
 
 
+def test_pdfa_real_worker_returns_current_archival_copy_without_cache(tmp_path):
+    from harness.pdfa_fixture import build_fixtures
+    source = build_fixtures(tmp_path)['text-sans'].read_bytes()
+    app = create_app()
+    with TestClient(app) as client:
+        response = client.post('/exports?operation=pdfa', content=source, headers=HEADERS)
+        assert response.status_code == 200, response.json()
+        result = response.json()
+        output = base64.b64decode(result['data'], validate=True)
+        assert result['filename'] == 'archival.pdf'
+        assert result['media_type'] == 'application/pdf' and result['changed_images'] == 0
+        assert result['location'] == 'server' and result['before_bytes'] == len(source)
+        assert result['after_bytes'] == len(output) and app.state.sources.total_bytes == 0
+        assert response.headers['cache-control'] == 'no-store, private'
+        with pikepdf.open(io.BytesIO(output)) as pdf:
+            with pdf.open_metadata(set_pikepdf_as_editor=False) as metadata:
+                assert str(metadata['pdfaid:part']) == '2'
+                assert metadata['pdfaid:conformance'] == 'B'
+
+
+def test_pdfa_real_child_preserves_safe_font_refusal():
+    with TestClient(create_app()) as client:
+        response = client.post('/exports?operation=pdfa', content=text_pdf(), headers=HEADERS)
+        assert response.status_code == 422
+        assert response.json() == {'detail': {'code': 'PDFA_UNSUPPORTED', 'reason_id': 'font-missing'}}
+
+
+@pytest.mark.parametrize('suffix,reason', [
+    ('FONT_MISSING', 'font-missing'), ('FONT_UNSUPPORTED', 'font-unsupported'),
+    ('FONT_INVALID', 'font-invalid'), ('COLOR_UNSUPPORTED', 'color-unsupported'),
+    ('CONTENT_UNSUPPORTED', 'content-unsupported'), ('STRUCTURE_UNSUPPORTED', 'structure-unsupported'),
+    ('METADATA_UNSUPPORTED', 'metadata-unsupported'), ('VERSION_UNSUPPORTED', 'pdf-version'),
+    ('LIMIT', 'limit'),
+])
+def test_pdfa_fixed_refusal_transport_drops_untrusted_worker_fields(monkeypatch, suffix, reason):
+    from server import isolation
+    monkeypatch.setattr(isolation, 'run_worker', lambda *a, **kw: {
+        'error': 'PDFA_' + suffix, 'reason_id': '<source text>', 'exception': 'private data'})
+    with TestClient(create_app()) as client:
+        response = client.post('/exports?operation=pdfa', content=text_pdf(), headers=HEADERS)
+        assert response.status_code == 422
+        assert response.json() == {'detail': {'code': 'PDFA_UNSUPPORTED', 'reason_id': reason}}
+
+
+def test_pdfa_signature_ack_and_invalid_downsample():
+    with TestClient(create_app()) as client:
+        response = client.post('/exports?operation=pdfa', content=signed_pdf(), headers=HEADERS)
+        assert response.status_code == 409
+        assert response.json()['detail']['code'] == 'SIGNATURE_ACKNOWLEDGEMENT_REQUIRED'
+        invalid = client.post('/exports?operation=pdfa&downsample=true', content=text_pdf(), headers=HEADERS)
+        assert invalid.status_code == 400
+
+
+def test_pdfa_uses_existing_unicode_password_transport_before_safe_refusal():
+    source = password_pdf('密碼')
+    with TestClient(create_app()) as client:
+        for password, expected in [(None, 'PASSWORD_REQUIRED'), ('wrong', 'PASSWORD_INCORRECT'),
+                                   ('密碼', 'PDFA_UNSUPPORTED')]:
+            headers = dict(HEADERS)
+            if password is not None:
+                headers['X-PDF-Password-B64'] = base64.b64encode(password.encode()).decode()
+            response = client.post('/exports?operation=pdfa', content=source, headers=headers)
+            assert response.status_code == 422
+            assert response.json()['detail']['code'] == expected
+            assert '密碼' not in response.text and 'wrong' not in response.text
+
+
 @pytest.mark.parametrize('operation,filename,mime', [
     ('compress', 'compressed.pdf', 'application/pdf'),
     ('flatten', 'flattened.pdf', 'application/pdf'),

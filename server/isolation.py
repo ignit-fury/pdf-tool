@@ -117,7 +117,7 @@ def run_worker(action: str, source: bytes, *, password: str = "", page: int = 0,
     code: str | None = None
     if action not in ACTIONS:
         code = "INVALID_ACTION"
-    elif action == 'export' and (export_operation not in ('compress', 'flatten', 'text', 'markdown', 'html')
+    elif action == 'export' and (export_operation not in ('compress', 'flatten', 'text', 'markdown', 'html', 'pdfa')
             or not isinstance(downsample, bool) or (downsample and export_operation != 'compress')):
         code = 'EXPORT_OPTIONS_INVALID'
     elif len(source) > MAX_SOURCE_BYTES:
