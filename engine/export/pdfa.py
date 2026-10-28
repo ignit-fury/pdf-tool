@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Buffer
 from dataclasses import dataclass
+from decimal import Decimal
 import hashlib
 import io
 import math
@@ -97,6 +98,37 @@ class _Audit:
         if time.process_time() - self.started > MAX_CPU_SECONDS:
             raise PdfaRefusal('limit')
 
+    @staticmethod
+    def primitive(value: Any) -> None:
+        # ISO 19005-2 6.1.13 applies to dictionaries AND content operands.
+        if isinstance(value, pikepdf.Name):
+            if len(bytes(value)) - 1 > 127:
+                raise PdfaRefusal('limit')
+        elif isinstance(value, pikepdf.String):
+            if len(bytes(value)) > 32767:
+                raise PdfaRefusal('limit')
+        elif type(value) is int:
+            if not -2147483648 <= value <= 2147483647:
+                raise PdfaRefusal('limit')
+        elif isinstance(value, (float, Decimal)):
+            number = Decimal(str(value))
+            if (not number.is_finite() or abs(number) > Decimal('3.403e38')
+                    or (number != 0 and abs(number) < Decimal('1.175e-38'))):
+                raise PdfaRefusal('limit')
+
+    def operands(self, values: Any) -> None:
+        pending = [(value, 0) for value in values]
+        work = 0
+        while pending:
+            value, depth = pending.pop()
+            work += 1
+            if work + len(pending) > MAX_OBJECTS or depth > 64:
+                raise PdfaRefusal('limit')
+            self.tick()
+            self.primitive(value)
+            if isinstance(value, pikepdf.Array):
+                pending.extend((item, depth + 1) for item in value)
+
     def stream(self, obj: Any) -> bytes:
         self.tick()
         if not isinstance(obj, pikepdf.Stream):
@@ -142,6 +174,7 @@ class _Audit:
             if work + len(pending) > MAX_OBJECTS or depth > 64:
                 raise PdfaRefusal('limit')
             self.tick()
+            self.primitive(obj)
             if not isinstance(obj, (pikepdf.Dictionary, pikepdf.Array, pikepdf.Stream)):
                 continue
             if obj.objgen != (0, 0):
@@ -161,6 +194,8 @@ class _Audit:
                 raise PdfaRefusal('color-unsupported')
             if isinstance(obj, pikepdf.Stream):
                 self.stream(obj)
+            for key in obj.keys():
+                self.primitive(pikepdf.Name(key))
             pending.extend((value, depth + 1) for key, value in obj.items()
                            if key not in ('/Parent', '/P', '/Pg'))
 
@@ -219,6 +254,10 @@ class _Audit:
             raise PdfaRefusal(reason)
         _keys(descriptor.FontFile2, 'Length Length1 Filter DecodeParms', reason)
         program = self.stream(descriptor.FontFile2)
+        length1 = descriptor.FontFile2.get('/Length1')
+        if ((length1 is None and not composite)
+                or (length1 is not None and _integer(length1, reason) != len(program))):
+            raise PdfaRefusal(reason)
         try:
             tt = TTFont(io.BytesIO(program), lazy=False, recalcTimestamp=False)
             if (tt.sfntVersion not in ('\x00\x01\x00\x00', 'true')
@@ -370,6 +409,8 @@ class _Audit:
 
     def content(self, page: Any, fonts: dict[str, Any], resources: Any) -> None:
         contents = page.obj.get('/Contents')
+        if contents is None:
+            return  # A page without a content stream is a valid blank page.
         streams = list(contents) if isinstance(contents, pikepdf.Array) else [contents]
         for stream in streams:
             _keys(stream, 'Length Filter DecodeParms')
@@ -408,6 +449,7 @@ class _Audit:
             if isinstance(instruction, pikepdf.ContentStreamInlineImage):
                 raise PdfaRefusal('content-unsupported')
             operands = instruction.operands
+            self.operands(operands)
             op = str(instruction.operator)
             if op in {'Tf', 'Tc', 'Tw', 'Tz', 'TL', 'Tr', 'Ts', 'Td', 'TD', 'Tm', 'T*'} and not in_text:
                 raise PdfaRefusal('content-unsupported')
@@ -428,8 +470,10 @@ class _Audit:
                         raise PdfaRefusal('content-unsupported')
                     in_text = False
                 elif op == 'q':
-                    if in_text or len(stack) >= 64:
+                    if in_text:
                         raise PdfaRefusal('content-unsupported')
+                    if len(stack) >= 28:
+                        raise PdfaRefusal('limit')
                     stack.append(selected)
                 elif op == 'Q':
                     if in_text or not stack:
@@ -489,7 +533,8 @@ def _geometry(pdf: pikepdf.Pdf) -> list[tuple[Any, ...]]:
             if not isinstance(value, pikepdf.Array) or len(value) != 4:
                 raise PdfaRefusal('structure-unsupported')
             coords = tuple(_number(number, 'structure-unsupported') for number in value)
-            if coords[0] >= coords[2] or coords[1] >= coords[3]:
+            if not (3 <= coords[2] - coords[0] <= 14400
+                    and 3 <= coords[3] - coords[1] <= 14400):
                 raise PdfaRefusal('structure-unsupported')
             record.append(coords)
         rotate = _integer(page.obj.get('/Rotate', 0), 'structure-unsupported')

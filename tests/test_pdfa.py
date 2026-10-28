@@ -101,3 +101,75 @@ def test_limits(fixtures, monkeypatch):
     with pikepdf.open(fixtures['text-sans']) as pdf:
         with pytest.raises(module.PdfaRefusal, match='limit'):
             module.export_pdfa(pdf, fixtures['text-sans'].read_bytes())
+
+
+@pytest.mark.parametrize('length', ['valid', 'missing', 'wrong'])
+def test_simple_embedded_truetype(fixtures, tmp_path, length):
+    from engine.export.pdfa import PdfaRefusal, export_pdfa
+    from fontTools.ttLib import TTFont
+    with pikepdf.open(fixtures['text-sans']) as pdf:
+        composite = pdf.pages[0].Resources.Font.F1
+        descendant = composite.DescendantFonts[0]
+        program = TTFont(io.BytesIO(descendant.FontDescriptor.FontFile2.read_bytes()))
+        glyph = program.getBestCmap()[ord('A')]
+        width = round(program['hmtx'].metrics[glyph][0] * 1000 / program['head'].unitsPerEm)
+        pdf.pages[0].Resources.Font.F1 = pdf.make_indirect(pikepdf.Dictionary(
+            Type=pikepdf.Name.Font, Subtype=pikepdf.Name.TrueType,
+            BaseFont=composite.BaseFont, FontDescriptor=descendant.FontDescriptor,
+            Encoding=pikepdf.Name.WinAnsiEncoding, FirstChar=65, LastChar=65, Widths=[width]))
+        pdf.pages[0].Contents.write(b'BT /F1 14 Tf 24 140 Td (A) Tj ET')
+        if length != 'missing':
+            descendant.FontDescriptor.FontFile2.Length1 = len(
+                descendant.FontDescriptor.FontFile2.read_bytes()) + (length == 'wrong')
+        source = io.BytesIO()
+        pdf.save(source)
+        if length != 'valid':
+            with pytest.raises(PdfaRefusal, match='font-invalid'):
+                export_pdfa(pdf, source.getvalue())
+            return
+        result = export_pdfa(pdf, source.getvalue())
+    with pikepdf.open(io.BytesIO(result.data)) as output:
+        assert output.pages[0].Resources.Font.F1.Subtype == pikepdf.Name.TrueType
+
+
+@pytest.mark.parametrize('mutation', ['q-depth', 'resource-name', 'info-string',
+    'text-string', 'integer', 'tiny-real', 'small-box', 'large-box'])
+def test_pdfa_implementation_limits_refuse_before_emitting(fixtures, mutation):
+    from decimal import Decimal
+    from engine.export.pdfa import PdfaRefusal, export_pdfa
+    source = fixtures['text-sans'].read_bytes()
+    with pikepdf.open(io.BytesIO(source)) as pdf:
+        page = pdf.pages[0]
+        if mutation == 'q-depth':
+            page.Contents.write(b'q\n' * 29 + b'Q\n' * 29)
+        elif mutation == 'resource-name':
+            name = '/' + 'x' * 128
+            page.Resources.Font[name] = page.Resources.Font.F1
+            del page.Resources.Font.F1
+            page.Contents.write(b'BT ' + name.encode() + b' 14 Tf ET')
+        elif mutation == 'info-string':
+            pdf.docinfo.Title = pikepdf.String('x' * 32768)
+        elif mutation == 'text-string':
+            page.Contents.write(b'BT /F1 14 Tf <' + b'0001' * 16384 + b'> Tj ET')
+        elif mutation == 'integer':
+            pdf.docinfo.Creator = 2147483648
+        elif mutation == 'tiny-real':
+            page.Contents.write(b'0.' + b'0' * 39 + b'1 0 1 1 re f')
+        elif mutation == 'small-box':
+            page.obj.MediaBox = [0, 0, 2, 180]
+        else:
+            page.obj.MediaBox = [0, 0, 14401, 180]
+        with pytest.raises(PdfaRefusal):
+            export_pdfa(pdf, source)
+
+
+def test_inserted_blank_page_without_contents_is_supported(fixtures):
+    from engine.export.pdfa import export_pdfa
+    with pikepdf.open(fixtures['text-sans']) as pdf:
+        blank = pdf.add_blank_page(page_size=(240, 180))
+        del blank.obj.Contents
+        source = io.BytesIO()
+        pdf.save(source)
+        result = export_pdfa(pdf, source.getvalue())
+    with pikepdf.open(io.BytesIO(result.data)) as result:
+        assert len(result.pages) == 2 and '/Contents' not in result.pages[1].obj
