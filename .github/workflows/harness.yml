@@ -19,3 +19,50 @@ jobs:
         run: >
           docker run --rm pdf-tool-harness:ci
           uv run python harness/run_corpus_harness.py corpus/manifest.json corpus/public
+
+  pdfa-g7a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Authenticate and install the pinned veraPDF CLI
+        run: python3 tools/install_verapdf.py --destination "$RUNNER_TEMP/verapdf"
+
+      - name: Build the existing pinned CI image
+        run: docker build -f Dockerfile.ci -t pdf-tool-harness:g7a .
+
+      # Plan 08-02 supplies this full conversion gate. A missing gate must fail,
+      # rather than treating the pre-conversion baseline as a passing sweep.
+      - name: G7a full corpus sweep with authenticated Java CLI
+        run: |
+          mkdir -p "$RUNNER_TEMP/g7a-evidence"
+          cp "$RUNNER_TEMP/verapdf/provenance.json" "$RUNNER_TEMP/g7a-evidence/validator-provenance.json"
+          docker run --rm \
+            --mount "type=bind,source=$(readlink -f "$JAVA_HOME"),target=/opt/g7-java,readonly" \
+            --mount "type=bind,source=$RUNNER_TEMP/verapdf,target=/opt/g7-verapdf,readonly" \
+            --mount "type=bind,source=$RUNNER_TEMP/g7a-evidence,target=/g7a-evidence" \
+            -e JAVA_HOME=/opt/g7-java \
+            -e VERAPDF_CMD=/opt/g7-verapdf/verapdf \
+            -e G7A_EVIDENCE_DIR=/g7a-evidence \
+            pdf-tool-harness:g7a sh -eu -c '
+              /opt/g7-java/bin/java -version
+              "$VERAPDF_CMD" --version
+              for tool in pdftoppm mutool qpdf pdfcpu ots-sanitize; do command -v "$tool"; done
+              uv run --frozen python -c "import pypdfium2"
+              uv run --frozen pytest -q -m corpus tests/test_gate_g7a.py
+            '
+
+      - name: Preserve G7a evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdfa-g7a-evidence
+          path: ${{ runner.temp }}/g7a-evidence
+          if-no-files-found: warn
