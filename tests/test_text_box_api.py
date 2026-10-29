@@ -21,6 +21,39 @@ from tools.build_security_fixtures import decompression_bomb, password_pdf, sign
 PDF_HEADERS = {'content-type': 'application/pdf'}
 JSON_HEADERS = {'content-type': 'application/json'}
 
+def test_replace_source_grows_atomically_and_uses_original_source_ids(tmp_path):
+    from tests.test_source_text_box import source_pdf, request
+    source,ids=source_pdf(tmp_path/'original.pdf')
+    cache=SourceCache();job=cache.put(source)
+    with TestClient(create_app(cache=cache)) as client:
+        response=client.post(f'/jobs/{job}/text-box',json=request(ids))
+    assert response.status_code==200,response.json()
+    result=response.json();assert result['ok'] is True and result['boxes'][0]['rect']['height']>12
+    import hashlib
+    assert result['source_hash']==hashlib.sha256(source).hexdigest()
+
+
+@pytest.mark.parametrize('protected',['signed','encrypted'])
+def test_source_expansion_preserves_protection_acknowledgement_and_unicode_password(tmp_path,protected):
+    from tests.test_source_text_box import source_pdf, request
+    from engine.classify_run import classify_document
+    original=tmp_path/'original.pdf';source_pdf(original)
+    target=tmp_path/'protected.pdf'
+    with pikepdf.open(original) as pdf:
+        if protected=='signed':pdf.Root.AcroForm=pikepdf.Dictionary(SigFlags=1,Fields=[])
+        pdf.save(target,**({'encryption':pikepdf.Encryption(user='密碼',owner='owner',R=6)} if protected=='encrypted' else {}))
+    password='密碼' if protected=='encrypted' else ''
+    ids={r.display_text:r.run_id for r,_ in classify_document(target,password=password).runs}
+    cache=SourceCache();job=cache.put(target.read_bytes());path=f'/jobs/{job}/text-box'
+    headers={'X-PDF-Password-B64':base64.b64encode(password.encode()).decode()} if password else {}
+    with TestClient(create_app(cache=cache)) as client:
+        refused=client.post(path,json=request(ids))
+        assert refused.status_code==(422 if password else 409)
+        response=client.post(path+'?acknowledge_signature=true',json=request(ids),headers=headers)
+    assert response.status_code==200,response.json()
+    assert response.json()['notices']==(['UNLOCKED_COPY'] if password else ['SIGNATURES_INVALIDATED'])
+
+
 
 def upsert(**changes):
     return {'operation': 'upsert', 'page_index': 0, 'text': 'Native box',

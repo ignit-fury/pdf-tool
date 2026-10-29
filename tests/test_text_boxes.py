@@ -82,6 +82,18 @@ def test_wrapping_long_tokens_explicit_newlines_spaces_and_overflow():
     assert 'pdf' not in result
 
 
+def test_opt_in_auto_growth_fits_complete_text_and_keeps_collision_checks():
+    request=draft(text='First line\nSecond line\nThird line',rect={'left':20,'top':20,'width':160,'height':10},auto_expand=True)
+    result=perform(source_pdf(),request)
+    assert result['ok'] is True
+    assert result['boxes'][0]['rect']['height']>=result['layout']['required_height']>10
+    assert 'Third line' in image_and_text(output(result))[1]
+    blocked=source_pdf(b'0 0 1 rg 20 200 160 55 re f')
+    with pytest.raises(TextBoxError,match='TEXT_BOX_OVERLAP'):perform(blocked,request)
+    overflow=perform(source_pdf(),{**request,'rect':{'left':20,'top':285,'width':160,'height':10}})
+    assert overflow['ok'] is False and overflow['code']=='TEXT_BOX_OVERFLOW' and 'pdf' not in overflow
+
+
 def test_overlap_actual_pixels_annotations_and_transparent_optin():
     original = source_pdf(b'1 0 0 rg 0 200 300 100 re f')
     with pytest.raises(TextBoxError, match='TEXT_BOX_OVERLAP'):

@@ -173,7 +173,7 @@ def _text_box_payload(encoded: object) -> dict[str, object]:
                                      parse_float=finite, parse_constant=finite)
     except (ValueError, UnicodeError, RecursionError):
         raise WorkerRefusal('INVALID_TEXT_BOX') from None
-    if not isinstance(payload, dict) or payload.get('operation') not in ('list', 'upsert', 'remove'):
+    if not isinstance(payload, dict) or payload.get('operation') not in ('list', 'upsert', 'remove', 'replace-source'):
         raise WorkerRefusal('INVALID_TEXT_BOX')
     return payload
 
@@ -299,7 +299,12 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
             from server.errors import TEXT_BOX_ERROR_CODES
             encrypted = pdf.is_encrypted
             try:
-                result = prepare_text_box(pdf, source, payload)
+                if payload['operation']=='replace-source':
+                    from engine.source_text_box import prepare_source_text_box
+                    result=prepare_source_text_box(path,source,payload,Path(scratch)/'source-without-run.pdf',
+                                                   password=secret.get_secret_value())
+                else:
+                    result = prepare_text_box(pdf, source, payload)
             except TextBoxError as error:
                 code = error.code
                 raise WorkerRefusal(code if isinstance(code, str) and code in TEXT_BOX_ERROR_CODES
@@ -445,6 +450,7 @@ def main() -> None:
         import engine.recipe  # noqa: F401
         import engine.boxes  # noqa: F401
         import engine.text_boxes  # noqa: F401
+        import engine.source_text_box  # noqa: F401
         import pypdfium2  # type: ignore[import-untyped]  # noqa: F401
         import engine.export.pdf  # noqa: F401
         import engine.export.text  # noqa: F401

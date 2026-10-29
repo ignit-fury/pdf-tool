@@ -30,7 +30,7 @@ from engine.fonts import (
 
 ERROR_CODES = frozenset({'INVALID_TEXT_BOX', 'TEXT_BOX_UNSUPPORTED_TEXT',
     'TEXT_BOX_UNSAFE', 'TEXT_BOX_NOT_FOUND', 'TEXT_BOX_OVERLAP',
-    'TEXT_BOX_LIMIT', 'TEXT_BOX_OUTPUT_LIMIT'})
+    'TEXT_BOX_LIMIT', 'TEXT_BOX_OUTPUT_LIMIT', 'TEXT_BOX_SOURCE_UNSAFE'})
 MAX_DECODED = 1024 * 1024
 MAX_METADATA = 128 * 1024
 MAX_OUTPUT = 48 * 1024 * 1024
@@ -569,10 +569,10 @@ def _isolate(pdf: pikepdf.Pdf, page: pikepdf.Page) -> None:
 
 def prepare_text_box(pdf: pikepdf.Pdf, source: bytes, payload: object) -> dict[str,object]:
     """Return a source-bound list, exact candidate PDF, or finite layout refusal."""
-    request=_dict(payload,{'operation','page_index','id','text','rect','style','allow_overlap'})
+    request=_dict(payload,{'operation','page_index','id','text','rect','style','allow_overlap','auto_expand'})
     operation=cast(str,request.get('operation'))
     if operation not in ('list','upsert','remove'):_fail()
-    keys={'list':{'operation'},'remove':{'operation','id'},'upsert':{'operation','page_index','id','text','rect','style','allow_overlap'}}[operation]
+    keys={'list':{'operation'},'remove':{'operation','id'},'upsert':{'operation','page_index','id','text','rect','style','allow_overlap','auto_expand'}}[operation]
     if set(request)-keys:_fail()
     if len(source)>50*1024*1024 or len(pdf.pages)>2000:_fail('TEXT_BOX_LIMIT')
     source_hash=hashlib.sha256(source).hexdigest()
@@ -595,6 +595,7 @@ def prepare_text_box(pdf: pikepdf.Pdf, source: bytes, payload: object) -> dict[s
     layout: dict[str,object] | None=None
     if operation=='upsert':
         if type(request.get('allow_overlap',False)) is not bool:_fail()
+        if type(request.get('auto_expand',False)) is not bool:_fail()
         if selected is None and len(boxes)>=200:_fail('TEXT_BOX_LIMIT')
         spec=_spec(request,len(pdf.pages))
         page=pdf.pages[spec['page_index']]
@@ -602,6 +603,13 @@ def prepare_text_box(pdf: pikepdf.Pdf, source: bytes, payload: object) -> dict[s
         _in_page(spec,geometry)
         drawing=_drawing(pdf,spec,geometry)
         layout=drawing.layout
+        required=cast(float,layout['required_height'])
+        if required>spec['rect']['height']+1e-6 and request.get('auto_expand',False):
+            grown=math.ceil(required*100)/100
+            if spec['rect']['top']+grown<=geometry.height+1e-6:
+                spec['rect']['height']=grown
+                drawing=_drawing(pdf,spec,geometry)
+                layout=drawing.layout
         if cast(float,layout['required_height'])>spec['rect']['height']+1e-6:
             return dict(ok=False,source_hash=source_hash,code='TEXT_BOX_OVERFLOW',required_height=layout['required_height'],available_height=layout['available_height'])
         if not request.get('allow_overlap',False):_collision(pdf,spec,geometry)
