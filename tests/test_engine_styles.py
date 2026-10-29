@@ -42,7 +42,7 @@ def test_size_change_named_refusal_and_no_output(tmp_path: Path) -> None:
     run, _ = classify_document(path).runs[0]
     recipe = (RecipeOp(run.run_id, run.display_text, style={"font_size": 18}),)
     report = apply_recipe(path, recipe, tmp_path / "out.pdf")
-    assert report.resolved[0].reason == "font_size_change_unsupported"
+    assert report.resolved[0].reason == "font_size_growth_unsupported"
     assert not (tmp_path / "out.pdf").exists()
 
 

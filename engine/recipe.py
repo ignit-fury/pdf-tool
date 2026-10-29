@@ -95,10 +95,11 @@ class RecipeStyle(TypedDict, total=False):
     bold: bool
     italic: bool
     font_size: float
+    character_spacing: float
 
 
 def _validated_style(value: object) -> RecipeStyle:
-    if not isinstance(value, dict) or set(value) - {"color", "bold", "italic", "font_size", "font_family"}:
+    if not isinstance(value, dict) or set(value) - {"color", "bold", "italic", "font_size", "font_family", "character_spacing"}:
         raise ValueError("invalid recipe style object")
     if "font_family" in value and (not isinstance(value["font_family"], str) or value["font_family"] not in ("Sans", "Serif", "Mono")):
         raise ValueError("style font_family must be Sans, Serif or Mono")
@@ -114,8 +115,12 @@ def _validated_style(value: object) -> RecipeStyle:
             raise ValueError("style color must be three finite RGB components in 0..1")
     if "font_size" in value:
         size = value["font_size"]
-        if type(size) not in (int, float) or not math.isfinite(size) or size <= 0:
-            raise ValueError("style font_size must be finite and positive")
+        if type(size) not in (int, float) or not math.isfinite(size) or not 1 <= size <= 512:
+            raise ValueError("style font_size must be finite and in 1..512 points")
+    if "character_spacing" in value:
+        spacing = value["character_spacing"]
+        if type(spacing) not in (int, float) or not math.isfinite(spacing) or not 0 <= spacing <= 10:
+            raise ValueError("style character_spacing must be finite and in 0..10 points")
     return cast(RecipeStyle, value.copy())
 
 
@@ -306,6 +311,99 @@ def source_font_info(
             lookup_bundled_font(_base_font_name(font)).family)
 
 
+def source_formatting_metadata(
+    pdf: pikepdf.Pdf, raw: bytes, runs: list[RunRecord], *, page_start: bool = False,
+) -> dict[str, dict[str, object]]:
+    """Report only parsed, known text state, once per owning stream.
+
+    The ordinal bridge is identical to rewrite's: every nonempty showing operator
+    must have glyph provenance. If it cannot be proved, omit optional metadata.
+    Parsing PDF objects (rather than regexes) keeps literal text from changing the
+    reported style. Unknown inherited state, patterns and CMYK are omitted.
+    """
+    from engine.rewrite import _instruction_has_text
+
+    try:
+        instructions = list(pikepdf.parse_content_stream(pdf.make_stream(raw)))
+        offsets = sorted({g.operator_byte_offset for run in runs for g in run.glyphs})
+        if sum(_instruction_has_text(i) for i in instructions) != len(offsets):
+            return {}
+        size: float | None = None
+        spacing: float | None = 0.0 if page_start else None
+        fill: list[float] | None = [0.0, 0.0, 0.0] if page_start else None
+        stroke: list[float] | None = [0.0, 0.0, 0.0] if page_start else None
+        mode: int | None = 0 if page_start else None
+        stack = []
+        by_offset: dict[int, dict[str, object]] = {}
+        ordinal = 0
+        for instruction in instructions:
+            operator, operands = str(instruction.operator), instruction.operands
+            if operator == 'q':
+                stack.append((size, spacing, fill, stroke, mode))
+            elif operator == 'Q':
+                if not stack:
+                    return {}
+                size, spacing, fill, stroke, mode = stack.pop()
+            elif operator == 'Tf':
+                size = float(operands[1])
+            elif operator == 'Tc':
+                spacing = float(operands[0])
+            elif operator == '"':
+                spacing = float(operands[1])
+            elif operator == 'Tr':
+                mode = int(operands[0])
+            elif operator in ('rg', 'g'):
+                fill = [float(v) for v in operands] if operator == 'rg' else [float(operands[0])] * 3
+            elif operator in ('RG', 'G'):
+                stroke = [float(v) for v in operands] if operator == 'RG' else [float(operands[0])] * 3
+            elif operator in ('k', 'cs', 'sc', 'scn'):
+                fill = None
+            elif operator in ('K', 'CS', 'SC', 'SCN'):
+                stroke = None
+            elif operator == 'gs':
+                # ExtGState may set fonts or painting state. Recover only from
+                # subsequent explicit operators; never infer an unseen default.
+                size = spacing = None
+                fill = stroke = None
+                mode = None
+            if _instruction_has_text(instruction):
+                state: dict[str, object] = {}
+                if size is not None and math.isfinite(size) and size > 0:
+                    state['font_size'] = size
+                if spacing is not None and math.isfinite(spacing):
+                    state['character_spacing'] = spacing
+                color = fill if mode in (0, 4) else stroke if mode in (1, 5) else fill if mode in (2, 6) and fill == stroke else None
+                if color is not None and len(color) == 3 and all(math.isfinite(c) and 0 <= c <= 1 for c in color):
+                    state['color'] = color
+                by_offset[offsets[ordinal]] = state
+                ordinal += 1
+        result = {}
+        for run in runs:
+            states = [by_offset[offset] for offset in {g.operator_byte_offset for g in run.glyphs}]
+            common = {key: value for key, value in states[0].items()
+                      if all(state.get(key) == value for state in states)}
+            if run.bold is not None:
+                common['bold'] = run.bold
+            if run.italic is not None:
+                common['italic'] = run.italic
+            if run.direction is not None:
+                common['direction'] = list(run.direction)
+            if run.effective_em is not None and run.page_ctm is not None:
+                # Reader matrices already contain Tf. Convert their measured em
+                # through the page's uniform rotation/reflection/scale only, so
+                # clients can multiply by PDF.js viewport.scale exactly once.
+                a, b, c, d, _e, _f = run.page_ctm
+                page_scale = math.hypot(a, b)
+                if (page_scale > 0 and math.isfinite(run.effective_em) and run.effective_em > 0
+                        and math.isclose(math.hypot(c, d), page_scale, rel_tol=1e-9)
+                        and abs(a * c + b * d) <= 1e-9 * page_scale ** 2):
+                    common['font_display_size'] = run.effective_em / page_scale
+            result[run.run_id] = common
+        return result
+    except Exception:
+        return {}
+
+
 def _part_key(run: RunRecord) -> tuple[int, int, tuple[int, ...]]:
     """The identity of the ONE content-stream part this run lives in: `(page, part,
     xobj_path)`. Every byte offset in a run ID is meaningful only within this scope
@@ -335,8 +433,13 @@ def _resolve_op(
     measurement), so this is correct against a mutated handle exactly as it is against a
     pristine one -- which is the whole reason it is a function rather than an inlined block.
     """
-    if op.style is not None and "font_size" in op.style:
-        return ResolvedOp(op, ok=False, reason="font_size_change_unsupported", run=run, verdict=verdict)
+    if any(ch in op.new_text for ch in "\r\n\v\f\x85\u2028\u2029"):
+        return ResolvedOp(op, ok=False, reason="multiline_text_unsupported", run=run, verdict=verdict)
+    if op.style is not None:
+        try:
+            _validated_style(op.style)
+        except ValueError:
+            return ResolvedOp(op, ok=False, reason="invalid_style", run=run, verdict=verdict)
     if verdict.state == "not_editable":
         return ResolvedOp(op, ok=False, reason=verdict.reason, run=run, verdict=verdict)
 
@@ -354,6 +457,35 @@ def _resolve_op(
         if active is None:
             raise ValueError("no usable /Tf precedes this run")
         resource_name, font_size = active
+        # Legacy font classification uses a byte scan. For formatting, independently
+        # prove its result against parsed operators and the q/Q stack; a Tf-looking
+        # literal or restored state must never select the wrong size or restore Tf.
+        instructions, touched = proof[0]
+        parsed_font: tuple[bytes, float] | None = None
+        font_stack = []
+        for instruction in instructions[:touched[0]]:
+            operator = str(instruction.operator)
+            if operator == 'q':
+                font_stack.append(parsed_font)
+            elif operator == 'Q':
+                parsed_font = font_stack.pop() if font_stack else None
+            elif operator == 'Tf':
+                parsed_font = (str(instruction.operands[0]).lstrip('/').encode('latin-1'),
+                               float(instruction.operands[1]))
+            elif operator == 'gs':
+                states = resources.get('/ExtGState') if resources is not None else None
+                state = states.get(str(instruction.operands[0])) if states is not None else None
+                if state is None or state.get('/Font') is not None:
+                    parsed_font = None
+        if parsed_font != active or not math.isfinite(font_size) or font_size <= 0:
+            return ResolvedOp(op, ok=False, reason="source_font_state_unsupported", run=run, verdict=verdict)
+        replacement_size = op.style.get("font_size", font_size) if op.style is not None else font_size
+        character_spacing = op.style.get("character_spacing", 0.0) if op.style is not None else 0.0
+        # The current ownership model proves a horizontal envelope, not free space
+        # above/below text. Growth can hit an unrelated graphic or line even when
+        # horizontal fitting succeeds. Retain that guard until ink obstacles exist.
+        if replacement_size > font_size:
+            return ResolvedOp(op, ok=False, reason="font_size_growth_unsupported", run=run, verdict=verdict)
 
         font_key = "/" + resource_name.decode("latin-1")
         fonts = resources.get("/Font") if resources is not None else None
@@ -436,15 +568,16 @@ def _resolve_op(
 
         loaded_font = load_font(font_bytes)
         if substitution_key is not None:
-            written_advance = shape_advance_pt(op.new_text, loaded_font, font_size, serialized_widths=True)
-            written_space = shape_advance_pt(' ', loaded_font, font_size, serialized_widths=True)
+            written_advance = shape_advance_pt(op.new_text, loaded_font, replacement_size, serialized_widths=True)
+            written_space = shape_advance_pt(' ', loaded_font, replacement_size, serialized_widths=True)
         else:
             reverse_codes = reverse_encoding_map(font_obj)
             written_advance = advance_pt_for_codes(
-                font_obj, [reverse_codes[UV2AGL[ord(ch)]] for ch in op.new_text], font_size)
-            written_space = (advance_pt_for_codes(font_obj, [reverse_codes['space']], font_size)
+                font_obj, [reverse_codes[UV2AGL[ord(ch)]] for ch in op.new_text], replacement_size)
+            written_space = (advance_pt_for_codes(font_obj, [reverse_codes['space']], replacement_size)
                              if 'space' in reverse_codes else 0.0)
-        fit_result = fit_run(original_advance_pt, op.new_text, loaded_font, font_size,
+        written_advance += len(op.new_text) * character_spacing
+        fit_result = fit_run(original_advance_pt, op.new_text, loaded_font, replacement_size,
                              replacement_advance_pt=written_advance,
                              replacement_space_width_pt=written_space)
         # A terminal kern cannot shrink painted glyphs. Such overflow must use the
@@ -458,7 +591,10 @@ def _resolve_op(
                 fit_result = replace(fit_result, strategy='refused', refused=True,
                                      refusal_reason='replacement_exceeds_visible_extent')
         fit_result = replace(fit_result, source_pen_advance_pt=pen, source_leading_kern=leading,
-                             source_charspace=charspace, source_wordspace=wordspace)
+                             source_charspace=charspace, source_wordspace=wordspace,
+                             replacement_font_size=replacement_size if replacement_size != font_size else None,
+                             replacement_charspace=character_spacing,
+                             source_font_size=font_size)
         if fit_result.strategy == 'tz' and fit_result.condensed_scale is not None:
             # Serialize a downward-rounded absolute Tz, then derive its exact ratio
             # for the terminal pen adjustment. Never round painted text outward.

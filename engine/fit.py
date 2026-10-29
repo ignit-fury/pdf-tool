@@ -89,6 +89,9 @@ class FitResult:
     source_leading_kern: float = 0.0
     source_charspace: float = 0.0
     source_wordspace: float = 0.0
+    source_font_size: float | None = None
+    replacement_font_size: float | None = None
+    replacement_charspace: float = 0.0
 
 
 # Every shaping entry point below accepts EITHER a bundled font's own path OR an

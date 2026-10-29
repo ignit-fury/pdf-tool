@@ -595,12 +595,13 @@ def test_plan_recipe_measures_original_by_character_code_not_decoded_unicode() -
     resolved_by_id = {r.op.run_id: r for r in report.resolved}
     assert all(resolved_by_id[run_id].ok for run_id in non_ascii_ids)
 
-    # (3) Preview also discloses the shared-operator refusal that used to appear
-    #     only at apply time. Neither refusal is a character-width lookup failure.
+    # (3) Preview discloses shared operators and disagreement between the legacy
+    #     font scan and parsed q/Q font state before writing. Neither safety
+    #     refusal is a character-width lookup failure.
     refusals = [r for r in report.resolved if not r.ok]
     assert all(
         r.reason is not None and (r.reason.startswith("no mapping table entry")
-                                 or r.reason == "operator_shared_by_multiple_runs")
+                                 or r.reason in {"operator_shared_by_multiple_runs", "source_font_state_unsupported"})
         for r in refusals
     )
 
@@ -1184,7 +1185,10 @@ MODULE_OWN_REASONS = frozenset(
         "run_lost_after_earlier_edit",
         "substitution_key_changed_after_earlier_edit",
         "character_has_no_glyph_in_bundled_font",
-        "font_size_change_unsupported",
+        "font_size_growth_unsupported",
+        "source_font_state_unsupported",
+        "invalid_style",
+        "multiline_text_unsupported",
     }
 )
 

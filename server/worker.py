@@ -145,7 +145,7 @@ def _preflight(pdf: object, page: int | None = None) -> None:
 def _execute(request: dict[str, object]) -> dict[str, object]:
     import pikepdf
     from engine.index import DocumentTooLargeError, RunIndex
-    from engine.recipe import RecipeTooLargeError, apply_recipe, parse_recipe, plan_recipe, source_font_info
+    from engine.recipe import RecipeTooLargeError, apply_recipe, parse_recipe, plan_recipe, source_font_info, source_formatting_metadata
 
     action = request.get("action")
     source64 = request.get("source")
@@ -178,6 +178,7 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
             from engine.boxes import run_box
             from engine.classify_run import stream_bytes_and_resources
             from engine.run_id import decode_run_id
+            from engine.records import RunRecord
             number = request.get("page", 0)
             if not isinstance(number, int) or isinstance(number, bool) or not 0 <= number < count:
                 raise WorkerRefusal("PAGE_OUT_OF_RANGE")
@@ -186,18 +187,27 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
                 indexed = index.page(number)
                 runs = []
                 streams: dict[tuple[int, tuple[int, ...]], tuple[bytes, pikepdf.Object | None]] = {}
+                stream_runs: dict[tuple[int, tuple[int, ...]], list[RunRecord]] = {}
+                formatting: dict[str, dict[str, object]] = {}
+                for source_run, _ in indexed.runs:
+                    address = decode_run_id(source_run.run_id)
+                    stream_runs.setdefault((address['part'], address['xobj_path']), []).append(source_run)
                 for run, verdict in indexed.runs:
                     parts = decode_run_id(run.run_id)
                     stream_key = (parts["part"], parts["xobj_path"])
                     if stream_key not in streams:
                         streams[stream_key] = stream_bytes_and_resources(pdf, number, *stream_key)
+                        formatting.update(source_formatting_metadata(
+                            pdf, streams[stream_key][0], stream_runs[stream_key],
+                            page_start=stream_key == (0, ())))
                     raw, resources = streams[stream_key]
                     source_font, suggested_family = source_font_info(raw, resources, run.glyphs[0].operator_byte_offset)
                     runs.append({"run_id": run.run_id, "text": run.display_text,
                         "search": project_search_text(run.display_text),
                         "box": run_box(run, raw, resources), "state": verdict.state,
                         "reason": verdict.reason, "source_font": source_font,
-                        "suggested_font_family": suggested_family})
+                        "suggested_font_family": suggested_family,
+                        **formatting.get(run.run_id, {})})
             box = [float(x) for x in pdf.pages[number].cropbox]
             return {"page": number, "bucket": indexed.bucket, "runs": runs,
                 "width": box[2] - box[0], "height": box[3] - box[1],

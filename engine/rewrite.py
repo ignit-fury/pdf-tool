@@ -1017,7 +1017,7 @@ def _trailing_fit_for_written_font(
     next showing operator relies on this run's pen position. Do not relax the guard.
     """
     if fit.source_pen_advance_pt is not None:
-        actual = advance_pt_for_codes(font, codes, font_size)
+        actual = advance_pt_for_codes(font, codes, font_size) + len(codes) * fit.replacement_charspace
         ratio = (fit.condensed_scale or 100.0) / 100.0 if fit.strategy == 'tz' else 1.0
         interior = list(fit.kerns) if fit.strategy == 'inter_word_kern' else []
         if interior:
@@ -1086,7 +1086,9 @@ def _show_instruction(
     # pikepdf writes six decimal places: avoid a -0 signature that reparses as 0.
     kerns = [0.0 if abs(kern) < 1e-9 else kern for kern in fit_result.kerns]
     ratio = (fit_result.condensed_scale or 100.0) / 100.0 if fit_result.strategy == 'tz' else 1.0
-    leading = fit_result.source_leading_kern / ratio
+    size_ratio = ((fit_result.source_font_size / fit_result.replacement_font_size)
+                  if fit_result.source_font_size and fit_result.replacement_font_size else 1.0)
+    leading = fit_result.source_leading_kern * size_ratio / ratio
     if not kerns:
         return pikepdf.ContentStreamInstruction(
             [pikepdf.String(all_bytes)], pikepdf.Operator("Tj")
@@ -1219,6 +1221,7 @@ def _resolve_substituted_operand(
     if resources is None or active is None:
         return RewriteOutcome(ok=False, reason="no_active_font_for_substitution")
     original_name, font_size = active
+    replacement_size = fit_result.replacement_font_size or font_size
 
     # Validate the active source font before shaping or installing resources.
     # THREAT T-03-06-01: operands are pikepdf.String-built inside _show_instruction.
@@ -1230,11 +1233,11 @@ def _resolve_substituted_operand(
             return RewriteOutcome(ok=False, reason=str(exc))
         raise
     fitted = _trailing_fit_for_written_font(
-        fit_result, font_obj, [int.from_bytes(code, "big") for code, _ in units], font_size)
+        fit_result, font_obj, [int.from_bytes(code, "big") for code, _ in units], replacement_size)
     replacement = _show_instruction(units, fitted)
     resource_key = _substitution_resource_key(resources, font_obj, subset)
     tf_new = pikepdf.ContentStreamInstruction(
-        [pikepdf.Name(resource_key), font_size], pikepdf.Operator("Tf")
+        [pikepdf.Name(resource_key), replacement_size], pikepdf.Operator("Tf")
     )
     tf_restore = pikepdf.ContentStreamInstruction(
         [pikepdf.Name("/" + original_name.decode("latin-1")), font_size],
@@ -1330,7 +1333,7 @@ def _resolve_non_substituted_operand(
     if active is None:
         return RewriteOutcome(ok=False, reason="no_active_font_for_original_encoding")
     fitted = _trailing_fit_for_written_font(
-        fit_result, font, [code_map[ch] for ch in new_text], active[1])
+        fit_result, font, [code_map[ch] for ch in new_text], fit_result.replacement_font_size or active[1])
     return _show_instruction(tuple((bytes([code_map[ch]]), ch) for ch in new_text), fitted)
 
 
@@ -1442,12 +1445,24 @@ def rewrite_run(
         if isinstance(resolved, RewriteOutcome):
             return resolved
         new_instructions = _bracket_for_fit(fit_result, resolved, active_scale)
+        if fit_result.replacement_font_size is not None:
+            part, path = _part_key(run)
+            raw, _ = stream_bytes_and_resources(pdf, page_index, part, path)
+            active = _active_font_operands(raw, min(g.operator_byte_offset for g in run.glyphs))
+            if active is None:
+                return RewriteOutcome(ok=False, reason='no_active_font_for_original_encoding')
+            name = pikepdf.Name('/' + active[0].decode('latin-1'))
+            new_instructions = [
+                pikepdf.ContentStreamInstruction([name, fit_result.replacement_font_size], pikepdf.Operator('Tf')),
+                *new_instructions,
+                pikepdf.ContentStreamInstruction([name, active[1]], pikepdf.Operator('Tf')),
+            ]
 
-    if fit_result.source_pen_advance_pt is not None and (fit_result.source_charspace or fit_result.source_wordspace):
+    if fit_result.source_pen_advance_pt is not None and (fit_result.source_charspace or fit_result.source_wordspace or fit_result.replacement_charspace):
         # Fit glyph widths without inherited spacing, then restore both text-state
         # parameters before any untouched instruction can observe them.
         new_instructions = [
-            pikepdf.ContentStreamInstruction([0], pikepdf.Operator('Tc')),
+            pikepdf.ContentStreamInstruction([fit_result.replacement_charspace], pikepdf.Operator('Tc')),
             pikepdf.ContentStreamInstruction([0], pikepdf.Operator('Tw')),
             *new_instructions,
             pikepdf.ContentStreamInstruction([fit_result.source_charspace], pikepdf.Operator('Tc')),
