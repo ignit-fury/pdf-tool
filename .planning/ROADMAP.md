@@ -417,3 +417,15 @@ actual-results walkthrough, and integration/review. Source reflow/height growth 
 unowned image editing remain explicitly unsupported. No new numbered release phase
 or closure of existing gates is implied. Plan: `docs/superpowers/plans/2026-10-29-document-viewer.md`.
 Evidence: `docs/verification/document-viewer-2026-10-29.md`. Nothing deployed.
+
+### Next stage — Native inserted text containers
+
+Delivered locally: direct insertion/edit/removal, searchable wrapped/multiline native
+text, font growth, alignment/spacing, exact candidate PDF preview, overlap/overflow
+protection and mixed Undo/Redo. Current-byte isolated API and verified ownership
+preserve existing source text, images and page operations. Existing rotated boxes
+require rotating the page back for layout editing; removal remains available.
+No automatic reconstruction/reflow of original paragraphs, neighboring-content
+movement, unowned-image editing or closure of prior release gates is claimed.
+Plan: `docs/superpowers/plans/2026-10-29-native-text-boxes.md`.
+Evidence: `docs/verification/native-text-boxes-2026-10-29.md`. Nothing deployed.

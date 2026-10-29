@@ -34,8 +34,11 @@ disabled until Linux confinement is verified. No deployment was published.
 The post-Phase-8 viewer upgrade adds continuous bounded pages, inline text input
 and a contextual toolbar, safe native size/spacing, managed image controls, mixed
 Undo/Redo, Replace One/All and a truthful post-commit walkthrough. It retains
-preserve-layout geometry; arbitrary source reflow, new text boxes and unowned image
-mutation remain unsupported. Evidence: `docs/verification/document-viewer-2026-10-29.md`.
+preserve-layout geometry. The next stage adds native inserted text containers with
+wrapping, multiline layout, growth, spacing, alignment and exact candidate preview.
+Arbitrary source reflow and unowned image mutation remain unsupported. Evidence:
+`docs/verification/document-viewer-2026-10-29.md` and
+`docs/verification/native-text-boxes-2026-10-29.md`.
 
 ## Core Value
 

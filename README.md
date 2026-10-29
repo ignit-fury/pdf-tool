@@ -105,15 +105,31 @@ can be selected, moved/resized using handles or numeric controls, rotated, repla
 at the same geometry and removed with confirmation. Aspect ratio is locked by default.
 Original unowned/shared PDF images remain preserved and are not offered for mutation.
 
-Preserve-layout edits can be longer or shorter when they fit, including by choosing
-a smaller size. Flexible arbitrary-PDF reflow, multiline source edits, new independent
-text boxes, growing source text height, alignment/paragraph/line-spacing changes and
-moving neighboring content remain unavailable; the UI explains these limits. The
-inline input is a temporary preview and is never saved as an overlay.
+**Insert text** creates a native, searchable text container directly on a page.
+It supports explicit line breaks, wrapping, larger/smaller text, bundled font
+selection, color, bold/italic, alignment and character/line/paragraph spacing.
+Change its dimensions or page in the contextual toolbar. Preview uploads the
+current PDF and draft through the isolated worker; Apply publishes those exact
+candidate bytes as one Undo/Redo operation. Cancel preserves the working PDF.
+The default overlap check includes rendered content and annotation bounds. Overflow
+offers explicit height expansion when it fits; text is never silently clipped.
+Use **Text boxes → Load inserted text boxes** to select/edit/remove verified boxes
+after reopening. A box rotated with its page can be removed or edited after rotating
+the page back. Newly inserted boxes on already rotated pages are upright/editable.
+
+Original preserve-layout text edits can be longer or shorter when they fit,
+including by choosing a smaller size. Arbitrary-PDF source reflow, multiline source
+edits, growing source text height and moving neighboring content remain unavailable.
+New containers have their own layout; they do not reconstruct existing paragraphs.
+Missing glyphs, complex shaping and unsafe ownership refuse explicitly. Ordinary
+text-run edits cannot rewrite managed containers; select the complete text box.
 
 [Implementation plan](docs/superpowers/plans/2026-10-29-document-viewer.md) and
 [verification, known limits and browser reproduction](docs/verification/document-viewer-2026-10-29.md)
 record the actual local results. No new dependency or migration is required.
+The next-stage [native text-box plan](docs/superpowers/plans/2026-10-29-native-text-boxes.md)
+and [verification report](docs/verification/native-text-boxes-2026-10-29.md)
+document the added layout support and its limits.
 
 ## How to run
 

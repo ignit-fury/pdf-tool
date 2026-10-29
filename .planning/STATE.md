@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
 status: verification_pending
-stopped_at: Requested document-viewer upgrade delivered locally with explicit layout limits; external release gates remain open
+stopped_at: Native inserted text-container stage delivered locally; source reflow and external release gates remain open
 last_updated: "2026-10-29"
-last_activity: Verified continuous inline viewer, native formatting, managed images, Undo/Redo and one/all replacement walkthrough
+last_activity: Verified native multiline text containers, exact preview, overlap/overflow protection and mixed source/page/image history
 progress:
   total_phases: 8
   completed_phases: 5
@@ -14,7 +14,7 @@ progress:
 # Project State
 
 **Core value:** Replace existing PDF text while preserving the surrounding document.
-**Current focus:** Post-Phase-8 document-viewer upgrade delivered locally; unsupported source reflow/growth is explicit. External release verification remains. No deployment.
+**Current focus:** Native inserted text-container stage delivered locally after the viewer upgrade. Original-source reflow remains unsupported; external release verification remains. No deployment.
 
 Phases 1–3 are complete. The Phase 3 engine and its fonts, CLI and regression gates are
 now present in this checkout; the original source worktree and local edits are preserved.
@@ -32,6 +32,26 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
 
 ## Current work
 
+### Native inserted text containers — 2026-10-29
+
+- Next requested stage delivered: page insertion/edit/removal, native searchable
+  multiline/wrap, font growth, alignment and character/line/paragraph spacing.
+- Exact separate PDF preview publishes the same bytes on Apply as one mixed Undo
+  entry. Cancel/stale/overflow preserve working bytes/history. Rendered-content
+  and annotation collision checks, explicit expansion and bounded ownership proof.
+- Current-byte API reuses isolated workers/cache/password/signature/resource limits.
+  Source runs route verified boxes to complete layout; unsafe individual rewrites refuse.
+- Broad regression: 867 passes; final native/API/recipe 114 passes includes the later
+  additional PDF-version regression. Client 180 passes; 12 existing export/removal
+  gates; strict 39-file typing, build and license/Unicode checks pass. Actual browser
+  mixed history, geometry, overflow/cancel and responsive controls verified; five
+  downloads pass 10 structural validations and 49 unrelated-pixel comparisons.
+- Original arbitrary paragraph reflow/neighbor movement, foreign image editing,
+  outline/history panels and exact substring glyph highlights remain future work.
+  Rotated existing boxes require rotating back for layout editing. No deployment.
+- Plan/evidence: `docs/superpowers/plans/2026-10-29-native-text-boxes.md` and
+  `docs/verification/native-text-boxes-2026-10-29.md`. Prior release gates retained.
+
 ### Document viewer upgrade — 2026-10-29
 
 - User requested a plan followed by implementation. Design/plan are under
@@ -46,9 +66,9 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
   build, licenses/Unicode pass. Browser/native proof covers the 12-page synthetic
   document, actual downloads, pointer controls, responsive layout, Unicode password
   and cache-recovery transport. Independent review findings are fixed with regressions.
-- Flexible source reflow/multiline, source height growth, new independent text boxes,
-  line/paragraph/alignment changes and unowned original image editing remain explicit
-  unsupported cases. No dependency, migration, deployment or container setup.
+- At this earlier viewer baseline, new independent text containers and their layout
+  controls remained unsupported; the next stage above delivers them. Flexible source
+  reflow/multiline/height growth and unowned original image editing remain unsupported. No dependency, migration, deployment or container setup.
 - Evidence/commands: `docs/verification/document-viewer-2026-10-29.md`. All earlier
   Linux/container/CDN, contract-specimen, hosted G7a and Word/Acrobat gates remain open.
 
