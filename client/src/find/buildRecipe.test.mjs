@@ -4,6 +4,15 @@ import {findMatches} from './search.mjs';
 async function api(){const module=await import('./buildRecipe.mjs').catch(()=>null);assert.ok(module,'full recipe builder missing');return module;}
 const pages={1:{runs:[{run_id:'r',text:'cat cat',state:'editable_original',suggested_font_family:'Serif'}]}};
 
+test('validated review retains actual output offsets across length changes and exclusions',async()=>{
+  const {buildReplacementRecipe:build}=await api(),matches=findMatches(pages,'cat');
+  const long=build({pages,matches,replacement:'kitten'});
+  assert.deepEqual(long.changes[0].spans,matches.map((m,i)=>({matchId:m.id,start:i*7,end:i*7+6})));
+  const short=build({pages,matches,replacement:'x'});assert.deepEqual(short.changes[0].spans.map(s=>[s.start,s.end]),[[0,1],[2,3]]);
+  const excluded=build({pages,matches,replacement:'kitten',excludedIds:new Set([matches[0].id])});assert.deepEqual(excluded.changes[0].spans.map(s=>[s.start,s.end]),[[4,10]]);
+  const removed=build({pages,matches,replacement:''});assert.deepEqual(removed.changes[0].spans.map(s=>[s.start,s.end]),[[0,0],[1,1]]);
+});
+
 test('per-occurrence exclusions build one ordinary operation and preserve prior order/style',async()=>{
   const {buildReplacementRecipe:build}=await api();const matches=findMatches(pages,'cat');
   const recipe=[{run_id:'other',new_text:'old'},{run_id:'r',new_text:'cat cat',style:{bold:true}}];

@@ -3,6 +3,17 @@ import assert from 'node:assert/strict';
 import {matchesForScope,beginWalkthrough,stepWalkthrough} from './walkthrough.mjs';
 import {buildReplacementRecipe} from './buildRecipe.mjs';
 
+test('tour targets committed replacement characters and marks removal explicitly',()=>{
+  const pages={1:{runs:[{run_id:'r',text:'cat cat',box:[0,0,100,12]}]}},matches=[0,4].map((start,i)=>({id:String(i),page:1,runId:'r',runOrder:0,start,end:start+3,text:'cat',replaceable:true}));
+  for(const replacement of ['kitten','']){
+    const review=buildReplacementRecipe({pages,matches,replacement});
+    const tour=beginWalkthrough(review,matches,pages,true);
+    assert.equal(tour.targets[1].sourceText,review.changes[0].after);
+    assert.equal(tour.targets[1].start,replacement?7:1);assert.equal(tour.targets[1].end,replacement?13:1);
+    assert.equal(tour.targets[1].removed,!replacement);
+  }
+});
+
 test('Replace One supplies only the active occurrence and preserves earlier style',()=>{
   const matches=[{id:'a',runId:'run',page:1,start:0,end:3,text:'cat',replaceable:true},{id:'b',runId:'run',page:1,start:4,end:7,text:'cat',replaceable:true}];
   const selected=matchesForScope(matches,'b','one');

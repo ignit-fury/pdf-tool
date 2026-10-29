@@ -5,7 +5,11 @@ export function matchesForScope(matches,activeId,scope='all') {
 }
 export function beginWalkthrough(review,matches,pages,reducedMotion=false) {
   const accepted=new Set((review.changes||[]).flatMap(change=>change.matchIds));
-  const targets=matches.filter(match=>accepted.has(match.id)).map(match=>({...match,box:sourceRunForMatch(pages,match)?.box})).filter(match=>Array.isArray(match.box));
+  const changes=new Map((review.changes||[]).map(change=>[change.runId,change]));
+  const targets=matches.filter(match=>accepted.has(match.id)).map(match=>{
+    const change=changes.get(match.runId),span=change?.spans?.find(value=>value.matchId===match.id);
+    return {...match,...(span?{start:span.start,end:span.end,sourceText:change.after,text:change.after.slice(span.start,span.end),removed:span.start===span.end}:{}),box:sourceRunForMatch(pages,match)?.box};
+  }).filter(match=>Array.isArray(match.box));
   return {targets,position:0,status:!targets.length?'complete':reducedMotion?'paused':'playing'};
 }
 export function stepWalkthrough(state,action) {

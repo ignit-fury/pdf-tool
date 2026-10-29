@@ -41,7 +41,9 @@ export function buildReplacementRecipe({pages,recipe=[],matches,excludedIds=new 
     const operation={run_id:runId,new_text:after};
     if(Object.keys(style).length)operation.style=style;
     candidate=upsertOperation(candidate,operation);
-    changes.push({runId,page:ordered[0].page,before,after,matchIds:ordered.map(match=>match.id)});
+    let shift=0;
+    const spans=ordered.map(match=>{const start=match.start+shift;shift+=replacement.length-(match.end-match.start);return {matchId:match.id,start,end:start+replacement.length};});
+    changes.push({runId,page:ordered[0].page,before,after,matchIds:ordered.map(match=>match.id),spans});
   }
   assertRecipeLimits(candidate);
   return {recipe:candidate,changes,selectedCount:changes.reduce((sum,change)=>sum+change.matchIds.length,0),changedPages:[...new Set(changes.map(change=>change.page))].sort((a,b)=>a-b),unchangedCount};
