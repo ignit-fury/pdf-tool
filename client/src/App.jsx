@@ -16,6 +16,7 @@ import {historyJump} from './viewer/history.mjs';
 import OutlinePanel from './viewer/OutlinePanel.jsx';
 import HistoryPanel from './viewer/HistoryPanel.jsx';
 import ToolbarDetails from './viewer/ToolbarDetails.jsx';
+import {groupedEditTargets} from './viewer/groupRuns.mjs';
 import './viewer/viewer.css';
 import './viewer/compactChrome.css';
 import {upsertOperation,withSourceRetry,decodePdf,explainReason,retryWorkerBusy,disposeDocument,explainBucket,passwordHeaders,viewportBox} from './session.mjs';
@@ -235,6 +236,10 @@ export default function App(){
     cancelTextBox();setSideOpen(false);
     if(run.text_box_id){startTextBox();await loadTextBoxes(run.text_box_id);return;}
     const number=run.pageNumber||page;
+    if(run.source_run_ids){
+      expandSourceText(run.text,{},undefined,{...run,pageNumber:number});
+      return;
+    }
     if(localMetadata?.pages[number-1]?.rotation||run.direction&&(Math.abs(run.direction[1])>.01||run.direction[0]<=0)){
       setMessage('Inline editing of rotated or directed text is unavailable. Rotate the page with page tools and analyze again, or choose a horizontal text run.');return;
     }
@@ -300,8 +305,8 @@ export default function App(){
     textBoxController.invalidate();textBoxPayloadRef.current=null;setTextBoxDraft(value);
     if(value.page_index!==textBoxDraft?.page_index&&Number.isInteger(value.page_index)&&value.page_index>=0&&value.page_index<(pdfRef.current?.numPages||0)){setPage(value.page_index+1);setNavigation(n=>({page:value.page_index+1,serial:n.serial+1}));}
   };
-  const expandSourceText=async(text=draft,format=style,caret)=>{
-    const target=sessionRef.current,run=selection,document=pdfRef.current,version=editVersion.current;
+  const expandSourceText=async(text=draft,format=style,caret,sourceRun)=>{
+    const target=sessionRef.current,run=sourceRun||selection,document=pdfRef.current,version=editVersion.current;
     if(!run||run.state==='not_editable'||busyOwnerRef.current)return;
     const valid=()=>current(target)&&sessionRef.current===target&&pdfRef.current===document&&editVersion.current===version;
     try{
@@ -310,7 +315,7 @@ export default function App(){
       const geometry=localMetadata.pages[run.pageNumber-1];
       const next=sourceTextBox({run,text,style:format,recipe:recipeState.recipe,geometry,box:viewportBox(run.box,viewport),typography:sourceTypography(run,format,viewportFontScale(viewport)),caret});
       cancelInline(false);releaseDraft();setManagedSelection(null);setSideOpen(false);setMode('text-box');setTextBoxDraft(next);
-      setMessage('Flexible text box: grows into free page space. Preview removes the original text and shows the real wrapped PDF; Apply commits it as one change.');
+      setMessage(run.source_run_ids?'This word uses two PDF text runs. Preview replaces both with one searchable word using the selected font and size; Apply commits them as one change.':'Flexible text box: grows into free page space. Preview removes the original text and shows the real wrapped PDF; Apply commits it as one change.');
     }catch(error){if(valid()&&!ignored(error))setMessage('Could not prepare this text box. Your draft and PDF are unchanged. Try another text run.');}
   };
   const placeTextBox=(number,point)=>{if(busyOwnerRef.current||!localMetadata?.pages[number])return;textBoxController.invalidate();setTextBoxDraft(newTextBox(number,localMetadata.pages[number],point));setPage(number+1);};
@@ -554,7 +559,14 @@ export default function App(){
   const exportCurrent=()=>{const target=sessionRef.current;return {session:target,bytes:target?.bytes,version:editVersion.current,retainedBytes:snapshotCopyBytes({openedBytes:target?.openedBytes,bytes:target?.bytes,sourceBytes:target?.sourceBytes,history:historyRef.current,redo:redoRef.current,draft:draftRef.current?.bytes,png:draftRef.current?.decoded?.pngBytes})+(target?.bytes?.buffer.byteLength||0)+(textBoxRef.current?.retainedBytes||0)};};
   const exportSplit=(bytes,groups,{signal,...options})=>runPdfJob({workerFactory:()=>new Worker(new URL('./pageOps/pdfJob.worker.mjs',import.meta.url),{type:'module'}),command:'split',payload:{bytes,groups,options},signal,errorCodes:SPLIT_ERROR_CODES});
   const download=(original=false)=>{if(!original&&textBoxRef.current?.previewResult){setMessage('Apply or cancel the text box preview before downloading the working PDF.');return;}const url=URL.createObjectURL(new Blob([original?session.openedBytes:session.bytes],{type:'application/pdf'})),anchor=document.createElement('a');anchor.href=url;anchor.download=!original&&output?`edited-${session.name.replace(/\.pdf$/i,'')}.pdf`:session.name;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
-  const pageData=index[page],runs=pageData?.runs||[],noEditable=pageData&&!runs.some(run=>run.state!=='not_editable');
+  const editedRunIds=useMemo(()=>new Set(recipeState.recipe.filter(op=>{
+    for(const pageData of Object.values(index)){
+      const original=pageData.runs?.find(run=>run.run_id===op.run_id);
+      if(original)return op.new_text!==original.text;
+    }
+    return true;
+  }).map(op=>op.run_id)),[index,recipeState.recipe]);
+  const pageData=index[page],runs=groupedEditTargets(pageData?.runs||[],editedRunIds),noEditable=pageData&&!runs.some(run=>run.state!=='not_editable');
   const textBoxPreview=textBoxState.status==='ready'?textBoxState.preview:null;
   const displayPdf=textBoxPreview?.prepared.document||pdf;
   const activeImage=imageDraft?.inline?imageDraft:managedSelection;
@@ -591,7 +603,7 @@ export default function App(){
       {textBoxPreview&&<div className="text-box-preview-banner" role="status">Preview only — Apply or Cancel to return to the working document. Downloads and exports use committed bytes.</div>}
       {busyOwnerRef.current?.kind.startsWith('text-box')&&<button className="text-box-cancel-work" onClick={cancelTextBox}>Cancel text box operation</button>}
       {selection&&<TextToolbar run={selection} style={style} draft={draft} preview={preview} busy={busy} allowed={!localMetadata?.signed||acknowledged} onStyle={changeStyle} onPreview={checkFit} onApply={apply} onCancel={cancelInline} onExpand={()=>expandSourceText()}/>}
-      {pdf?<ContinuousViewer pdf={displayPdf} scale={scale} mode={mode} metadata={localMetadata} index={index} navigation={navigation} onPageChange={setPage} onVisible={fetchRuns} selection={textBoxDraft?{pageNumber:textBoxDraft.page_index+1}:selection} onSelect={choose} disabled={!!busy} findTarget={findTarget} onFindRendered={onFindRendered} imageDraft={imageDraft}
+      {pdf?<ContinuousViewer pdf={displayPdf} scale={scale} mode={mode} metadata={localMetadata} index={index} editedRunIds={editedRunIds} navigation={navigation} onPageChange={setPage} onVisible={fetchRuns} selection={textBoxDraft?{pageNumber:textBoxDraft.page_index+1}:selection} onSelect={choose} disabled={!!busy} findTarget={findTarget} onFindRendered={onFindRendered} imageDraft={imageDraft}
         renderOverlay={(number,viewport)=><>
           {selection?.pageNumber===number&&selection.state!=='not_editable'&&<InlineInput run={selection} style={style} draft={draft} viewport={viewport} busy={!!busy} onDraft={changeDraft} onCancel={cancelInline} onPreview={checkFit}/>}
           {mode==='text-box'&&localMetadata&&<TextBoxOverlay number={number} viewport={viewport} geometry={localMetadata.pages[number-1]} draft={textBoxDraft} boxes={textBoxes} state={textBoxState} disabled={!!busy} onPlace={placeTextBox} onSelect={selectTextBox} onDraft={changeTextBox}/>}

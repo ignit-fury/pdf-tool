@@ -2,6 +2,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import {PageCanvas} from '../Viewer.jsx';
 import {pageSize,visibleDocumentPage} from './model.mjs';
 import {scrollWithinDocument} from './scroll.mjs';
+import {groupedEditTargets} from './groupRuns.mjs';
 
 function PageShell({number,pdf,scale,geometry,root,register,pinned,...props}) {
   const element=useRef(null),[near,setNear]=useState(number===1);
@@ -17,7 +18,7 @@ function PageShell({number,pdf,scale,geometry,root,register,pinned,...props}) {
   </section>;
 }
 
-export default function ContinuousViewer({pdf,scale,metadata,index,navigation,onPageChange,onVisible,selection,renderOverlay,...props}) {
+export default function ContinuousViewer({pdf,scale,metadata,index,navigation,onPageChange,onVisible,selection,renderOverlay,editedRunIds,...props}) {
   const root=useRef(null),shells=useRef(new Map()),latest=useRef(null),register=useRef((number,node)=>{if(node)shells.current.set(number,node);else shells.current.delete(number);}).current;
   latest.current={onPageChange,onVisible};
   useEffect(()=>{
@@ -37,7 +38,7 @@ export default function ContinuousViewer({pdf,scale,metadata,index,navigation,on
   useEffect(()=>{scrollWithinDocument(root.current,shells.current.get(navigation?.page),{align:'start',behavior:navigation?.behavior||'instant'});},[navigation?.serial,pdf,scale]);
   return <div ref={root} className="canvas-stage continuous-stage" tabIndex="0" aria-label="Continuous PDF document">
     {Array.from({length:pdf.numPages},(_,i)=>{const number=i+1;return <PageShell key={number} number={number} root={root} register={register} pinned={selection?.pageNumber===number} pdf={pdf} scale={scale} geometry={metadata?.pages[number-1]} {...props}
-      runs={index[number]?.runs||[]} selected={selection?.pageNumber===number?selection.run_id:null}
+      runs={groupedEditTargets(index[number]?.runs||[],editedRunIds)} selected={selection?.pageNumber===number?selection.run_id:null}
       onSelect={run=>props.onSelect({...run,pageNumber:number})} imageDraft={props.imageDraft?.page===number?props.imageDraft:null}
       renderOverlay={viewport=>renderOverlay?.(number,viewport)}/>;})}
   </div>;

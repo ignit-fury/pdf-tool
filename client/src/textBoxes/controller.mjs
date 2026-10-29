@@ -10,7 +10,7 @@ export function validateBoxes(boxes){
   if(!Array.isArray(boxes)||boxes.length>200)fail();
   const ids=new Set();
   for(const box of boxes){
-    if(!keys(box,['id','page_index','rect','text','style',...(Object.hasOwn(box,'rotation')?['rotation']:[])])||Object.hasOwn(box,'rotation')&&![90,180,270].includes(box.rotation)||typeof box.id!=='string'||!/^[0-9a-f]{32}$/.test(box.id)||ids.has(box.id)||!Number.isSafeInteger(box.page_index)||box.page_index<0||box.page_index>=2000||typeof box.text!=='string'||!box.text.length||Array.from(box.text).length>10000)fail();
+    if(!keys(box,['id','page_index','rect','text','style',...(Object.hasOwn(box,'rotation')?['rotation']:[])])||Object.hasOwn(box,'rotation')&&![90,180,270].includes(box.rotation)||typeof box.id!=='string'||!/^[0-9a-f]{32}$/.test(box.id)||ids.has(box.id)||!Number.isSafeInteger(box.page_index)||box.page_index<0||box.page_index>=2048||typeof box.text!=='string'||!box.text.length||Array.from(box.text).length>10000)fail();
     ids.add(box.id);const r=box.rect,s=box.style;
     if(!keys(r,['left','top','width','height'])||!Object.entries(r).every(([k,v])=>finite(v,['left','top'].includes(k)?0:.01,144000)))fail();
     if(!keys(s,styleKeys)||!['Sans','Serif','Mono'].includes(s.font_family)||!['left','center','right'].includes(s.alignment)||typeof s.bold!=='boolean'||typeof s.italic!=='boolean'||!Array.isArray(s.color)||s.color.length!==3||!s.color.every(v=>finite(v,0,1))||!finite(s.font_size,1,512)||!finite(s.character_spacing,0,10)||!finite(s.line_spacing,1,3)||!finite(s.paragraph_spacing,0,144))fail();
@@ -67,7 +67,7 @@ export function createTextBoxController({getCurrent,request,prepare,onState=()=>
         if(!keys(response,['ok','source_hash','code','required_height','available_height','location'])||response.code!=='TEXT_BOX_OVERFLOW'||!finite(response.required_height,.01,100000000)||!finite(response.available_height,.01,144000)||response.required_height<=response.available_height)fail();
         const result={...response};onState({status:'overflow',...result});return result;
       }
-      if(!keys(response,['ok','source_hash','pdf','page_index','boxes','layout','notices','location'])||!Number.isSafeInteger(response.page_index)||response.page_index<0||response.page_index>=2000||!Array.isArray(response.notices)||response.notices.length>2||response.notices.some(n=>!['UNLOCKED_COPY','SIGNATURES_INVALIDATED'].includes(n)))fail();
+      if(!keys(response,['ok','source_hash','pdf','page_index','boxes','layout','notices','location'])||!Number.isSafeInteger(response.page_index)||response.page_index<0||response.page_index>=2048||!Array.isArray(response.notices)||response.notices.length>2||response.notices.some(n=>!['UNLOCKED_COPY','SIGNATURES_INVALIDATED'].includes(n)))fail();
       const boxes=validateBoxes(response.boxes),layout=response.layout;
       if(payload.operation!=='remove'&&(!keys(layout,['required_height','available_height','line_count'])||!finite(layout.required_height,.01,144000)||!finite(layout.available_height,.01,144000)||layout.required_height>layout.available_height+.000001||!Number.isSafeInteger(layout.line_count)||layout.line_count<1||layout.line_count>10000))fail();
       if(payload.operation==='remove'&&layout!==null)fail();

@@ -34,6 +34,7 @@ ERROR_CODES = frozenset({'INVALID_TEXT_BOX', 'TEXT_BOX_UNSUPPORTED_TEXT',
 MAX_DECODED = 1024 * 1024
 MAX_METADATA = 128 * 1024
 MAX_OUTPUT = 48 * 1024 * 1024
+MAX_TEXT_BOX_PAGES = 2048
 DEFAULT_STYLE: dict[str, object] = dict(font_family='Sans', font_size=12, bold=False,
     italic=False, color=[0,0,0], character_spacing=0, line_spacing=1.2,
     paragraph_spacing=0, alignment='left')
@@ -335,7 +336,7 @@ def _owned(pdf: pikepdf.Pdf) -> list[tuple[dict[str,Any],pikepdf.Object]]:
                 spec=meta['spec']
                 if not isinstance(spec,dict) or set(spec)!={'id','page_index','rect','text','style'}:
                     _fail('TEXT_BOX_UNSAFE')
-                normalized=_spec(spec,2000)
+                normalized=_spec(spec,MAX_TEXT_BOX_PAGES)
                 if normalized!=spec or spec['id'] in seen:
                     _fail('TEXT_BOX_UNSAFE')
                 seen.add(spec['id'])
@@ -574,7 +575,7 @@ def prepare_text_box(pdf: pikepdf.Pdf, source: bytes, payload: object) -> dict[s
     if operation not in ('list','upsert','remove'):_fail()
     keys={'list':{'operation'},'remove':{'operation','id'},'upsert':{'operation','page_index','id','text','rect','style','allow_overlap','auto_expand'}}[operation]
     if set(request)-keys:_fail()
-    if len(source)>50*1024*1024 or len(pdf.pages)>2000:_fail('TEXT_BOX_LIMIT')
+    if len(source)>50*1024*1024 or len(pdf.pages)>MAX_TEXT_BOX_PAGES:_fail('TEXT_BOX_LIMIT')
     source_hash=hashlib.sha256(source).hexdigest()
     owned=_owned(pdf)
     boxes=[s for s,_ in owned]
