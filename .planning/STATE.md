@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
 status: verification_pending
-stopped_at: Local outline and atomic history navigation delivered; source reflow and release gates remain open
+stopped_at: Precise text-layer search highlights and render-gated replacement tour delivered; release gates remain open
 last_updated: "2026-10-29"
-last_activity: Verified local bookmarks, atomic history jumps, stale/failure guards and no-upload navigation
+last_activity: Verified substring rectangles, actual replacement spans, Unicode/geometry, stale guards and exact downloads
 progress:
   total_phases: 8
   completed_phases: 5
@@ -14,7 +14,7 @@ progress:
 # Project State
 
 **Core value:** Replace existing PDF text while preserving the surrounding document.
-**Current focus:** Outline and atomic history navigation delivered locally after the viewer/text-container stages. Original-source reflow and earlier external release verification remain open. No deployment.
+**Current focus:** Precise text-layer search highlights delivered locally after navigation/history. Explicit approximation/removal fallbacks remain; arbitrary source reflow and external release verification remain open. No deployment.
 
 Phases 1–3 are complete. The Phase 3 engine and its fonts, CLI and regression gates are
 now present in this checkout; the original source worktree and local edits are preserved.
@@ -31,6 +31,29 @@ Execution record: `.planning/PHASE-4-EXECUTION.md`.
 Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04-VERIFICATION.md`.
 
 ## Current work
+
+### Precise search highlights — 2026-10-29
+
+- Active matches use bounded canonical/UTF16 mapping into actual PDF.js DOM Ranges.
+  Repeated same-run words, split nodes, accents, zoom and rotation/crop/UserUnit work.
+  Ambiguous/unsupported mappings are explicitly approximate, not guessed.
+- Validated review captures actual output spans; the post-commit tour highlights
+  replacement text or labels deleted locations. Timed advance waits for rendering.
+  Query/source changes cancel stale ranges and unrelated tours. No extra PDF writes.
+- Fixed UserUnit text-layer alignment and viewport scrolling that could hide outer
+  chrome. Highlighting remains temporary, pointer-transparent and absent from exports.
+- Full client suite: 193 tests, production build, runtime license closures, 19 controls and
+  Unicode check pass. Two new and 10 existing browser journeys pass on final build.
+  New actual downloads: 3 byte identities, 8 structural validations, 12 unrelated-pixel
+  comparisons and preserved searchable text/neighbor glyphs. Prior download regressions pass.
+- One fresh review's 2 Important issues reproduced/fixed: pathological canonical
+  reordering and false geometry through empty unions. No deferred findings. Backend
+  unchanged; full Python/corpus and new cross-browser verification not rerun.
+- Search coverage still follows individual authoritative runs. Fragmented/overprinted
+  or native-container glyph runs are not joined into new cross-run matches. Arbitrary
+  source reflow/growth, neighbor movement and foreign-image editing remain unsupported.
+- Plan/evidence: `docs/superpowers/plans/2026-10-29-search-highlights.md` and
+  `docs/verification/search-highlights-2026-10-29.md`. No dependency/deployment.
 
 ### Document navigation and history — 2026-10-29
 

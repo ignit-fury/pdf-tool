@@ -42,6 +42,10 @@ Arbitrary source reflow and unowned image mutation remain unsupported. Evidence:
 The following stage adds bounded local bookmark navigation and an atomic retained
 history navigator. Navigation pauses further automatic server analysis; explicit
 Edit/Find resumes it. Evidence: `docs/verification/document-navigation-2026-10-29.md`.
+The next stage adds bounded measured text-layer substring highlights, explicit
+approximation/removal labels and an actual-render-gated replacement walkthrough.
+Evidence: `docs/verification/search-highlights-2026-10-29.md`. Search coverage stays
+within existing authoritative runs; cross-run matching/reflow are not introduced.
 
 ## Core Value
 

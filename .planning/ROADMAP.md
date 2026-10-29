@@ -439,3 +439,14 @@ Outline/History initiate no document upload; explicit Edit/Find resumes deferred
 analysis. All existing constraints/release gates remain. No deployment/dependency.
 Plan: `docs/superpowers/plans/2026-10-29-document-navigation.md`.
 Evidence: `docs/verification/document-navigation-2026-10-29.md`.
+
+### Next stage — Precise text-layer search highlights
+
+Delivered locally: measured substring ranges, canonical Unicode/source geometry
+mapping with explicit fallbacks, actual committed replacement offsets/deletions,
+render-gated tour timing and stale-target guards. UserUnit selection alignment and
+viewport-only navigation scrolling fixed. Full client suite: 193 tests, two new/10 existing
+browser journeys and actual native download integrity checks pass. No backend/API,
+dependency or deployment changes; prior release gates remain open.
+Plan: `docs/superpowers/plans/2026-10-29-search-highlights.md`.
+Evidence: `docs/verification/search-highlights-2026-10-29.md`.

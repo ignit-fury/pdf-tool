@@ -146,6 +146,17 @@ the document and timeline unchanged.
 See the [navigation plan](docs/superpowers/plans/2026-10-29-document-navigation.md)
 and [verification report](docs/verification/document-navigation-2026-10-29.md).
 
+Find now highlights the selected substring using measured PDF.js text-layer ranges,
+including repeated words within one run, normalized accents, zoom and rotated pages.
+Ambiguous or unavailable mappings show a dashed area labeled **Approximate text area**.
+Highlights are temporary viewer elements and never become PDF annotations or exports.
+The batch walkthrough highlights the actual committed replacement spans, labels
+removed-text locations, and waits for each result to render before advancing.
+Changing the query or document clears stale ranges. Search/page scrolling stays
+inside the document viewport so the top toolbar remains visible.
+See the [highlight plan](docs/superpowers/plans/2026-10-29-search-highlights.md)
+and [verification and limits](docs/verification/search-highlights-2026-10-29.md).
+
 ## How to run
 
 Python 3.13+ and Node 22.13+ are required. From the repository root:
