@@ -56,6 +56,12 @@ export function admitHistory({openedBytes,current,history=[],candidateBytes,temp
   if(transientBytes>MAX_TRANSIENT_BYTES)return failure('TRANSIENT_LIMIT');
   return {ok:true,retainedBytes,transientBytes};
 }
+/** New mutations discard Redo only on successful publication. Count the final
+ * past entries for the entry cap, but all currently retained Redo bytes for both
+ * memory caps. Undo/Redo themselves move entries instead of adding to the total. */
+export function admitTimeline({past=[],future=[],...options}={}) {
+  return admitHistory({...options,history:past,current:{...options.current,redo:future}});
+}
 export function pushSnapshot(history,snapshot) {
   if(history.length>=MAX_HISTORY_ENTRIES)throw Object.assign(new Error('HISTORY_LIMIT'),{code:'HISTORY_LIMIT'});
   return Object.freeze([...history,snapshot]);

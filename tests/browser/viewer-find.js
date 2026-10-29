@@ -1,0 +1,43 @@
+// Continue after viewer-images.js. Proves one atomic apply per action, no animation writes.
+async (page) => {
+  const root=page.__viewerFixtureRoot||'/private/tmp/pdf-tool-viewer-20261029';
+  const check=(condition,message)=>{if(!condition)throw new Error(message);};
+  await page.locator('.document-actions').getByRole('button',{name:'Find and replace',exact:true}).click();
+  if(await page.getByRole('button',{name:'Analyze text Server',exact:true}).count())await page.getByRole('button',{name:'Analyze text Server',exact:true}).click();
+  await page.getByRole('textbox',{name:'Find text',exact:true}).fill('Hello');
+  await page.getByText('24 matches across 12 pages',{exact:true}).first().waitFor();
+  await page.getByRole('textbox',{name:'Replace with',exact:true}).fill('Hi');
+  await page.getByRole('combobox',{name:'Replacement font',exact:true}).selectOption('Serif');
+  if(!await page.locator('.find-row-controls [aria-current="true"]').count())await page.getByRole('button',{name:'Next match',exact:true}).click();
+  const writes=()=>page.__viewerNetwork.filter(r=>r.query.includes('dry_run=false')).length;
+  const beforeOne=writes();
+  await page.getByRole('button',{name:'Preview Replace One Server',exact:true}).click();
+  await page.getByRole('button',{name:'Replace One Server',exact:true}).click();
+  await page.getByText('23 matches across 12 pages',{exact:true}).first().waitFor();
+  check(writes()===beforeOne+1,'Replace One must apply exactly once');
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.getByRole('button',{name:'Preview Replace All Server',exact:true}).click();
+  await page.getByRole('button',{name:'Replace All (23) Server',exact:true}).click();
+  await page.getByRole('region',{name:'Applied replacement walkthrough',exact:true}).waitFor();
+  check(writes()===beforeOne+2,'Replace All must be one atomic apply');
+  await page.getByRole('button',{name:'Resume walkthrough',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Next applied result',exact:true}).click();
+  await page.getByText('Applied replacement 2 of 23 — Page 2 of 12',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Resume walkthrough',exact:true}).click();
+  await page.getByRole('button',{name:'Pause walkthrough',exact:true}).click();
+  const tourWrites=writes();
+  await page.getByRole('button',{name:'Stop walkthrough',exact:true}).click();
+  check(writes()===tourWrites,'Walkthrough must never rewrite PDFs');
+  await page.getByText('0 matches across 12 pages',{exact:true}).first().waitFor();
+  const output=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download edited PDF Browser',exact:true}).click();
+  await (await output).saveAs(`${root}/replaced-all.pdf`);
+  await page.getByRole('button',{name:'Undo replacements Browser',exact:true}).click();
+  await page.getByText('23 matches across 12 pages',{exact:true}).first().waitFor();
+  await page.getByRole('button',{name:'Redo Browser',exact:true}).click();
+  await page.getByText('0 matches across 12 pages',{exact:true}).first().waitFor();
+  check(writes()===tourWrites,'Batch Undo/Redo must not rewrite or upload');
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  page.__viewerFindResult={passed:true,one:1,all:23,atomicWrites:2,walkthrough:true,reducedMotion:true,undoRedo:true};
+  return page.__viewerFindResult;
+}

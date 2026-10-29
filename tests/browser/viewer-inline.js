@@ -1,0 +1,57 @@
+// Run with the existing Playwright connector's browser_run_code_unsafe filename.
+// First run tools/build_viewer_fixtures.py. Set page.__viewerFixtureRoot to override.
+async (page) => {
+  const root=page.__viewerFixtureRoot||'/private/tmp/pdf-tool-viewer-20261029';
+  const check=(condition,message)=>{if(!condition)throw new Error(message);};
+  await page.goto(page.__viewerBaseUrl||'http://127.0.0.1:8767/');
+  page.__viewerNetwork=[];
+  for(const listener of page.listeners('request'))if(listener.toString().includes('__viewerNetwork'))page.off('request',listener);
+  page.__viewerRequestListener=r=>{const u=new URL(r.url());if(u.pathname==='/upload'||u.pathname.startsWith('/jobs/'))page.__viewerNetwork.push({method:r.method(),path:u.pathname,query:u.search,bytes:r.postDataBuffer()?.length||0});};
+  page.on('request',page.__viewerRequestListener);
+  await page.locator('input[aria-label="Open PDF file"]').setInputFiles(`${root}/viewer-fixture.pdf`);
+  await page.locator('.continuous-stage').waitFor();
+  await page.waitForFunction(()=>document.querySelector('button.primary')&&!document.querySelector('.document-actions .primary').disabled);
+  check(page.__viewerNetwork.length===0,'Opening unexpectedly uploaded the PDF');
+  check(await page.locator('.document-page').count()===12,'All page shells must exist');
+  await page.waitForFunction(()=>document.querySelectorAll('.document-page canvas[aria-label^="PDF page"]').length<6);
+  await page.locator('[data-page-number="12"]').scrollIntoViewIfNeeded();
+  await page.locator('[data-page-number="12"] canvas[aria-label="PDF page 12"]').waitFor();
+  await page.waitForFunction(()=>document.querySelector('.page-controls').textContent.includes('12 / 12'));
+  await page.locator('[data-page-number="1"]').scrollIntoViewIfNeeded();
+  await page.getByRole('button',{name:'Edit text',exact:true}).click();
+  await page.getByRole('button',{name:'Analyze text Server',exact:true}).click();
+  const run=()=>page.locator('[data-page-number="1"]').getByRole('button',{name:'Edit text: Hello world',exact:true}).first();
+  await run().click();
+  await page.getByRole('textbox',{name:'Edit text on page',exact:true}).fill('Hi');
+  await page.getByRole('button',{name:'Preview fit Server',exact:true}).click();
+  await page.getByText('Validated — ready to apply.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Apply edit Server',exact:true}).click();
+  await page.getByRole('button',{name:'Undo text edit Browser',exact:true}).waitFor();
+  await page.waitForFunction(()=>document.querySelector('[data-page-number="1"] .textLayer')?.textContent.includes('Hi'));
+  const beforeHistory=page.__viewerNetwork.length;
+  await page.getByRole('button',{name:'Undo text edit Browser',exact:true}).click();
+  await page.getByRole('button',{name:'Download original Browser',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Redo Browser',exact:true}).click();
+  await page.getByRole('button',{name:'Download edited PDF Browser',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Undo text edit Browser',exact:true}).click();
+  await page.getByRole('button',{name:'Download original Browser',exact:true}).waitFor();
+  check(page.__viewerNetwork.length===beforeHistory,'History restoration unexpectedly uploaded');
+  await page.getByRole('button',{name:'Edit text',exact:true}).click();
+  await run().click();
+  await page.getByRole('textbox',{name:'Edit text on page',exact:true}).fill('Hello new world');
+  await page.getByRole('spinbutton',{name:'Font size',exact:true}).fill('9');
+  await page.getByRole('spinbutton',{name:'Character spacing',exact:true}).fill('0.1');
+  await page.getByRole('button',{name:'Preview fit Server',exact:true}).click();
+  await page.getByText('Validated — ready to apply.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Apply edit Server',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('[data-page-number="1"] .textLayer')?.textContent.includes('Hello new world'));
+  check(await page.getByRole('button',{name:'Redo Browser',exact:true}).isDisabled(),'A new mutation must clear Redo');
+  await run().click();
+  await page.getByRole('textbox',{name:'Edit text on page',exact:true}).fill('a\nb');
+  check(await page.getByRole('button',{name:'Preview fit Server',exact:true}).isDisabled(),'Unsupported newlines must block preview');
+  await page.getByRole('button',{name:'Cancel text editing',exact:true}).click();
+  const download=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download edited PDF Browser',exact:true}).click();
+  await (await download).saveAs(`${root}/inline-edited.pdf`);
+  return {passed:true,pages:12,canvases:await page.locator('.document-page canvas[aria-label^="PDF page"]').count(),network:page.__viewerNetwork};
+}

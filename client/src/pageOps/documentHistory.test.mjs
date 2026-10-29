@@ -1,8 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {captureSnapshot,admitHistory,pushSnapshot,peekSnapshot,popSnapshot,MAX_PDF_BYTES,MAX_RETAINED_BYTES,MAX_TRANSIENT_BYTES,MAX_HISTORY_ENTRIES} from './documentHistory.mjs';
+import {captureSnapshot,admitHistory,admitTimeline,pushSnapshot,peekSnapshot,popSnapshot,MAX_PDF_BYTES,MAX_RETAINED_BYTES,MAX_TRANSIENT_BYTES,MAX_HISTORY_ENTRIES} from './documentHistory.mjs';
 
 const bytes=n=>new Uint8Array([n]);
+test('new history branches use final past entry count while still budgeting Redo bytes',()=>{
+  const item={bytes:bytes(1)},past=Array(99).fill(item),future=[item];
+  assert.equal(admitTimeline({current:item,past,future,candidateBytes:bytes(2)}).ok,true);
+  assert.equal(admitTimeline({current:item,past:Array(100).fill(item),future:[],candidateBytes:bytes(2)}).code,'HISTORY_LIMIT');
+  const large=Array.from({length:5},()=>({bytes:new Uint8Array(MAX_PDF_BYTES)}));
+  assert.equal(admitTimeline({current:item,past:[],future:large,candidateBytes:bytes(2)}).code,'RETENTION_LIMIT');
+});
 export const state=n=>({bytes:bytes(n),sourceBytes:bytes(n-1),password:'secret',recipe:[{run_id:'p0-r0',replacement:'new'}],selectedPage:2,style:{bold:true},selection:{id:'p0-r0'},localMetadata:{signed:false,encrypted:true,pageCount:3,pages:[]},analysis:{enabled:true,sourceIdentity:'old-source',meta:{pages:3},index:{runs:[1]}},findState:{query:'new'},acknowledged:true,action:'text'});
 test('mixed document history restores byte exact state and distinct replay baseline',()=>{
   const opened=bytes(0),first=state(2),snapshot=captureSnapshot(first);

@@ -74,6 +74,9 @@ export async function disposeDocument(document) {
   try {await document?.loadingTask?.destroy();} catch {}
 }
 export function explainReason(reason) {
+  if(reason==='font_size_growth_unsupported')return 'Increasing source text height could overlap nearby content. Choose the original size or a smaller size; automatic reflow is unavailable.';
+  if(reason==='multiline_text_unsupported')return 'This source run cannot safely contain line breaks. Keep one line, choose smaller text, or edit a structured source document for reflow.';
+  if(reason==='source_font_state_unsupported')return 'The source font state cannot be verified for size or spacing changes. Preserve those settings or choose another text run.';
   if(reason==='normalization_boundary_unreplaceable')return 'This match covers only part of a character or combined character. Search for the complete character to replace it safely.';
   const widthError=/^delta (-?\d+(?:\.\d+)?)pt exceeds/.exec(reason||'');
   if(widthError)return Number(widthError[1])>0?'The replacement is too wide for this text area. Try shorter text or another replacement font.':'The replacement is shorter than the original text. Preview again with the updated editor.';
