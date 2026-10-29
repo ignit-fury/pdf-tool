@@ -450,3 +450,13 @@ browser journeys and actual native download integrity checks pass. No backend/AP
 dependency or deployment changes; prior release gates remain open.
 Plan: `docs/superpowers/plans/2026-10-29-search-highlights.md`.
 Evidence: `docs/verification/search-highlights-2026-10-29.md`.
+
+### User-reported gap fix — Original source expansion
+
+Delivered locally: selected original text now enters flexible native layout on line
+breaks/pasted tabs or explicit Expand choice. Original removal plus wrapped insertion
+is one candidate; auto-height growth, collision/page limits, prior recipes and exact
+Undo/Redo verified. 875 Python/197 client tests and12 export/removal gates pass; actual
+browser/native-output evidence retained. No deployment/dependency; prior gates open.
+Plan: `docs/superpowers/plans/2026-10-29-source-text-expansion.md`.
+Evidence: `docs/verification/source-text-expansion-2026-10-29.md`.

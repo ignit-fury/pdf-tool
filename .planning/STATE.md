@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
 status: verification_pending
-stopped_at: Precise text-layer search highlights and render-gated replacement tour delivered; release gates remain open
+stopped_at: Original source multiline/growing-container workflow delivered and verified locally; release gates remain open
 last_updated: "2026-10-29"
-last_activity: Verified substring rectangles, actual replacement spans, Unicode/geometry, stale guards and exact downloads
+last_activity: Verified genuine source-to-flexible replacement, automatic growth, prior recipe retention and atomic Undo
 progress:
   total_phases: 8
   completed_phases: 5
@@ -14,7 +14,7 @@ progress:
 # Project State
 
 **Core value:** Replace existing PDF text while preserving the surrounding document.
-**Current focus:** Precise text-layer search highlights delivered locally after navigation/history. Explicit approximation/removal fallbacks remain; arbitrary source reflow and external release verification remain open. No deployment.
+**Current focus:** The original-text expansion gap is fixed locally: line breaks enter flexible native layout and boxes grow safely. Automatic neighbor/paragraph reflow and external release verification remain open. No deployment.
 
 Phases 1–3 are complete. The Phase 3 engine and its fonts, CLI and regression gates are
 now present in this checkout; the original source worktree and local edits are preserved.
@@ -31,6 +31,31 @@ Execution record: `.planning/PHASE-4-EXECUTION.md`.
 Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04-VERIFICATION.md`.
 
 ## Current work
+
+### Original source text expansion — 2026-10-29
+
+- User-reported one-line warning traced to the missing bridge from original runs
+  to native flexible containers. Enter/pasted multiline now transitions without
+  losing draft/caret; Expand text box/Layout provides an explicit choice.
+- Original source removal and native wrapped insertion form one candidate through
+  the existing guarded writer. All prior recipe edits retained; original IDs use
+  baseline source bytes, publication remains bound to current bytes/version.
+- Typing surface and native bounds grow automatically when enabled; actual font
+  metrics, page bounds and rendered/annotation collision checks protect neighbors.
+  Cancel/refusal preserves current PDF; Apply is one exact Undo/Redo operation.
+- 875 selected Python tests and12 export/removal gates pass. Final197 client tests,
+  40-file strict typing, build, both license closures/19 controls and Unicode pass.
+  New actual browser/source-download proof:3 byte identities,4 structural validations,
+  24 unrelated-pixel comparisons. Existing viewer/Find/images/text-box/navigation/
+  highlight browser and native-output regressions pass.
+- Fresh review has no Important/Critical findings. Tab remains focus navigation;
+  pasted tabs use four spaces. Integration fix chooses largest visible page after
+  taller draft closure, rather than accidentally selecting a nearer next-page top.
+- No dependencies, migration or deployment. Bundled replacement fonts are explicit.
+  Arbitrary neighbor movement/multirun reflow and original engine unsafe cases remain
+  bounded/refused; no text is silently clipped.
+- Plan/evidence: `docs/superpowers/plans/2026-10-29-source-text-expansion.md` and
+  `docs/verification/source-text-expansion-2026-10-29.md`.
 
 ### Precise search highlights — 2026-10-29
 

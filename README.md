@@ -12,7 +12,9 @@ Hybrid client/server — rendering, text selection, original-byte retention and 
 
 Page-image export and splitting also run in the browser. Compression, annotation/form flattening, text/Markdown/HTML, PDF/A and DOCX use isolated server workers after explicit actions. DOCX review and conversion each upload the current PDF separately; reviewing does not create a download. Exports preserve the working PDF and its Undo history.
 
-Editing is **content-stream only**. No white-box overlays. No reflow across lines or pages — replaced text occupies the original text run's space.
+Editing uses genuine content streams. Preserve-layout edits occupy the original run's
+space. Flexible text boxes replace a selected source run with native wrapped text;
+surrounding PDF content stays fixed and collision checks protect it.
 
 ## Privacy model
 
@@ -82,8 +84,9 @@ The editor uses the actual content stream. Unsupported edits are refused explici
 Implemented: password-protected PDFs, signature warnings, server-issued edit boxes,
 selectable browser text, progressive thumbnails/classification, bold/italic and colour,
 immutable-source replay, cache-loss recovery and isolated parser workers. Font-size shrink/equal and bounded character spacing are supported within the original
-run geometry. Source size growth and multiline reflow are refused because neighboring
-content cannot be moved safely without reliable layout ownership.
+run geometry. In Preserve layout, source size growth and multiline rewriting are refused because
+neighboring content stays fixed. Flexible text box provides the validated wrapping/
+growth alternative described below, without moving unrelated content.
 Shorter replacements can leave unused space after the new text while preserving the
 following text's position; they do not need to be stretched to the original width.
 Edits using stateful quote operators or unsupported Unicode shaping are also refused to
@@ -118,9 +121,18 @@ after reopening. A box rotated with its page can be removed or edited after rota
 the page back. Newly inserted boxes on already rotated pages are upright/editable.
 
 Original preserve-layout text edits can be longer or shorter when they fit,
-including by choosing a smaller size. Arbitrary-PDF source reflow, multiline source
-edits, growing source text height and moving neighboring content remain unavailable.
-New containers have their own layout; they do not reconstruct existing paragraphs.
+including by choosing a smaller size. Choose **Expand text box** or **Layout →
+Flexible text box** for wrapping and growth. Entering/pasting line breaks switches
+there automatically without losing the draft or caret; pasted tabs use four spaces.
+The selected original run is genuinely removed through the validated writer, and
+the new native layout includes all prior committed edits. Preview shows the complete
+candidate; Apply is one Undo action. Cancel leaves the working PDF unchanged.
+**Grow height to fit text** is enabled by default for new/selected managed boxes.
+Both the typing surface and validated PDF can grow; the PDF uses actual font metrics.
+The selected bundled replacement font is disclosed before Apply.
+Arbitrary multirun paragraph reconstruction and automatically moving neighboring
+content remain unavailable. Growth must fit free space; move/widen the box, choose
+another page or reduce the font if it cannot fit. No text is silently clipped.
 Missing glyphs, complex shaping and unsafe ownership refuse explicitly. Ordinary
 text-run edits cannot rewrite managed containers; select the complete text box.
 
@@ -156,6 +168,9 @@ Changing the query or document clears stale ranges. Search/page scrolling stays
 inside the document viewport so the top toolbar remains visible.
 See the [highlight plan](docs/superpowers/plans/2026-10-29-search-highlights.md)
 and [verification and limits](docs/verification/search-highlights-2026-10-29.md).
+The [source-expansion plan](docs/superpowers/plans/2026-10-29-source-text-expansion.md)
+and [verified fix](docs/verification/source-text-expansion-2026-10-29.md) document
+the original-text workflow and its safety boundaries.
 
 ## How to run
 

@@ -46,6 +46,11 @@ The next stage adds bounded measured text-layer substring highlights, explicit
 approximation/removal labels and an actual-render-gated replacement walkthrough.
 Evidence: `docs/verification/search-highlights-2026-10-29.md`. Search coverage stays
 within existing authoritative runs; cross-run matching/reflow are not introduced.
+The original-run expansion gap is subsequently fixed: Enter/multiline or explicit
+Flexible text box replaces a selected source run with a growing native container in
+one validated candidate/Undo step. Nearby content stays fixed, source identity and
+all committed recipe edits are retained, and space/glyph limits remain explicit.
+Evidence: `docs/verification/source-text-expansion-2026-10-29.md`.
 
 ## Core Value
 
