@@ -1189,6 +1189,7 @@ MODULE_OWN_REASONS = frozenset(
         "source_font_state_unsupported",
         "invalid_style",
         "multiline_text_unsupported",
+        "managed_text_box",
     }
 )
 

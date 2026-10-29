@@ -433,6 +433,20 @@ def _resolve_op(
     measurement), so this is correct against a mutated handle exactly as it is against a
     pristine one -- which is the whole reason it is a function rather than an inlined block.
     """
+    # Managed containers have a separate complete-stream proof and writer. An
+    # ordinary run rewrite would invalidate that proof, even for a no-op or an
+    # explicit font selection. The authoritative direct content-part address is
+    # sufficient to lock a marked stream; untrusted metadata grants no bypass.
+    address = decode_run_id(run.run_id)
+    if (not address["xobj_path"] and address["annot"] is None
+            and address["pattern"] is None and address["charproc"] is None):
+        contents = pdf.pages[run.page].obj.get("/Contents")
+        direct_parts = list(contents) if isinstance(contents, pikepdf.Array) else [contents]
+        part = address["part"]
+        if 0 <= part < len(direct_parts):
+            stream = direct_parts[part]
+            if isinstance(stream, pikepdf.Stream) and "/NativeTextBox" in stream:
+                return ResolvedOp(op, ok=False, reason="managed_text_box", run=run, verdict=verdict)
     if any(ch in op.new_text for ch in "\r\n\v\f\x85\u2028\u2029"):
         return ResolvedOp(op, ok=False, reason="multiline_text_unsupported", run=run, verdict=verdict)
     if op.style is not None:
