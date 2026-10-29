@@ -13,8 +13,13 @@ PDFA_REASON_CODES = {
     'PDFA_METADATA_UNSUPPORTED': 'metadata-unsupported',
     'PDFA_VERSION_UNSUPPORTED': 'pdf-version', 'PDFA_LIMIT': 'limit',
 }
+TEXT_BOX_ERROR_CODES = frozenset({
+    'INVALID_TEXT_BOX', 'TEXT_BOX_UNSUPPORTED_TEXT', 'TEXT_BOX_UNSAFE',
+    'TEXT_BOX_NOT_FOUND', 'TEXT_BOX_OVERLAP', 'TEXT_BOX_LIMIT', 'TEXT_BOX_OUTPUT_LIMIT',
+})
 ERROR_CODES = frozenset({
     *PDFA_REASON_CODES,
+    *TEXT_BOX_ERROR_CODES,
     'DOCX_REVIEW_REQUIRED', 'DOCX_REVIEW_MISMATCH', 'DOCX_UNAVAILABLE', 'DOCX_UNSUPPORTED',
     "INVALID_ACTION", "INVALID_INPUT", "SOURCE_TOO_LARGE", "RECIPE_TOO_LARGE",
     "SCRATCH_UNSAFE", "WORKER_TIMEOUT", "WORKER_OUTPUT_LIMIT", "WORKER_FAILED",
@@ -26,7 +31,7 @@ ERROR_CODES = frozenset({
 })
 # PDF worker actions stay separate: accepting heic-decode here would make it a
 # valid action in the PDF transport. Only reporting accepts the image action.
-ACTIONS = frozenset({"inspect", "page", "edit", "plan", "export"})
+ACTIONS = frozenset({"inspect", "page", "edit", "plan", "export", "text-box"})
 
 
 def set_error_reporter(reporter: ErrorReporter | None) -> None:

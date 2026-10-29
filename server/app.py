@@ -262,6 +262,7 @@ def create_app(*, max_upload_bytes: int = MAX_UPLOAD_BYTES,
             status = {'PASSWORD_REQUIRED': 422, 'PASSWORD_INCORRECT': 422,
                       'SIGNATURE_ACKNOWLEDGEMENT_REQUIRED': 409,
                       'PAGE_OUT_OF_RANGE': 400, 'INVALID_RECIPE': 400,
+                      'INVALID_TEXT_BOX': 400,
                       'RECIPE_TOO_LARGE': 413, 'WORKER_TIMEOUT': 422,
                       'WORKER_LIMIT_EXCEEDED': 422}.get(str(error), 422)
             if error in ('DOCX_REVIEW_REQUIRED','DOCX_REVIEW_MISMATCH'):
@@ -378,6 +379,21 @@ def create_app(*, max_upload_bytes: int = MAX_UPLOAD_BYTES,
         result = await dispatch('edit', source, request, recipe=recipe,
                                 dry_run=dry_run, acknowledge_signature=acknowledge_signature)
         return {**result, 'location': operation_location([1])}
+
+    @api.post('/jobs/{job_id}/text-box')
+    async def text_box(job_id: str, request: Request,
+                       acknowledge_signature: str = Query(default='false')) -> dict[str, Any]:
+        if (acknowledge_signature not in ('true', 'false')
+                or any(key != 'acknowledge_signature' or len(request.query_params.getlist(key)) != 1
+                       for key in request.query_params)):
+            raise HTTPException(400, {'code': 'INVALID_TEXT_BOX'})
+        source = require_source(job_id)
+        if request.headers.get('content-type', '').split(';')[0] != 'application/json':
+            raise HTTPException(415, {'code': 'JSON_CONTENT_TYPE_REQUIRED'})
+        payload = await _body(request, MAX_RECIPE_BYTES, body_timeout)
+        result = await dispatch('text-box', source, request, recipe=payload,
+                                acknowledge_signature=acknowledge_signature == 'true')
+        return {**result, 'location': 'server'}
 
     @api.post('/ocr-notify')
     async def ocr_notify(request: Request) -> dict[str, int]:

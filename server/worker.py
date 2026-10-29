@@ -11,6 +11,7 @@ import io
 import hashlib
 import json
 import logging
+import math
 import os
 from pathlib import Path
 import resource
@@ -142,6 +143,73 @@ def _preflight(pdf: object, page: int | None = None) -> None:
                     if isinstance(child, pikepdf.Stream) and str(child.get("/Subtype")) == "/Form")
 
 
+def _text_box_payload(encoded: object) -> dict[str, object]:
+    """Decode the existing recipe transport without ambiguous JSON semantics."""
+    if not isinstance(encoded, str):
+        raise WorkerRefusal('INVALID_TEXT_BOX')
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (ValueError, binascii.Error):
+        raise WorkerRefusal('INVALID_TEXT_BOX') from None
+    if len(raw) > MAX_RECIPE_BYTES:
+        raise WorkerRefusal('RECIPE_TOO_LARGE')
+
+    def unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError('duplicate')
+            result[key] = value
+        return result
+
+    def finite(value: str) -> float:
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError('nonfinite')
+        return number
+
+    try:
+        payload: object = json.loads(raw.decode('utf-8'), object_pairs_hook=unique,
+                                     parse_float=finite, parse_constant=finite)
+    except (ValueError, UnicodeError, RecursionError):
+        raise WorkerRefusal('INVALID_TEXT_BOX') from None
+    if not isinstance(payload, dict) or payload.get('operation') not in ('list', 'upsert', 'remove'):
+        raise WorkerRefusal('INVALID_TEXT_BOX')
+    return payload
+
+
+def _managed_text_box_parts(pdf: object, source: bytes, page: int) -> dict[int, str | None]:
+    """Lock marked direct parts; link IDs only after the native ownership proof."""
+    import pikepdf
+    from engine.text_boxes import TextBoxError, prepare_text_box
+    assert isinstance(pdf, pikepdf.Pdf)
+    contents = pdf.pages[page].obj.get('/Contents')
+    streams = list(contents) if isinstance(contents, pikepdf.Array) else [contents]
+    marked = {part: stream for part, stream in enumerate(streams)
+              if isinstance(stream, pikepdf.Stream) and '/NativeTextBox' in stream}
+    result: dict[int, str | None] = dict.fromkeys(marked)
+    if not marked:
+        return result
+    try:
+        verified = prepare_text_box(pdf, source, {'operation': 'list'})
+        boxes = verified.get('boxes')
+        if verified.get('ok') is not True or not isinstance(boxes, list):
+            return result
+        identifiers = {box['id'] for box in boxes if isinstance(box, dict)
+                       and isinstance(box.get('id'), str) and box.get('page_index') == page}
+        for part, stream in marked.items():
+            metadata: object = json.loads(bytes(stream['/NativeTextBox']))
+            if isinstance(metadata, dict):
+                spec = metadata.get('spec')
+                if isinstance(spec, dict) and isinstance(spec.get('id'), str) and spec['id'] in identifiers:
+                    result[part] = spec['id']
+    except (TextBoxError, ValueError, TypeError, KeyError, pikepdf.PdfError):
+        # An invalid marker must not suppress unrelated source-run analysis.
+        # No document-derived verification details cross the transport.
+        return dict.fromkeys(marked)
+    return result
+
+
 def _execute(request: dict[str, object]) -> dict[str, object]:
     import pikepdf
     from engine.index import DocumentTooLargeError, RunIndex
@@ -150,7 +218,7 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
     action = request.get("action")
     source64 = request.get("source")
     password = request.get("password", "")
-    if action not in {"inspect", "page", "edit", "plan", "export"} or not isinstance(source64, str) or not isinstance(password, str):
+    if action not in {"inspect", "page", "edit", "plan", "export", "text-box"} or not isinstance(source64, str) or not isinstance(password, str):
         raise WorkerRefusal("INVALID_INPUT")
     source = base64.b64decode(source64, validate=True)
     if len(source) > MAX_SOURCE_BYTES or not source.startswith(b"%PDF-"):
@@ -183,6 +251,7 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
             if not isinstance(number, int) or isinstance(number, bool) or not 0 <= number < count:
                 raise WorkerRefusal("PAGE_OUT_OF_RANGE")
             _preflight(pdf, number)
+            managed_parts = _managed_text_box_parts(pdf, source, number)
             with RunIndex(path, password=secret.get_secret_value()) as index:
                 indexed = index.page(number)
                 runs = []
@@ -202,17 +271,49 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
                             page_start=stream_key == (0, ())))
                     raw, resources = streams[stream_key]
                     source_font, suggested_family = source_font_info(raw, resources, run.glyphs[0].operator_byte_offset)
+                    ownership: dict[str, object] = {}
+                    if (not parts['xobj_path'] and parts['annot'] is None and parts['pattern'] is None
+                            and parts['charproc'] is None and parts['part'] in managed_parts):
+                        identifier = managed_parts[parts['part']]
+                        ownership = {'state': 'not_editable', 'reason': 'managed_text_box' if identifier is not None
+                                     else 'managed_text_box_unverified'}
+                        if identifier is not None:
+                            ownership['text_box_id'] = identifier
                     runs.append({"run_id": run.run_id, "text": run.display_text,
                         "search": project_search_text(run.display_text),
                         "box": run_box(run, raw, resources), "state": verdict.state,
                         "reason": verdict.reason, "source_font": source_font,
                         "suggested_font_family": suggested_family,
-                        **formatting.get(run.run_id, {})})
+                        **formatting.get(run.run_id, {}), **ownership})
             box = [float(x) for x in pdf.pages[number].cropbox]
             return {"page": number, "bucket": indexed.bucket, "runs": runs,
                 "width": box[2] - box[0], "height": box[3] - box[1],
                 "rotation": int(pdf.pages[number].get("/Rotate", 0)), "view_box": box}
         _preflight(pdf)
+        if action == 'text-box':
+            payload = _text_box_payload(request.get('recipe'))
+            if (signed and payload['operation'] != 'list'
+                    and request.get('acknowledge_signature') is not True):
+                raise WorkerRefusal('SIGNATURE_ACKNOWLEDGEMENT_REQUIRED')
+            from engine.text_boxes import TextBoxError, prepare_text_box
+            from server.errors import TEXT_BOX_ERROR_CODES
+            encrypted = pdf.is_encrypted
+            try:
+                result = prepare_text_box(pdf, source, payload)
+            except TextBoxError as error:
+                code = error.code
+                raise WorkerRefusal(code if isinstance(code, str) and code in TEXT_BOX_ERROR_CODES
+                                    else 'WORKER_FAILED') from None
+            if payload['operation'] != 'list' and result.get('ok') is True and isinstance(result.get('pdf'), str):
+                # These facts come from the opened input; never propagate arbitrary
+                # native notice values through the fixed public notice protocol.
+                text_box_notices: list[str] = []
+                if signed:
+                    text_box_notices.append('SIGNATURES_INVALIDATED')
+                if encrypted:
+                    text_box_notices.append('UNLOCKED_COPY')
+                result = {**result, 'notices': text_box_notices}
+            return result
         if action == 'export':
             from engine.export.pdf import ExportRefusal, MAX_EXPORT_BYTES, export_pdf
             from engine.export.text import ExportLimitError, export_document_result
@@ -343,6 +444,8 @@ def main() -> None:
         import engine.index  # noqa: F401
         import engine.recipe  # noqa: F401
         import engine.boxes  # noqa: F401
+        import engine.text_boxes  # noqa: F401
+        import pypdfium2  # type: ignore[import-untyped]  # noqa: F401
         import engine.export.pdf  # noqa: F401
         import engine.export.text  # noqa: F401
         import engine.export.pdfa  # noqa: F401
