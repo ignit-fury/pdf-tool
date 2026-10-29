@@ -4,7 +4,7 @@ const labels={'blank insertion':'Insert blank page','page rotation':'Rotate page
   'page deletion':'Delete page','text edit':'Edit text','replacements':'Replace text',
   'image placement':'Insert image','image change':'Change image','image removal':'Remove image',
   'image replacement':'Replace image','image page':'Insert image page','PDF merge':'Merge PDF',
-  'text insertion':'Insert text box','text box edit':'Edit text box','text box removal':'Remove text box'};
+  'source text expansion':'Expand source text','text insertion':'Insert text box','text box edit':'Edit text box','text box removal':'Remove text box'};
 export const historyLabel=action=>labels[action]||'Document change';
 export function historyRows(past,future){
   const labelsInOrder=['Original document',...past.map(s=>historyLabel(s.action)),...future.slice().reverse().map(s=>historyLabel(s.action))];

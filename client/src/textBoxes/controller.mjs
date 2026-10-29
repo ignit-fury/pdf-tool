@@ -28,7 +28,8 @@ function decodePdf(encoded,retainedBytes){
 }
 const digest=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');
 
-/** Separate current-byte cache context. Never mutates the editor's source/job/recipe. */
+/** Separate preview cache. Source conversion uploads baseline + recipe; publication
+ * always stays bound to current working bytes. Never mutates source/job/recipe. */
 export function createTextBoxController({getCurrent,request,prepare,onState=()=>{}}){
   let generation=0,active=null,previewResult=null,cache=null,retiredBytes=0;
   const pendingBytes=new Map(),pendingTotal=()=>[...pendingBytes.values()].reduce((sum,size)=>sum+size,0);
@@ -44,16 +45,19 @@ export function createTextBoxController({getCurrent,request,prepare,onState=()=>
     let prepared;
     try{
       check();if(!(capture.bytes instanceof Uint8Array)||!capture.bytes.length||capture.bytes.byteLength>50*1024*1024)throw Object.assign(new Error(),{code:'INVALID_TEXT_BOX'});
-      admitExport(capture.retainedBytes||0,capture.bytes.buffer.byteLength*2+retiredBytes+1024*1024);
+      const sourceBytes=payload.operation==='replace-source'?capture.session.sourceBytes:capture.bytes;
+      if(!(sourceBytes instanceof Uint8Array)||!sourceBytes.length||sourceBytes.byteLength>50*1024*1024)throw Object.assign(new Error(),{code:'INVALID_TEXT_BOX'});
+      admitExport(capture.retainedBytes||0,sourceBytes.buffer.byteLength*2+retiredBytes+1024*1024);
       onState({status:payload.operation==='list'?'listing':'preparing'});
-      const hash=cache&&matches(cache.capture)?cache.hash:await digest(capture.bytes);check();
-      const context={controller,sourceBytes:capture.bytes,password:capture.session.password,jobId:cache&&matches(cache.capture)?cache.jobId:null};
+      const cached=cache&&matches(cache.capture)&&cache.sourceBytes===sourceBytes;
+      const hash=cached?cache.hash:await digest(sourceBytes);check();
+      const context={controller,sourceBytes,password:capture.session.password,jobId:cached?cache.jobId:null};
       const upload=async(bytes,password)=>{
         const result=await request('/upload',{method:'POST',body:bytes,signal:controller.signal,headers:{'Content-Type':'application/pdf',...passwordHeaders(password)}});check();
         if(!result||result.source_hash!==hash||typeof result.job_id!=='string'||!result.job_id.length||result.job_id.length>256)fail();return result;
       };
       const response=await withSourceRetry(context,job=>request(`/jobs/${encodeURIComponent(job)}/text-box?acknowledge_signature=${!!acknowledged}`,{method:'POST',body:JSON.stringify(payload),signal:controller.signal,headers:{'Content-Type':'application/json',...passwordHeaders(context.password)}}),upload);
-      check();cache={capture,hash,jobId:context.jobId};
+      check();cache={capture,hash,jobId:context.jobId,sourceBytes};
       if(!response||response.location!=='server'||response.source_hash!==hash||typeof response.ok!=='boolean')fail();
       if(payload.operation==='list'){
         if(!keys(response,['ok','source_hash','boxes','location'])||!response.ok)fail();

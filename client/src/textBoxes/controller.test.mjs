@@ -24,6 +24,20 @@ test('explicit preview uploads current materialized bytes and retains an exact s
   const taken=f.controller.take(payload);assert.strictEqual(taken.prepared,result.prepared);assert.deepEqual(f.disposed,[]);
   assert.equal(f.controller.take(payload),null);
 });
+test('source expansion uploads immutable baseline while binding publication to current bytes',async()=>{
+  const baseline=new TextEncoder().encode('%PDF-baseline'),hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',baseline)),v=>v.toString(16).padStart(2,'0')).join('');
+  const calls=[];let f;
+  f=await fixture({request:async(path,options)=>{calls.push({path,...options});return path==='/upload'?{job_id:'baseline',source_hash:hash}:{...f.response,source_hash:hash};}});
+  f.session.sourceBytes=baseline;
+  const conversion={...payload,operation:'replace-source',source_run_id:'original-run',recipe:[{run_id:'other',new_text:'kept'}]};
+  await f.controller.preview(conversion);assert.strictEqual(calls[0].body,baseline);assert.strictEqual(f.current.bytes,f.bytes);
+  f.current.version++;assert.equal(f.controller.take(conversion),null);
+});
+test('source expansion admits the larger original upload before any network request',async()=>{
+  const f=await fixture();f.session.sourceBytes=new Uint8Array(50*1024*1024);f.current.retainedBytes=200*1024*1024;
+  await assert.rejects(()=>f.controller.preview({...payload,operation:'replace-source',source_run_id:'original',recipe:[]}),{code:'EXPORT_LIMIT'});
+  assert.equal(f.calls.length,0);
+});
 test('list performs no candidate generation; source cache recovers from missing source once',async()=>{
   const f=await fixture();let missed=false;
   const g=await fixture({request:async(path,options)=>{f.calls.push({path,...options});if(path==='/upload')return{job_id:'current-job',source_hash:f.hash};if(!missed){missed=true;throw Object.assign(new Error(),{status:409,code:'SOURCE_MISSING'});}return{ok:true,source_hash:f.hash,boxes:[f.box],location:'server'};}});

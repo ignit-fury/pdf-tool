@@ -9,14 +9,14 @@ import TextToolbar,{InlineInput} from './viewer/InlineEditor.jsx';
 import ImageToolbar,{ImageHandles} from './viewer/ImageEditor.jsx';
 import TextBoxToolbar,{TextBoxOverlay} from './textBoxes/TextBoxEditor.jsx';
 import {createTextBoxController} from './textBoxes/controller.mjs';
-import {newTextBox,textBoxPayload,draftError,explainTextBoxError} from './textBoxes/model.mjs';
+import {newTextBox,sourceTextBox,textBoxPayload,draftError,explainTextBoxError} from './textBoxes/model.mjs';
 import './textBoxes/textBoxes.css';
-import {draftProblem} from './viewer/model.mjs';
+import {draftProblem,sourceTypography,viewportFontScale} from './viewer/model.mjs';
 import {historyJump} from './viewer/history.mjs';
 import OutlinePanel from './viewer/OutlinePanel.jsx';
 import HistoryPanel from './viewer/HistoryPanel.jsx';
 import './viewer/viewer.css';
-import {upsertOperation,withSourceRetry,decodePdf,explainReason,retryWorkerBusy,disposeDocument,explainBucket,passwordHeaders} from './session.mjs';
+import {upsertOperation,withSourceRetry,decodePdf,explainReason,retryWorkerBusy,disposeDocument,explainBucket,passwordHeaders,viewportBox} from './session.mjs';
 import FindPanel from './find/FindPanel.jsx';
 import {findMatches,sourceRunForMatch} from './find/search.mjs';
 import {buildReplacementRecipe} from './find/buildRecipe.mjs';
@@ -225,7 +225,7 @@ export default function App(){
   const showInspector=()=>{cancelTextBox();setSideOpen(true);resumeAnalysis();setPanel('inspector');requestAnimationFrame(()=>inspectorButtonRef.current?.focus());};
   const cancelInline=(focus=true)=>{cancelTextBox();setTour(null);editVersion.current++;setSelection(null);setPreview(null);setBatchReview(null);if(focus)requestAnimationFrame(()=>document.querySelector('.continuous-stage')?.focus({preventScroll:true}));};
   const gotoPage=number=>{cancelInline();setPage(number);setNavigation(previous=>({page:number,serial:previous.serial+1}));fetchRuns(number,0);};
-  const changeDraft=value=>{editVersion.current++;setPreview(null);setBatchReview(null);setDraft(value);};
+  const changeDraft=(value,caret)=>{editVersion.current++;setPreview(null);setBatchReview(null);setDraft(value);if(/[\r\n\t\v\f\u0085\u2028\u2029]/.test(value))expandSourceText(value,style,caret);};
   const changeStyle=value=>{editVersion.current++;setPreview(null);setBatchReview(null);setStyle(value);};
   const choose=async run=>{
     setManagedSelection(null);
@@ -298,18 +298,37 @@ export default function App(){
     textBoxController.invalidate();textBoxPayloadRef.current=null;setTextBoxDraft(value);
     if(value.page_index!==textBoxDraft?.page_index&&Number.isInteger(value.page_index)&&value.page_index>=0&&value.page_index<(pdfRef.current?.numPages||0)){setPage(value.page_index+1);setNavigation(n=>({page:value.page_index+1,serial:n.serial+1}));}
   };
+  const expandSourceText=async(text=draft,format=style,caret)=>{
+    const target=sessionRef.current,run=selection,document=pdfRef.current,version=editVersion.current;
+    if(!run||run.state==='not_editable'||busyOwnerRef.current)return;
+    const valid=()=>current(target)&&sessionRef.current===target&&pdfRef.current===document&&editVersion.current===version;
+    try{
+      const sourcePage=await document.getPage(run.pageNumber),viewport=sourcePage.getViewport({scale:1});
+      if(!valid())return;
+      const geometry=localMetadata.pages[run.pageNumber-1];
+      const next=sourceTextBox({run,text,style:format,recipe:recipeState.recipe,geometry,box:viewportBox(run.box,viewport),typography:sourceTypography(run,format,viewportFontScale(viewport)),caret});
+      cancelInline(false);releaseDraft();setManagedSelection(null);setSideOpen(false);setMode('text-box');setTextBoxDraft(next);
+      setMessage('Flexible text box: grows into free page space. Preview removes the original text and shows the real wrapped PDF; Apply commits it as one change.');
+    }catch(error){if(valid()&&!ignored(error))setMessage('Could not prepare this text box. Your draft and PDF are unchanged. Try another text run.');}
+  };
   const placeTextBox=(number,point)=>{if(busyOwnerRef.current||!localMetadata?.pages[number])return;textBoxController.invalidate();setTextBoxDraft(newTextBox(number,localMetadata.pages[number],point));setPage(number+1);};
-  const selectTextBox=box=>{if(busyOwnerRef.current)return;textBoxController.invalidate();setTextBoxDraft({...structuredClone(box),allow_overlap:false});setPage(box.page_index+1);};
+  const selectTextBox=box=>{if(busyOwnerRef.current)return;textBoxController.invalidate();setTextBoxDraft({...structuredClone(box),allow_overlap:false,auto_expand:true});setPage(box.page_index+1);};
   const loadTextBoxes=async(selectId=null)=>{
     const owner=beginWork('text-box-list','Loading inserted text boxes on the server…');if(!owner)return;
     const target=sessionRef.current,bytes=target.bytes,version=editVersion.current;
-    try{const boxes=await textBoxController.list();if(current(target)&&sessionRef.current===target&&target.bytes===bytes&&editVersion.current===version){textBoxListRef.current={session:target,bytes};setTextBoxes(boxes);if(selectId){const box=boxes.find(item=>item.id===selectId);if(box){setTextBoxDraft({...structuredClone(box),allow_overlap:false});setPage(box.page_index+1);}}setMessage(`${boxes.length} verified text boxes loaded. Select one on its page to edit.`);}}
+    try{const boxes=await textBoxController.list();if(current(target)&&sessionRef.current===target&&target.bytes===bytes&&editVersion.current===version){textBoxListRef.current={session:target,bytes};setTextBoxes(boxes);if(selectId){const box=boxes.find(item=>item.id===selectId);if(box){setTextBoxDraft({...structuredClone(box),allow_overlap:false,auto_expand:true});setPage(box.page_index+1);}}setMessage(`${boxes.length} verified text boxes loaded. Select one on its page to edit.`);}}
     catch(error){if(!ignored(error)&&current(target))setMessage(explainTextBoxError(error));}finally{finishWork(owner);}
   };
   const previewTextBox=async(payload=textBoxPayload(textBoxDraft))=>{
     const owner=beginWork('text-box-preview','Preparing an exact text box PDF preview…');if(!owner)return;
-    textBoxPayloadRef.current=structuredClone(payload);
-    try{await textBoxController.preview(payload,{acknowledged});}catch{}finally{finishWork(owner);}
+    const submitted=structuredClone(payload);textBoxPayloadRef.current=submitted;
+    try{
+      const result=await textBoxController.preview(payload,{acknowledged});
+      if(result?.prepared&&textBoxPayloadRef.current===submitted){
+        const box=payload.id?result.boxes.find(value=>value.id===payload.id):result.boxes.at(-1);
+        if(payload.operation!=='remove'&&box)setTextBoxDraft(value=>value?{...value,rect:{...box.rect}}:value);
+      }
+    }catch{}finally{finishWork(owner);}
   };
   const applyTextBox=async()=>{
     const candidate=textBoxController.previewResult,payload=textBoxPayloadRef.current,target=sessionRef.current;
@@ -317,7 +336,7 @@ export default function App(){
     const owner=beginWork('text-box-apply','Applying prepared text box in this browser…');if(!owner)return;
     const version=editVersion.current,valid=()=>current(target)&&sessionRef.current===target&&busyOwnerRef.current===owner&&editVersion.current===version&&textBoxController.previewResult===candidate;
     try{
-      const action=payload.operation==='remove'?'text box removal':payload.id?'text box edit':'text insertion';
+      const action=payload.operation==='replace-source'?'source text expansion':payload.operation==='remove'?'text box removal':payload.id?'text box edit':'text insertion';
       const snapshot=takeSnapshot(action);requireBudget({current:snapshot,candidateBytes:candidate.prepared.bytes,temporaryBytes:candidate.prepared.bytes.buffer.byteLength});
       const metadata=await pdfJob(target,'inspect',{bytes:candidate.prepared.bytes,options:{}});
       if(!valid())return;
@@ -569,7 +588,7 @@ export default function App(){
       {textBoxDraft&&<TextBoxToolbar draft={textBoxDraft} state={textBoxState} geometry={localMetadata?.pages[textBoxDraft.page_index]} pageCount={pdf?.numPages||0} busy={busy} allowed={!localMetadata?.signed||acknowledged} onDraft={changeTextBox} onPreview={()=>previewTextBox()} onApply={applyTextBox} onCancel={cancelTextBox} onEdit={()=>textBoxController.invalidate()} onRemove={()=>previewTextBox({operation:'remove',id:textBoxDraft.id})}/>}
       {textBoxPreview&&<div className="text-box-preview-banner" role="status">Preview only — Apply or Cancel to return to the working document. Downloads and exports use committed bytes.</div>}
       {busyOwnerRef.current?.kind.startsWith('text-box')&&<button className="text-box-cancel-work" onClick={cancelTextBox}>Cancel text box operation</button>}
-      {selection&&<TextToolbar run={selection} style={style} draft={draft} preview={preview} busy={busy} allowed={!localMetadata?.signed||acknowledged} onStyle={changeStyle} onPreview={checkFit} onApply={apply} onCancel={cancelInline}/>}
+      {selection&&<TextToolbar run={selection} style={style} draft={draft} preview={preview} busy={busy} allowed={!localMetadata?.signed||acknowledged} onStyle={changeStyle} onPreview={checkFit} onApply={apply} onCancel={cancelInline} onExpand={()=>expandSourceText()}/>}
       {pdf?<ContinuousViewer pdf={displayPdf} scale={scale} mode={mode} metadata={localMetadata} index={index} navigation={navigation} onPageChange={setPage} onVisible={fetchRuns} selection={textBoxDraft?{pageNumber:textBoxDraft.page_index+1}:selection} onSelect={choose} disabled={!!busy} findTarget={findTarget} onFindRendered={onFindRendered} imageDraft={imageDraft}
         renderOverlay={(number,viewport)=><>
           {selection?.pageNumber===number&&selection.state!=='not_editable'&&<InlineInput run={selection} style={style} draft={draft} viewport={viewport} busy={!!busy} onDraft={changeDraft} onCancel={cancelInline} onPreview={checkFit}/>}

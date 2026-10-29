@@ -1,6 +1,6 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {PageCanvas} from '../Viewer.jsx';
-import {pageSize} from './model.mjs';
+import {pageSize,visibleDocumentPage} from './model.mjs';
 import {scrollWithinDocument} from './scroll.mjs';
 
 function PageShell({number,pdf,scale,geometry,root,register,pinned,...props}) {
@@ -24,8 +24,11 @@ export default function ContinuousViewer({pdf,scale,metadata,index,navigation,on
     const visible=new Map();
     const observer=new IntersectionObserver(entries=>{
       for(const entry of entries){const number=Number(entry.target.dataset.pageNumber);if(entry.isIntersecting)visible.set(number,entry);else visible.delete(number);}
-      const ordered=[...visible.entries()].sort((a,b)=>Math.abs(a[1].boundingClientRect.top-(a[1].rootBounds?.top||0))-Math.abs(b[1].boundingClientRect.top-(b[1].rootBounds?.top||0)));
-      if(ordered[0])latest.current.onPageChange(ordered[0][0]);
+      if(!root.current)return;
+      const bounds=root.current.getBoundingClientRect();
+      const positions=[...visible.keys()].flatMap(number=>{const node=shells.current.get(number);if(!node)return [];const rect=node.getBoundingClientRect();return [{number,top:rect.top,bottom:rect.bottom}];});
+      const current=visibleDocumentPage(positions,bounds.top,bounds.bottom);
+      if(current)latest.current.onPageChange(current);
       for(const [number] of visible)latest.current.onVisible(number,0);
     },{root:root.current,threshold:[0,.15,.4,.7,1]});
     for(const node of shells.current.values())observer.observe(node);

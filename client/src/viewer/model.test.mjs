@@ -2,6 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {pageSize,inlineBox,sourceTypography,draftProblem,historyTransition,moveImageRect,viewportFontScale} from './model.mjs';
 
+test('current page follows the largest visible portion after a draft toolbar closes',async()=>{
+  const {visibleDocumentPage}=await import('./model.mjs');
+  assert.equal(typeof visibleDocumentPage,'function');
+  assert.equal(visibleDocumentPage([{number:1,top:-500,bottom:420},{number:2,top:448,bottom:1368}],0,600),1);
+  assert.equal(visibleDocumentPage([{number:1,top:-800,bottom:120},{number:2,top:148,bottom:1068}],0,600),2);
+});
+
 test('page shells use physical rotated dimensions without allocating a canvas',()=>{
   assert.deepEqual(pageSize({visibleWidth:200,visibleHeight:300},1.5),{width:300,height:450});
   assert.deepEqual(pageSize(null,1),{width:612,height:792});

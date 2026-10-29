@@ -3,6 +3,10 @@ import {viewportBox} from '../session.mjs';
 export function pageSize(geometry,scale=1) {
   return {width:(geometry?.visibleWidth||612)*scale,height:(geometry?.visibleHeight||792)*scale};
 }
+export function visibleDocumentPage(pages,top,bottom){
+  return pages.map(page=>({...page,visible:Math.max(0,Math.min(bottom,page.bottom)-Math.max(top,page.top))}))
+    .filter(page=>page.visible>0).sort((a,b)=>b.visible-a.visible||Math.abs(a.top-top)-Math.abs(b.top-top))[0]?.number;
+}
 export function inlineBox(box,viewport) {
   if(!Array.isArray(box)||box.length!==4||!box.every(Number.isFinite))return null;
   const result=viewportBox(box,viewport);
@@ -20,7 +24,7 @@ export function sourceTypography(run,style={},scale=1) {
 }
 export function draftProblem(text) {
   if(Array.from(text).length>10000)return 'A text run supports at most 10,000 characters. Use a shorter edit.';
-  if(/[\r\n\t\v\f\u0085\u2028\u2029]/.test(text))return 'This source text run cannot safely wrap or contain line breaks or tabs. Keep this edit on one line, choose a smaller font, or edit a structured source document for reflow.';
+  if(/[\r\n\t\v\f\u0085\u2028\u2029]/.test(text))return 'Line breaks and tabs need Flexible text box. Choose Expand text box to wrap and grow within free page space.';
   return null;
 }
 export function historyTransition({past,future,current},direction) {
