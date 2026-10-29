@@ -1,4 +1,8 @@
 /* Viewer chrome stays quiet; the original PDF is the main canvas. */
+.find-highlight-layer{position:absolute;inset:0;pointer-events:none;z-index:4}
+.find-highlight-layer .find-highlight{outline:1px solid #2458df;outline-offset:0;min-width:0;min-height:0;background:#2458df26}
+.find-highlight-layer .find-highlight.approximate,.find-highlight-layer .find-highlight.removed{outline:1px dashed #687990;background:#68799012}
+.find-navigation-status{flex:none;padding:4px 14px;margin:0;font-size:11px;line-height:1.5;background:#fff}
 .navigation-panel h2{outline-offset:4px}
 .navigation-guidance{font-size:12px;color:#52647f;line-height:1.6;overflow-wrap:anywhere}
 .outline-list,.history-list{list-style:none;padding:0;margin:12px 0}

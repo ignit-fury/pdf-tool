@@ -1,9 +1,10 @@
 import React, {useEffect,useRef,useState} from 'react';
 import * as pdfjs from 'pdfjs-dist';
 import {viewportBox,explainReason,explainBucket} from './session.mjs';
+import FindHighlight from './find/FindHighlight.jsx';
 
 export function PageCanvas({pdf,pageNumber,scale,mode,runs=[],selected,onSelect,findTarget,onFindRendered,imageDraft,geometry,renderOverlay,disabled=false}) {
-  const canvas=useRef(null),text=useRef(null),highlight=useRef(null);
+  const canvas=useRef(null),text=useRef(null),paper=useRef(null);
   const [viewport,setViewport]=useState(null),[error,setError]=useState(''),[rendered,setRendered]=useState(null);
   useEffect(()=>{
     let stopped=false,render,layer;
@@ -23,17 +24,12 @@ export function PageCanvas({pdf,pageNumber,scale,mode,runs=[],selected,onSelect,
     })().catch(error=>{if(!stopped&&error.name!=='RenderingCancelledException')setError('This page could not be rendered. Try reopening the PDF.');});
     return ()=>{stopped=true;render?.cancel();layer?.cancel();};
   },[pdf,pageNumber,scale]);
-  useEffect(()=>{
-    if(!findTarget||findTarget.page!==pageNumber||rendered?.pdf!==pdf||rendered?.pageNumber!==pageNumber||rendered?.scale!==scale||!highlight.current)return;
-    const frame=requestAnimationFrame(()=>{highlight.current?.scrollIntoView({block:'center',inline:'nearest',behavior:findTarget.behavior||'instant'});onFindRendered?.(findTarget);});
-    return()=>cancelAnimationFrame(frame);
-  },[pdf,pageNumber,scale,rendered,findTarget,onFindRendered]);
-  return <div className="paper" onDoubleClick={event=>{if(mode!=='select'||disabled||!viewport)return;const rect=event.currentTarget.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;const run=runs.find(run=>{const b=viewportBox(run.box,viewport);return x>=b.left&&x<=b.left+b.width&&y>=b.top&&y<=b.top+b.height;});if(run)onSelect(run);}} style={viewport?{width:viewport.width,height:viewport.height,'--scale-factor':scale,'--total-scale-factor':viewport.scale}:undefined}>
+  return <div ref={paper} className="paper" onDoubleClick={event=>{if(mode!=='select'||disabled||!viewport)return;const rect=event.currentTarget.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;const run=runs.find(run=>{const b=viewportBox(run.box,viewport);return x>=b.left&&x<=b.left+b.width&&y>=b.top&&y<=b.top+b.height;});if(run)onSelect(run);}} style={viewport?{width:viewport.width,height:viewport.height,'--scale-factor':scale,'--total-scale-factor':viewport.scale*(viewport.userUnit||1)}:undefined}>
     <canvas ref={canvas} aria-label={`PDF page ${pageNumber}`}/>
     <div ref={text} className={`textLayer ${mode==='edit'?'inactive':''}`}/>
     {viewport&&geometry&&imageDraft?.preview&&imageDraft.rect&&<canvas className="placement-preview" aria-label="Temporary image placement preview" ref={element=>{if(element&&imageDraft.preview){element.width=imageDraft.width;element.height=imageDraft.height;element.getContext('2d').drawImage(imageDraft.preview,0,0);}}} style={{left:imageDraft.rect.left/geometry.visibleWidth*viewport.width,top:imageDraft.rect.top/geometry.visibleHeight*viewport.height,width:imageDraft.rect.width/geometry.visibleWidth*viewport.width,height:imageDraft.rect.height/geometry.visibleHeight*viewport.height}}/>}
     {viewport&&mode==='edit'&&<div className="edit-layer" aria-label="Text edit targets">{runs.map(run=><button key={run.run_id} type="button" disabled={disabled} className={`run-box ${selected===run.run_id?'selected':''} ${run.state==='not_editable'?'refused':''}`} style={viewportBox(run.box,viewport)} title={`${run.text}: ${run.state==='not_editable'?explainReason(run.reason):'Edit text'}`} aria-label={`Edit text: ${run.text}`} onClick={()=>onSelect(run)}/>)}</div>}
-    {viewport&&findTarget?.page===pageNumber&&findTarget.box&&<div ref={highlight} className="find-highlight" style={viewportBox(findTarget.box,viewport)} aria-label="Current search result text area"/>}
+    {viewport&&findTarget?.page===pageNumber&&<FindHighlight pdf={pdf} pageNumber={pageNumber} scale={scale} viewport={viewport} rendered={rendered} textRef={text} paperRef={paper} target={findTarget} onRendered={onFindRendered}/>}
     {error&&<p className="render-error" role="alert">{error}</p>}
     {viewport&&renderOverlay?.(viewport)}
   </div>;

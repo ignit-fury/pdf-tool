@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {PageCanvas} from '../Viewer.jsx';
 import {pageSize} from './model.mjs';
+import {scrollWithinDocument} from './scroll.mjs';
 
 function PageShell({number,pdf,scale,geometry,root,register,pinned,...props}) {
   const element=useRef(null),[near,setNear]=useState(number===1);
@@ -30,7 +31,7 @@ export default function ContinuousViewer({pdf,scale,metadata,index,navigation,on
     for(const node of shells.current.values())observer.observe(node);
     return()=>observer.disconnect();
   },[pdf]);
-  useEffect(()=>{const node=shells.current.get(navigation?.page);if(node)node.scrollIntoView({block:'start',inline:'nearest',behavior:navigation?.behavior||'instant'});},[navigation?.serial,pdf,scale]);
+  useEffect(()=>{scrollWithinDocument(root.current,shells.current.get(navigation?.page),{align:'start',behavior:navigation?.behavior||'instant'});},[navigation?.serial,pdf,scale]);
   return <div ref={root} className="canvas-stage continuous-stage" tabIndex="0" aria-label="Continuous PDF document">
     {Array.from({length:pdf.numPages},(_,i)=>{const number=i+1;return <PageShell key={number} number={number} root={root} register={register} pinned={selection?.pageNumber===number} pdf={pdf} scale={scale} geometry={metadata?.pages[number-1]} {...props}
       runs={index[number]?.runs||[]} selected={selection?.pageNumber===number?selection.run_id:null}
