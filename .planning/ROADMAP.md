@@ -429,3 +429,13 @@ No automatic reconstruction/reflow of original paragraphs, neighboring-content
 movement, unowned-image editing or closure of prior release gates is claimed.
 Plan: `docs/superpowers/plans/2026-10-29-native-text-boxes.md`.
 Evidence: `docs/verification/native-text-boxes-2026-10-29.md`. Nothing deployed.
+
+### Next stage — Document navigation and history
+
+Delivered locally: safe nested/named internal bookmarks against the committed PDF,
+optional History with current/future states and one-publication exact-byte jumps,
+new-branch Redo semantics, failure/stale guards and responsive/focus behavior.
+Outline/History initiate no document upload; explicit Edit/Find resumes deferred
+analysis. All existing constraints/release gates remain. No deployment/dependency.
+Plan: `docs/superpowers/plans/2026-10-29-document-navigation.md`.
+Evidence: `docs/verification/document-navigation-2026-10-29.md`.

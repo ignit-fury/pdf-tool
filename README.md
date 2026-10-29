@@ -131,6 +131,21 @@ The next-stage [native text-box plan](docs/superpowers/plans/2026-10-29-native-t
 and [verification report](docs/verification/native-text-boxes-2026-10-29.md)
 document the added layout support and its limits.
 
+**Outline** reads the current PDF's bookmarks locally. Expand nested sections and
+choose an internal destination to navigate while keeping your zoom. External links,
+document scripts and attachment actions are not opened. Large/deep outlines show a
+bounded portion with a notice. Opening Outline or History pauses further automatic
+text analysis; choose **Edit text** or **Find and replace** to resume it explicitly.
+
+**History** lists the original document, applied changes, the current state and
+undone changes available to redo. Choose any retained state to restore its exact PDF
+in one operation; intermediate states are not rendered or uploaded. New successful
+edits clear the undone future. History is retained only in memory while the document
+is open and uses the existing memory/entry limits. Failed or canceled restores leave
+the document and timeline unchanged.
+See the [navigation plan](docs/superpowers/plans/2026-10-29-document-navigation.md)
+and [verification report](docs/verification/document-navigation-2026-10-29.md).
+
 ## How to run
 
 Python 3.13+ and Node 22.13+ are required. From the repository root:

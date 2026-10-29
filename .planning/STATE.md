@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
 status: verification_pending
-stopped_at: Native inserted text-container stage delivered locally; source reflow and external release gates remain open
+stopped_at: Local outline and atomic history navigation delivered; source reflow and release gates remain open
 last_updated: "2026-10-29"
-last_activity: Verified native multiline text containers, exact preview, overlap/overflow protection and mixed source/page/image history
+last_activity: Verified local bookmarks, atomic history jumps, stale/failure guards and no-upload navigation
 progress:
   total_phases: 8
   completed_phases: 5
@@ -14,7 +14,7 @@ progress:
 # Project State
 
 **Core value:** Replace existing PDF text while preserving the surrounding document.
-**Current focus:** Native inserted text-container stage delivered locally after the viewer upgrade. Original-source reflow remains unsupported; external release verification remains. No deployment.
+**Current focus:** Outline and atomic history navigation delivered locally after the viewer/text-container stages. Original-source reflow and earlier external release verification remain open. No deployment.
 
 Phases 1–3 are complete. The Phase 3 engine and its fonts, CLI and regression gates are
 now present in this checkout; the original source worktree and local edits are preserved.
@@ -32,6 +32,29 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
 
 ## Current work
 
+### Document navigation and history — 2026-10-29
+
+- Optional nested Outline and retained History panels reuse the current committed
+  PDF.js proxy and existing exact-byte timeline. Internal named/explicit bookmarks
+  preserve zoom and resolve correctly after page changes. External actions stay disabled.
+- History jumps publish one prepared snapshot, preserve mixed operations/recipes,
+  expose future Redo and clear it only after successful new edits. Failed/stale
+  restores preserve bytes and stacks. Heading/current-state focus is accessible.
+- Opening local navigation pauses further automatic analysis; explicit Edit/Find
+  resumes it. Cache-miss browser proof shows zero requests/uploads from Outline.
+- 187 client tests, production build, both runtime license closures, 19 license
+  controls and Unicode check pass. Three new actual browser journeys plus inline,
+  image, Find/tour and native-text-box regressions pass. New history downloads:
+  five byte-identity checks, 12 structural validations and 13 exact unrelated-pixel
+  comparisons; prior viewer/text-box download regressions also pass.
+- One fresh review's two Important findings reproduced/fixed: delayed bookmark
+  overriding newer navigation and re-upload triggered by analyzed navigation.
+  No findings deferred. Backend unchanged; full Python suite not rerun this stage.
+- Plan/evidence: `docs/superpowers/plans/2026-10-29-document-navigation.md` and
+  `docs/verification/document-navigation-2026-10-29.md`. No deployment/dependency.
+- Exact substring glyph highlights, arbitrary original-paragraph reflow/growth,
+  neighbor movement and foreign-image editing remain outside this delivered slice.
+
 ### Native inserted text containers — 2026-10-29
 
 - Next requested stage delivered: page insertion/edit/removal, native searchable
@@ -47,7 +70,8 @@ Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04
   mixed history, geometry, overflow/cancel and responsive controls verified; five
   downloads pass 10 structural validations and 49 unrelated-pixel comparisons.
 - Original arbitrary paragraph reflow/neighbor movement, foreign image editing,
-  outline/history panels and exact substring glyph highlights remain future work.
+  exact substring glyph highlights remained future work at this baseline. The next
+  stage above delivers outline/history panels.
   Rotated existing boxes require rotating back for layout editing. No deployment.
 - Plan/evidence: `docs/superpowers/plans/2026-10-29-native-text-boxes.md` and
   `docs/verification/native-text-boxes-2026-10-29.md`. Prior release gates retained.

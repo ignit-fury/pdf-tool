@@ -39,6 +39,9 @@ wrapping, multiline layout, growth, spacing, alignment and exact candidate previ
 Arbitrary source reflow and unowned image mutation remain unsupported. Evidence:
 `docs/verification/document-viewer-2026-10-29.md` and
 `docs/verification/native-text-boxes-2026-10-29.md`.
+The following stage adds bounded local bookmark navigation and an atomic retained
+history navigator. Navigation pauses further automatic server analysis; explicit
+Edit/Find resumes it. Evidence: `docs/verification/document-navigation-2026-10-29.md`.
 
 ## Core Value
 
