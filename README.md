@@ -34,7 +34,7 @@ No AGPL anywhere in the runtime dependency tree, **including transitively** — 
 
 GPL/LGPL permitted only as a subprocess with a file-in/file-out interface (GPL triggers on distribution, and a hosted service distributes nothing). This keeps Poppler and veraPDF available. AGPL permitted only in CI and dev tooling no served request can reach.
 
-**Known trap:** `pdf2docx` is MIT at the top level and pulls `PyMuPDF>=1.26.7` transitively. A license scanner that only checks top-level packages will miss it. The project uses `python-docx` + its own run map instead.
+**Known trap:** `pdf2docx` is MIT at the top level and pulls `PyMuPDF>=1.26.7` transitively. A license scanner that only checks top-level packages will miss it. The project generates direct stdlib OOXML from its own shared run map instead.
 
 ## Tech stack
 
@@ -57,7 +57,7 @@ GPL/LGPL permitted only as a subprocess with a file-in/file-out interface (GPL t
 | pypdfium2 | 5.12.1 | BSD-3-Clause / Apache-2.0 | Server-side rasterization |
 | FastAPI | 0.141.1 | MIT | HTTP layer |
 | uvicorn | 0.52.1 | BSD-3 | ASGI server |
-| @cantoo/pdf-lib | 2.8.1 | MIT | Client-side page ops |
+| @cantoo/pdf-lib | 2.9.1 | MIT | Client-side page ops |
 | pdfjs-dist | 6.2.108 | Apache-2.0 | Browser rendering |
 | React | 18.3.1 | MIT | UI |
 | Vite | 5.4.21 | MIT | Build |
@@ -81,8 +81,9 @@ The editor uses the actual content stream. Unsupported edits are refused explici
 
 Implemented: password-protected PDFs, signature warnings, server-issued edit boxes,
 selectable browser text, progressive thumbnails/classification, bold/italic and colour,
-immutable-source replay, cache-loss recovery and isolated parser workers. Font-size
-changes are refused because replacements must fit the original run width.
+immutable-source replay, cache-loss recovery and isolated parser workers. Font-size shrink/equal and bounded character spacing are supported within the original
+run geometry. Source size growth and multiline reflow are refused because neighboring
+content cannot be moved safely without reliable layout ownership.
 Shorter replacements can leave unused space after the new text while preserving the
 following text's position; they do not need to be stretched to the original width.
 Edits using stateful quote operators or unsupported Unicode shaping are also refused to
@@ -90,6 +91,29 @@ preserve layout and searchable text. Precomposed accents such as `é` remain sup
 
 Built-in OCR remains deferred. The current screen links to OCRmyPDF's external guide without uploading the
 PDF there. The OCR interest counter collects no document or contact data.
+
+## Document viewer upgrade
+
+The page is now the primary editing surface. Its contextual toolbar offers detected
+font information, bundled font selection, safe font size/spacing, color/hex, bold and
+italic, with Preview/Apply/Cancel. Reading/copying remains available without analysis.
+Page tools, search and exports use optional panels. At narrow widths the top action
+row scrolls horizontally; choosing page text returns focus to the document.
+
+**Insert image** accepts PNG/JPEG/WebP in this browser. Images added by this editor
+can be selected, moved/resized using handles or numeric controls, rotated, replaced
+at the same geometry and removed with confirmation. Aspect ratio is locked by default.
+Original unowned/shared PDF images remain preserved and are not offered for mutation.
+
+Preserve-layout edits can be longer or shorter when they fit, including by choosing
+a smaller size. Flexible arbitrary-PDF reflow, multiline source edits, new independent
+text boxes, growing source text height, alignment/paragraph/line-spacing changes and
+moving neighboring content remain unavailable; the UI explains these limits. The
+inline input is a temporary preview and is never saved as an overlay.
+
+[Implementation plan](docs/superpowers/plans/2026-10-29-document-viewer.md) and
+[verification, known limits and browser reproduction](docs/verification/document-viewer-2026-10-29.md)
+record the actual local results. No new dependency or migration is required.
 
 ## How to run
 
@@ -105,9 +129,13 @@ uv run uvicorn server.app:app --host 127.0.0.1 --port 8000 --no-access-log
 ```
 
 Open <http://127.0.0.1:8000>. The FastAPI service serves the built client and all pdf.js
-assets on the same origin. Select a text run, preview its fit, then apply and download.
-Undo restores the previous whole recipe, including text and style. Repeated edits to
-one run replace that run's operation instead of creating duplicate addresses.
+assets on the same origin. Pages scroll continuously; only nearby page canvases are kept
+mounted. Choose **Edit text → Analyze text**, click a run directly on its page, edit in
+place, preview its fit, then apply. Source-issued IDs remain authoritative; PDF.js text
+is used for reading/selection rather than inventing rewrite addresses.
+Undo/Redo restores exact mixed document snapshots, including text, pages and images.
+Repeated edits to one run replace that run's operation instead of creating duplicate
+addresses. Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z work outside native text inputs.
 
 Choose **Find and replace** to index every page. Search defaults to case-insensitive
 substring matching; Match case and Unicode whole-word options are available. Results
@@ -116,14 +144,17 @@ visible with their reasons. Stop/resume and failed-page retry preserve honest pa
 counts; replacements require a complete index.
 
 Enter replacement text, optionally choose a fallback font, then select **Preview
-replacements**. The exact remaining full recipe must pass the server's fit checks
-before **Replace** becomes available. Empty replacement removes included matches and
+Replace One** for the current match or **Preview Replace All** for included matches. The exact remaining full recipe must pass the server's fit checks
+before **Replace One** or **Replace All** becomes available. Empty replacement removes included matches and
 shows a warning. One Undo or Ctrl/Cmd+Z outside text inputs restores the entire batch,
 including earlier text/style choices. Search is local over the server-produced index;
-indexing, preview and text replacement use the server.
+indexing, preview and text replacement use the server. After a batch applies atomically,
+a pausable, reduced-motion-aware walkthrough highlights actual accepted results. Stopping
+the walkthrough keeps the completed batch; Undo restores it once.
 
 For frontend development, run the API on port 8000 and `npm run dev` in `client/`;
-Vite proxies API routes. Opening a file uploads it for analysis; rendering and download
+Vite proxies API routes. Opening, reading and page/image operations stay local.
+Text analysis and editing upload only after explicit actions; rendering and PDF download
 happen locally. Original bytes and passwords stay in browser memory while open, with
 passwords sent to the worker when needed. Closing/reloading clears the browser session.
 The client transports passwords as UTF-8/base64 in `X-PDF-Password-B64` so Unicode and
@@ -159,7 +190,9 @@ uv run python tools/pdftool.py edit path/to/document.pdf --recipe recipe.json -o
 ```
 
 A recipe is an array of `{ "run_id": "server-issued-id", "new_text": "replacement" }`.
-Optional `style` supports RGB `color` values from 0 to 1 and boolean `bold`/`italic`.
+Optional `style` supports RGB `color` values from 0 to 1, boolean `bold`/`italic`,
+`font_size` from 1–512 (shrink/equal only), and `character_spacing` from 0–10pt.
+Unsupported font state, growth, multiline text, shaping and overflow refuse atomically.
 The inspector displays the detected source font. Choose a replacement when automatic
 matching is unavailable, or intentionally change the typeface: Liberation Serif, Sans,
 or Mono. Recipes express this as `style.font_family: "Serif" | "Sans" | "Mono"`.
@@ -257,7 +290,7 @@ pdf-tool/
 - **PyMuPDF / MuPDF / mupdf.js** — AGPL-3.0. Network clause triggers on SaaS.
 - **Ghostscript** — Same Artifex AGPL. Its usual jobs here all have permissive replacements.
 - **pdf2docx** — MIT wrapper, AGPL dependency (PyMuPDF).
-- **pdf-lib (original 1.17.1)** — Last published 2021-11-06. Unmaintained. Use `@cantoo/pdf-lib` 2.8.1 instead.
+- **pdf-lib (original 1.17.1)** — Last published 2021-11-06. Unmaintained. Use `@cantoo/pdf-lib` 2.9.1 instead.
 - **pdf-lib (any fork) for text editing** — Append-only library. Reaching for it to "edit text" produces white-box overlay — the exact failure mode this project exists to avoid.
 - **Stirling-PDF** — Root LICENSE reads MIT, but `engine/` is separately licensed under open-core terms. Also now a direct competitor.
 - **Next.js** — Serverless function body limit is 4.5 MB — a hard wall for a PDF upload product.

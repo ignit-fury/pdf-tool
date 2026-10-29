@@ -406,3 +406,14 @@ implementation and its review evidence are tracked in `.planning/PHASE-4-EXECUTI
 
 ---
 *Roadmap created: 2026-08-12 from REQUIREMENTS.md and research/SUMMARY.md*
+
+
+## Post-Phase-8 document viewer upgrade (2026-10-29)
+
+Requested separately after the eight-phase feature roadmap. Six planned tasks are
+implemented and verified locally: continuous viewer/inline editing, conservative
+native formatting, mixed Undo/Redo, managed images, One/All replacement with an
+actual-results walkthrough, and integration/review. Source reflow/height growth and
+unowned image editing remain explicitly unsupported. No new numbered release phase
+or closure of existing gates is implied. Plan: `docs/superpowers/plans/2026-10-29-document-viewer.md`.
+Evidence: `docs/verification/document-viewer-2026-10-29.md`. Nothing deployed.

@@ -31,6 +31,12 @@ Evidence is in `phases/06-page-ops-and-merge/06-G5-RESULTS.md` and
 Linux/container/CDN release checks remain open. Production HEIC conversion stays
 disabled until Linux confinement is verified. No deployment was published.
 
+The post-Phase-8 viewer upgrade adds continuous bounded pages, inline text input
+and a contextual toolbar, safe native size/spacing, managed image controls, mixed
+Undo/Redo, Replace One/All and a truthful post-commit walkthrough. It retains
+preserve-layout geometry; arbitrary source reflow, new text boxes and unowned image
+mutation remain unsupported. Evidence: `docs/verification/document-viewer-2026-10-29.md`.
+
 ## Core Value
 
 **Replace text across every page of an existing PDF and have the output look like nothing
@@ -60,7 +66,8 @@ Validated locally in Phases 1–8 (public release remains gated):
 
 Evidence: `phases/04-web-tier-walking-skeleton-hardening/04-VERIFICATION.md` and
 `phases/05-find-and-replace-across-all-pages/05-G4-RESULTS.md`.
-Font-size changes are explicitly unsupported; later-phase features remain active.
+Source font-size shrink/equal and bounded character spacing are now supported;
+height growth and arbitrary source reflow remain explicitly unsupported.
 
 ### Active
 

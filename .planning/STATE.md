@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: PDF Tool
 status: verification_pending
-stopped_at: All six Phase 8 plans delivered and verified locally; hosted G7a CI and earlier release gates remain open
+stopped_at: Requested document-viewer upgrade delivered locally with explicit layout limits; external release gates remain open
 last_updated: "2026-10-29"
-last_activity: Verified DOCX two-action UI, actual downloads, literal writer removal and full selected regressions
+last_activity: Verified continuous inline viewer, native formatting, managed images, Undo/Redo and one/all replacement walkthrough
 progress:
   total_phases: 8
   completed_phases: 5
@@ -14,7 +14,7 @@ progress:
 # Project State
 
 **Core value:** Replace existing PDF text while preserving the surrounding document.
-**Current focus:** Phase 08 — six plans delivered/verified locally; external release verification remains. No deployment.
+**Current focus:** Post-Phase-8 document-viewer upgrade delivered locally; unsupported source reflow/growth is explicit. External release verification remains. No deployment.
 
 Phases 1–3 are complete. The Phase 3 engine and its fonts, CLI and regression gates are
 now present in this checkout; the original source worktree and local edits are preserved.
@@ -31,6 +31,28 @@ Execution record: `.planning/PHASE-4-EXECUTION.md`.
 Evidence and remaining checks: `phases/04-web-tier-walking-skeleton-hardening/04-VERIFICATION.md`.
 
 ## Current work
+
+### Document viewer upgrade — 2026-10-29
+
+- User requested a plan followed by implementation. Design/plan are under
+  `docs/superpowers/`; all six tasks are delivered within the conservative scope.
+- Continuous, bounded PDF.js rendering and inline text input/contextual formatting
+  reuse authoritative run IDs and the atomic native writer. Safe size shrink/equal,
+  character spacing, font/color/bold/italic preserve following text state.
+- Native managed-image insert/move/resize/rotate/replace/delete, mixed exact Undo/Redo,
+  explicit One/All replacement and a post-commit results tour are delivered.
+- Final verification: 787 selected Python passes plus one added mandatory combined-
+  runtime regression; 170 client passes; 12 G6/G7a/removal gate passes; strict typing,
+  build, licenses/Unicode pass. Browser/native proof covers the 12-page synthetic
+  document, actual downloads, pointer controls, responsive layout, Unicode password
+  and cache-recovery transport. Independent review findings are fixed with regressions.
+- Flexible source reflow/multiline, source height growth, new independent text boxes,
+  line/paragraph/alignment changes and unowned original image editing remain explicit
+  unsupported cases. No dependency, migration, deployment or container setup.
+- Evidence/commands: `docs/verification/document-viewer-2026-10-29.md`. All earlier
+  Linux/container/CDN, contract-specimen, hosted G7a and Word/Acrobat gates remain open.
+
+### Earlier phase delivery
 
 - Phase 8 started under the user's continue instruction. G7b's scope document is
   committed before implementation (`60dd243`). Research/UI contract and the actual
