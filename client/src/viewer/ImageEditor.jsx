@@ -1,5 +1,6 @@
 import React,{useRef,useState} from 'react';
 import {moveImageRect} from './model.mjs';
+import ToolbarDetails from './ToolbarDetails.jsx';
 
 export function ImageHandles({images,selected,geometry,viewport,disabled,onSelect,onChange}) {
   const drag=useRef(null),sx=viewport.width/geometry.visibleWidth,sy=viewport.height/geometry.visibleHeight;
@@ -29,7 +30,9 @@ export default function ImageToolbar({image,newImage,busy,valid,error,onChange,o
       <label>Rotation<select aria-label="Image rotation" value={image.rotation||0} onChange={event=>onChange({...image,rotation:Number(event.target.value)})}>{[0,90,180,270].map(value=><option key={value} value={value}>{value}°</option>)}</select></label>
       <label className="aspect-lock"><input type="checkbox" checked={image.locked!==false} onChange={event=>onChange({...image,locked:event.target.checked})}/> Lock aspect ratio</label>
     </fieldset>
-    <p className="context-guidance">Drag the outline to move; drag its corner to resize. Position and bounds are previewed before Apply. Existing PDF content stays unchanged until then. Original, unowned PDF images cannot be altered safely here.</p>
+    <ToolbarDetails label="Edit details">
+      <p className="context-guidance">Drag the outline to move; drag its corner to resize. Position and bounds are previewed before Apply. Existing PDF content stays unchanged until then. Original, unowned PDF images cannot be altered safely here.</p>
+    </ToolbarDetails>
     {error&&<p className="context-warning" role="status">{error}</p>}
     {!valid&&<p className="context-warning">Keep the entire image within this page. Rotation may require a smaller size.</p>}
     <div className="context-actions"><button className="primary" onClick={onApply} disabled={!!busy||!valid}>Apply image <span className="action-location">Browser</span></button><button onClick={()=>picker.current.click()} disabled={!!busy}>Replace image file</button>{!newImage&&<button onClick={()=>setConfirm(true)} disabled={!!busy}>Remove image</button>}<button onClick={onCancel} disabled={!!busy}>Cancel image changes</button></div>
