@@ -74,6 +74,8 @@ export async function disposeDocument(document) {
   try {await document?.loadingTask?.destroy();} catch {}
 }
 export function explainReason(reason) {
+  if(reason==='managed_text_box')return 'This text belongs to an inserted text box. Use the text-box controls to edit its complete layout.';
+  if(reason==='managed_text_box_unverified')return 'This marked text box cannot be verified safely. Other source text and page tools remain available.';
   if(reason==='font_size_growth_unsupported')return 'Increasing source text height could overlap nearby content. Choose the original size or a smaller size; automatic reflow is unavailable.';
   if(reason==='multiline_text_unsupported')return 'This source run cannot safely contain line breaks. Keep one line, choose smaller text, or edit a structured source document for reflow.';
   if(reason==='source_font_state_unsupported')return 'The source font state cannot be verified for size or spacing changes. Preserve those settings or choose another text run.';
