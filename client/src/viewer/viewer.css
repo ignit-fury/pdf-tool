@@ -1,4 +1,19 @@
 /* Viewer chrome stays quiet; the original PDF is the main canvas. */
+.navigation-panel h2{outline-offset:4px}
+.navigation-guidance{font-size:12px;color:#52647f;line-height:1.6;overflow-wrap:anywhere}
+.outline-list,.history-list{list-style:none;padding:0;margin:12px 0}
+.outline-list .outline-list{padding-left:10px;margin:4px 0}
+.outline-row{display:flex;align-items:flex-start;gap:4px}
+.outline-row button{min-width:0;min-height:36px;padding:7px 8px;font-size:12px;text-align:left}
+.outline-row .outline-toggle{flex:0 0 28px;padding:7px 4px;text-align:center;border-color:transparent}
+.outline-destination{flex:1;overflow-wrap:anywhere;background:transparent;border-color:transparent}
+.outline-list li{margin:3px 0;min-width:0}
+.outline-list li>small{display:block;margin:2px 6px 6px;color:#687990;font-size:10px;line-height:1.5;overflow-wrap:anywhere}
+.history-list button{display:flex;align-items:flex-start;gap:10px;width:100%;text-align:left;padding:10px 8px;margin:3px 0;border-color:transparent;font-size:12px;overflow-wrap:anywhere}
+.history-list button[aria-current=step]{background:#edf3ff;border-color:#bccce2;color:#213b5c;opacity:1}
+.history-list small{display:block;font-weight:400;color:#687990;font-size:10px;margin-top:4px}
+.history-position{font-variant-numeric:tabular-nums;color:#687990;min-width:18px}
+@media(max-width:760px){.navigation-panel button{min-height:44px}.navigation-panel h2{font-size:16px}}
 .app:has(.document-workspace){height:100dvh;min-height:0;overflow:hidden}
 .app:has(.document-workspace)>.app-header,.app:has(.document-workspace)>.document-bar,.app:has(.document-workspace)>.app-footer,.app:has(.document-workspace)>.notice,.app:has(.document-workspace)>.signature-notice{flex-shrink:0}
 .document-workspace{grid-template-columns:112px minmax(0,1fr);grid-template-rows:minmax(0,1fr);height:auto;min-height:0;flex:1 1 0}
