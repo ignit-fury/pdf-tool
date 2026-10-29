@@ -48,8 +48,10 @@ async (page) => {
   check(await page.getByRole('button',{name:'Redo Browser',exact:true}).isDisabled(),'A new mutation must clear Redo');
   await run().click();
   await page.getByRole('textbox',{name:'Edit text on page',exact:true}).fill('a\nb');
-  check(await page.getByRole('button',{name:'Preview fit Server',exact:true}).isDisabled(),'Unsupported newlines must block preview');
-  await page.getByRole('button',{name:'Cancel text editing',exact:true}).click();
+  await page.getByRole('textbox',{name:'Text box content on page',exact:true}).waitFor();
+  check(await page.getByRole('textbox',{name:'Text box content on page',exact:true}).inputValue()==='a\nb','Newlines must enter flexible layout without losing text');
+  await page.getByRole('button',{name:'Cancel text box changes',exact:true}).click();
+  await page.getByRole('button',{name:'Edit text',exact:true}).click();
   const download=page.waitForEvent('download');
   await page.getByRole('button',{name:'Download edited PDF Browser',exact:true}).click();
   await (await download).saveAs(`${root}/inline-edited.pdf`);

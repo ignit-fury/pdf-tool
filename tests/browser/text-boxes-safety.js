@@ -13,6 +13,7 @@ async(page)=>{
   await page.getByRole('button',{name:'Insert text on page 1',exact:true}).click({position:{x:100,y:600}});
   await page.getByRole('textbox',{name:'Text box content on page',exact:true}).fill('Line one wraps into several words that are measured correctly.\nLine two also wraps.');
   await page.getByRole('spinbutton',{name:'Text box width',exact:true}).fill('80');await page.getByRole('spinbutton',{name:'Text box height',exact:true}).fill('10');
+  await page.getByRole('checkbox',{name:'Grow height to fit text',exact:true}).uncheck();
   await page.getByRole('button',{name:'Preview text box Server',exact:true}).click();await page.getByText(/No text was applied or clipped/).waitFor();
   const before=Number(await page.getByRole('spinbutton',{name:'Text box height',exact:true}).inputValue());
   await page.getByRole('button',{name:'Expand text box to fit',exact:true}).click();
