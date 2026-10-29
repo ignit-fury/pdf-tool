@@ -18,6 +18,11 @@ export function stepWalkthrough(state,action) {
   if(action==='pause')return {...state,status:'paused'};
   if(action==='resume')return state.position<state.targets.length?{...state,status:'playing'}:state;
   if(action==='tick'&&state.status!=='playing')return state;
-  if(['next','tick'].includes(action))return {...state,position:Math.min(state.position+1,state.targets.length),status:state.position+1>=state.targets.length?'complete':state.status};
+  if(['next','tick'].includes(action)){
+    const page=state.targets[state.position]?.page;
+    let position=state.position+1;
+    while(position<state.targets.length&&state.targets[position].page===page)position++;
+    return {...state,position,status:position>=state.targets.length?'complete':state.status};
+  }
   return state;
 }

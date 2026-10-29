@@ -8,16 +8,16 @@ async(page)=>{
   const save=async name=>{const download=page.waitForEvent('download');await page.locator('.document-actions button.primary').click();await(await download).saveAs(`${root}/${name}.pdf`);};
   const query=async(text,summary)=>{await page.getByRole('textbox',{name:'Find text',exact:true}).fill(text);if(summary)await page.getByText(summary,{exact:true}).first().waitFor();};
   const select=async number=>{await page.locator('.find-row-controls button').nth(number-1).click();};
-  const precise=async(number,source,start,end)=>{
+  const precise=async(number,source,start,end,highlightIndex=null)=>{
     const area=page.locator(`[data-page-number="${number}"]`);await area.locator('[data-highlight-quality="precise"]').waitFor();
-    const facts=await area.evaluate((paperPage,{source,start,end})=>{
+    const facts=await area.evaluate((paperPage,{source,start,end,highlightIndex})=>{
       const span=Array.from(paperPage.querySelectorAll('.textLayer span')).find(s=>s.textContent===source&&!s.querySelector('span'));
       if(!span)throw Error('Expected actual PDF text span missing');
       const nodes=[],walker=document.createTreeWalker(span,4);let n,total=0;while(n=walker.nextNode()){nodes.push({node:n,start:total,end:total+n.length});total+=n.length;}
       const a=nodes.find(n=>n.end>start),b=nodes.find(n=>n.end>=end),range=document.createRange();range.setStart(a.node,start-a.start);range.setEnd(b.node,end-b.start);
-      const expected=range.getBoundingClientRect(),rects=Array.from(paperPage.querySelectorAll('.find-highlight'),r=>r.getBoundingClientRect()),left=Math.min(...rects.map(r=>r.left)),top=Math.min(...rects.map(r=>r.top)),actual={left,top,width:Math.max(...rects.map(r=>r.right))-left,height:Math.max(...rects.map(r=>r.bottom))-top},run=span.getBoundingClientRect();
+      const expected=range.getBoundingClientRect(),all=Array.from(paperPage.querySelectorAll('.find-highlight'),r=>r.getBoundingClientRect()),rects=highlightIndex===null?all:[all[highlightIndex]],left=Math.min(...rects.map(r=>r.left)),top=Math.min(...rects.map(r=>r.top)),actual={left,top,width:Math.max(...rects.map(r=>r.right))-left,height:Math.max(...rects.map(r=>r.bottom))-top},run=span.getBoundingClientRect();
       return {delta:Math.max(...['left','top','width','height'].map(k=>Math.abs(expected[k]-actual[k]))),actual:{left:actual.left,top:actual.top,width:actual.width,height:actual.height},run:{width:run.width,height:run.height},pointer:getComputedStyle(paperPage.querySelector('.find-highlight-layer')).pointerEvents};
-    },{source,start,end});
+    },{source,start,end,highlightIndex});
     check(facts.delta<.25,'Highlight differs from actual DOM Range: '+JSON.stringify(facts));check(facts.pointer==='none','Highlight intercepts text selection');return facts;
   };
   await page.locator('input[aria-label="Open PDF file"]').setInputFiles(`${root}/highlights.pdf`);
@@ -31,10 +31,10 @@ async(page)=>{
   await query('not-present','No matches found');check(!await page.locator('.find-highlight').count(),'Old rectangles survived query change');await save('after-highlighting');
   await query('cat','4 matches across 3 pages');await page.getByRole('textbox',{name:'Replace with',exact:true}).fill('otter');await page.getByRole('combobox',{name:'Replacement font',exact:true}).selectOption('Serif');
   await page.getByRole('button',{name:'Preview Replace All Server',exact:true}).click();await page.getByRole('button',{name:'Replace All (4) Server',exact:true}).click();
-  await page.getByRole('region',{name:'Applied replacement walkthrough',exact:true}).waitFor();await precise(1,'alpha otter otter omega',6,11);await page.getByRole('button',{name:'Next applied result',exact:true}).click();await precise(1,'alpha otter otter omega',12,17);await save('replaced');
-  await page.getByRole('button',{name:'Next applied result',exact:true}).click();await precise(2,'alpha otter otter omega',6,11);
+  await page.getByRole('region',{name:'Applied replacement walkthrough',exact:true}).waitFor();await precise(1,'alpha otter otter omega',6,11,0);await precise(1,'alpha otter otter omega',12,17,1);await save('replaced');
+  await page.getByRole('button',{name:'Next page',exact:true}).click();await precise(2,'alpha otter otter omega',6,11,0);
   await page.getByRole('button',{name:'Stop walkthrough',exact:true}).click();await query('otter','4 matches across 3 pages');await page.getByRole('textbox',{name:'Replace with',exact:true}).fill('');await page.getByRole('button',{name:'Preview Replace All Server',exact:true}).click();await page.getByRole('button',{name:'Replace All (4) Server',exact:true}).click();
-  await page.locator('[data-highlight-quality="removed"]').waitFor();await page.getByText(/Text removed — showing its original text area/).waitFor();await save('removed');
+  await page.locator('.find-highlight.removed').first().waitFor();await save('removed');
   const writes=requests.filter(r=>r.query.includes('dry_run=false')).length;check(writes===2,'Highlight/tour introduced additional PDF writes');
   await page.locator('.document-actions').getByRole('button',{name:'Undo replacements Browser',exact:true}).click();await page.locator('.document-actions').getByRole('button',{name:'Redo Browser',exact:true}).waitFor();await save('undo-removal');
   page.off('request',listener);await page.screenshot({path:`${root}/highlight-restored.png`});

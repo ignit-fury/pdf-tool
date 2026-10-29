@@ -65,5 +65,5 @@ export function chooseCandidate(candidates,expected){
   });
   return eligible.length===1?{reason:null,rects:eligible[0].rects}:{reason:eligible.length?'ambiguous':'unmapped',rects:[]};
 }
-export const highlightKey=target=>JSON.stringify([target.id,target.sourceText,target.start,target.end,target.box,target.removed===true]);
+export const highlightKey=target=>JSON.stringify((target.highlights||[target]).map(item=>[item.id,item.sourceText,item.start,item.end,item.box,item.removed===true]));
 export const highlightMessage=result=>result?.quality==='precise'?'Matching text highlighted.':result?.quality==='removed'?'Text removed — showing its original text area.':result?.quality==='approximate'?'Approximate text area — exact text-layer mapping is unavailable.':'Locating matching text…';

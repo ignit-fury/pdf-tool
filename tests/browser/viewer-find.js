@@ -21,8 +21,8 @@ async (page) => {
   await page.getByRole('region',{name:'Applied replacement walkthrough',exact:true}).waitFor();
   check(writes()===beforeOne+2,'Replace All must be one atomic apply');
   await page.getByRole('button',{name:'Resume walkthrough',exact:true}).waitFor();
-  await page.getByRole('button',{name:'Next applied result',exact:true}).click();
-  await page.getByText('Applied replacement 2 of 23 — Page 2 of 12',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Next page',exact:true}).click();
+  await page.getByText('Applied replacements 2–3 of 23 — Page 2 of 12',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Resume walkthrough',exact:true}).click();
   await page.getByRole('button',{name:'Pause walkthrough',exact:true}).click();
   const tourWrites=writes();

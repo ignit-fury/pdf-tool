@@ -38,3 +38,14 @@ test('tour pause/resume/stop has no PDF writer and reduced motion starts paused'
   const reduced=beginWalkthrough({changes:[{matchIds:['x']}]},[{id:'x',page:1,runId:'a',runOrder:0}],{1:{runs:[{run_id:'a',box:[0,0,1,1]}]}},true);
   assert.equal(reduced.status,'paused');
 });
+test('walkthrough advances once per page while retaining every committed match',()=>{
+  const tour={status:'playing',position:0,targets:[{id:'a',page:1},{id:'b',page:1},{id:'c',page:2},{id:'d',page:2},{id:'e',page:4}]};
+  const second=stepWalkthrough(tour,'tick');
+  assert.equal(second.position,2);
+  assert.equal(second.status,'playing');
+  assert.deepEqual(tour.targets.map(item=>item.id),['a','b','c','d','e']);
+  const paused=stepWalkthrough(second,'pause');
+  assert.equal(stepWalkthrough(paused,'tick').position,2);
+  assert.equal(stepWalkthrough(paused,'next').position,4);
+  assert.equal(stepWalkthrough(stepWalkthrough(paused,'next'),'next').status,'complete');
+});
