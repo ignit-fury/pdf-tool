@@ -1,6 +1,6 @@
 import {inspectLocalPdf,transformPages,subsetPages} from './pdfDocument.mjs';
 import {inspectPdfImport,mergePdf} from './mergePdf.mjs';
-import {writeImage} from './images.mjs';
+import {writeImage,updateManagedImage} from './images.mjs';
 
 self.onmessage=async({data})=>{
   const {id,command,payload}=data||{};
@@ -12,6 +12,7 @@ self.onmessage=async({data})=>{
       case 'split':result=await subsetPages(payload.bytes,payload.groups,payload.options);break;
       case 'inspectImport':result=await inspectPdfImport(payload.bytes,payload.options);break;
       case 'merge':result=await mergePdf(payload.bytes,payload.sourceBytes,payload.options);break;
+      case 'managedImage':result=await updateManagedImage(payload.bytes,payload.pngBytes,payload.options);break;
       case 'image':result=await writeImage(payload.bytes,payload.pngBytes,payload.options);break;
       default:throw Object.assign(new Error('PDF_JOB_FAILED'),{code:'PDF_JOB_FAILED'});
     }

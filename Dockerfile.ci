@@ -73,4 +73,5 @@ RUN uv sync --locked --no-install-project
 COPY . .
 COPY --from=client-checks /client/node_modules ./client/node_modules
 COPY --from=client-checks /client/dist ./client/dist
+COPY --from=client-checks /usr/local/bin/node /usr/local/bin/node
 RUN uv sync --locked

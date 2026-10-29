@@ -1,3 +1,4 @@
+import {readManagedImages} from './managedImages.mjs';
 import {PDFDocument, PDFName, PDFDict, PDFArray, PDFNumber, PDFRef, PDFNull, PDFString, PDFHexString, PDFParser, PDFStream, PDFRawStream, PDFInvalidObject, degrees} from '@cantoo/pdf-lib';
 import {MAX_EXPORT_BYTES,admitExport} from '../exports/zip.mjs';
 
@@ -54,7 +55,8 @@ export function describePage(pdf,index) {
   // pdf.js falls back to MediaBox for a disjoint/empty crop.
   const w=(width&&height?width:mediaBox.width)*unit,h=(width&&height?height:mediaBox.height)*unit;
   if(!Number.isFinite(w)||!Number.isFinite(h)||w<=0||h<=0)refuse('PAGE_GEOMETRY_INVALID');
-  return {mediaBox,cropBox,userUnit:unit,rotation,visibleWidth:rotation%180?h:w,visibleHeight:rotation%180?w:h};
+  const geometry={mediaBox,cropBox,userUnit:unit,rotation,visibleWidth:rotation%180?h:w,visibleHeight:rotation%180?w:h};
+  return {...geometry,managedImages:readManagedImages(page,geometry)};
 }
 /** Bounded field-tree traversal; malformed, repeated or cyclic field identities fail closed. */
 export function inspectSignatures(pdf) {

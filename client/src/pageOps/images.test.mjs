@@ -123,7 +123,7 @@ for(const rotation of [0,90,180,270])test(`serialized current-page image has pre
 test('new image pages inherit geometry and fit centered; signed gate and decrypted output metadata are explicit',async()=>{
   for(const position of ['before','after']) {
     const pdf=await pdfFixture(90),bytes=await pdf.save(),result=await writeImage(bytes,png(),{destination:'new-page',pageIndex:0,position});
-    const out=await loadLocalPdf(result.bytes),index=position==='before'?0:1;assert.equal(out.getPageCount(),3);assert.equal(result.selectedPage,index);assert.deepEqual(describePage(out,index),describePage(pdf,0));
+    const out=await loadLocalPdf(result.bytes),index=position==='before'?0:1;assert.equal(out.getPageCount(),3);assert.equal(result.selectedPage,index);assert.deepEqual({...describePage(out,index),managedImages:[]},describePage(pdf,0));
     assert.ok(content(out,out.getPage(index)).some(s=>s.includes(placementMatrix(fitImage({width:2,height:1},describePage(out,index)),describePage(out,index)).join(' ')+' cm')));
   }
   const pdf=await pdfFixture();pdf.catalog.set(n('AcroForm'),pdf.context.obj({SigFlags:1,Fields:[]}));pdf.encrypt({userPassword:'páss🔑',ownerPassword:'owner'});const bytes=await pdf.save();

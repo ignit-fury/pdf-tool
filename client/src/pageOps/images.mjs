@@ -1,3 +1,4 @@
+import {attachManagedImage,findManagedImage,removeManagedImage} from './managedImages.mjs';
 import {PDFName,PDFNumber,degrees} from '@cantoo/pdf-lib';
 import {loadLocalPdf,describePage,isolatePageResources,inspectSignatures,MAX_LOCAL_PDF_BYTES,pdfError} from './pdfDocument.mjs';
 import {fitImage,placementMatrix} from './imageGeometry.mjs';
@@ -6,7 +7,7 @@ export const MAX_IMAGE_BYTES=20*1024*1024;
 export const MAX_IMAGE_PIXELS=16000000;
 export const MAX_IMAGE_DIMENSION=16384;
 export const MAX_IMAGE_PNG_BYTES=64*1024*1024;
-export const IMAGE_ERROR_CODES=Object.freeze(['HEIC_CONVERSION_REQUIRED','IMAGE_UNSUPPORTED','IMAGE_INVALID','IMAGE_ANIMATED','IMAGE_AMBIGUOUS','IMAGE_TOO_LARGE','IMAGE_DIMENSIONS_EXCEEDED','IMAGE_PNG_TOO_LARGE','IMAGE_ORIENTATION_INVALID','IMAGE_ABORTED','IMAGE_DECODE_FAILED','IMAGE_RECT_INVALID','IMAGE_OUTSIDE_PAGE','IMAGE_SIZE_INVALID','IMAGE_ASPECT_INVALID']);
+export const IMAGE_ERROR_CODES=Object.freeze(['HEIC_CONVERSION_REQUIRED','IMAGE_UNSUPPORTED','IMAGE_INVALID','IMAGE_ANIMATED','IMAGE_AMBIGUOUS','IMAGE_TOO_LARGE','IMAGE_DIMENSIONS_EXCEEDED','IMAGE_PNG_TOO_LARGE','IMAGE_ORIENTATION_INVALID','IMAGE_ABORTED','IMAGE_DECODE_FAILED','IMAGE_RECT_INVALID','IMAGE_OUTSIDE_PAGE','IMAGE_SIZE_INVALID','IMAGE_ASPECT_INVALID','IMAGE_ROTATION_INVALID','IMAGE_MANAGED_UNSUPPORTED','IMAGE_OWNERSHIP_INVALID']);
 const refuse=code=>{throw pdfError(code);};
 const text=(bytes,start,length)=>String.fromCharCode(...bytes.subarray(start,start+length));
 function dimensions(width,height) {
@@ -180,7 +181,7 @@ export async function decodeLocalImage(file,{signal,convertedPng=false,decodeBit
 }
 /** Pure byte mutation for the module worker (UI transaction owns publication and
  * acknowledgement). Geometry is read afresh; never trust draft page metadata. */
-export async function writeImage(bytes,pngBytes,{password,destination,pageIndex,position='after',rect,acknowledged=false}={}) {
+export async function writeImage(bytes,pngBytes,{password,destination,pageIndex,position='after',rect,rotation=0,acknowledged=false}={}) {
   const png=pngBytes instanceof ArrayBuffer?new Uint8Array(pngBytes):pngBytes;
   if(!(png instanceof Uint8Array))refuse('IMAGE_INVALID');if(png.byteLength>MAX_IMAGE_PNG_BYTES)refuse('IMAGE_PNG_TOO_LARGE');
   const info=inspectImage(png);if(info.mime!=='image/png'||info.orientation!==1)refuse('IMAGE_INVALID');
@@ -195,11 +196,34 @@ export async function writeImage(bytes,pngBytes,{password,destination,pageIndex,
     rect=fitImage(info,describePage(pdf,selectedPage));notices.push({code:'IMAGE_PAGE_INHERITED',adjacentIndex:pageIndex,...describePage(pdf,selectedPage)});
   }else if(destination==='current-page')page=pdf.getPage(pageIndex);
   else refuse('PAGE_COMMAND_INVALID');
-  const matrix=placementMatrix(rect,describePage(pdf,selectedPage));
+  placementMatrix(rect,describePage(pdf,selectedPage));
   isolatePageResources(page);
-  try {const image=await pdf.embedPng(png);page.drawImage(image,{x:0,y:0,width:1,height:1,matrix});}
+  try {const image=await pdf.embedPng(png);await image.embed();attachManagedImage(pdf,page,image,rect,describePage(pdf,selectedPage),{rotation});}
   catch(error){if(error.code)throw error;refuse('IMAGE_INVALID');}
   if(encrypted)notices.push({code:'ENCRYPTED_COPY_UNLOCKED'});
   const output=await pdf.save({updateFieldAppearances:false});if(output.byteLength>MAX_LOCAL_PDF_BYTES)refuse('LOCAL_PDF_TOO_LARGE');
   return {bytes:output,selectedPage,notices,localMetadata:{pageCount:pdf.getPageCount(),pages:pdf.getPages().map((_,i)=>describePage(pdf,i)),signed,encrypted:false}};
+}
+
+/** Exact native updates are limited to verified isolated placements produced by
+ * this editor. Admission and signature/password gates match image insertion. */
+export async function updateManagedImage(bytes,pngBytes,{password,pageIndex,id,rect,rotation=0,remove=false,acknowledged=false}={}) {
+  const pdf=await loadLocalPdf(bytes,{password}),signed=inspectSignatures(pdf),encrypted=!!(pdf.isEncrypted||pdf.context.isDecrypted),notices=[];
+  if(signed&&!acknowledged)refuse('SIGNATURE_ACK_REQUIRED');
+  const geometry=describePage(pdf,pageIndex),page=pdf.getPage(pageIndex),record=findManagedImage(page,id,geometry);
+  if(remove===true)removeManagedImage(page,record);
+  else {
+    let image={ref:record.imageRef};
+    if(pngBytes!==undefined) {
+      const png=pngBytes instanceof ArrayBuffer?new Uint8Array(pngBytes):pngBytes;
+      if(!(png instanceof Uint8Array))refuse('IMAGE_INVALID');if(png.byteLength>MAX_IMAGE_PNG_BYTES)refuse('IMAGE_PNG_TOO_LARGE');
+      const info=inspectImage(png);if(info.mime!=='image/png'||info.orientation!==1)refuse('IMAGE_INVALID');
+      try{image=await pdf.embedPng(png);await image.embed();}catch(error){if(error.code)throw error;refuse('IMAGE_INVALID');}
+    }
+    isolatePageResources(page);
+    attachManagedImage(pdf,page,image,rect,geometry,{id,rotation,replace:record});
+  }
+  if(encrypted)notices.push({code:'ENCRYPTED_COPY_UNLOCKED'});
+  const output=await pdf.save({updateFieldAppearances:false});if(output.byteLength>MAX_LOCAL_PDF_BYTES)refuse('LOCAL_PDF_TOO_LARGE');
+  return {bytes:output,selectedPage:pageIndex,notices,localMetadata:{pageCount:pdf.getPageCount(),pages:pdf.getPages().map((_,i)=>describePage(pdf,i)),signed,encrypted:false}};
 }
