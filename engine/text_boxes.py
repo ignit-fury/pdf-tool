@@ -86,7 +86,7 @@ def _spec(payload: dict[str, Any], count: int) -> dict[str, Any]:
     normalized_rect = {k: _number(v, 0 if k in ('left','top') else .01, 144000)
                        for k,v in rect.items()}
     style = dict(DEFAULT_STYLE)
-    supplied = _dict(payload.get('style', {}), set(style))
+    supplied = _dict(payload.get('style', {}), set(style) | {'initial_font_size'})
     style.update(supplied)
     if style['font_family'] not in ('Sans','Serif','Mono') or style['alignment'] not in ('left','center','right'):
         _fail()
@@ -96,6 +96,8 @@ def _spec(payload: dict[str, Any], count: int) -> dict[str, Any]:
     for key,lo,hi in [('font_size',1,512),('character_spacing',0,10),
                       ('line_spacing',1,3),('paragraph_spacing',0,144)]:
         style[key] = _number(style[key],lo,hi)
+    if 'initial_font_size' in supplied:
+        style['initial_font_size'] = _number(supplied['initial_font_size'],1,512)
     color = style['color']
     if not isinstance(color,list) or len(color) != 3:
         _fail()
@@ -252,31 +254,37 @@ def _drawing(pdf: pikepdf.Pdf, spec: dict[str,Any], geometry: Geometry) -> Drawi
             bounds[ch]=(glyph.xMin*scale,glyph.yMin*scale,glyph.xMax*scale,glyph.yMax*scale)
         else:
             bounds[ch]=(0,0,0,0)
-    asc=max(font['hhea'].ascent*scale,max((b[3] for b in bounds.values()),default=0))
-    desc=max(-font['hhea'].descent*scale,max((-b[1] for b in bounds.values()),default=0))
     size=style['font_size']; spacing=style['character_spacing']
-    def measure(line: str) -> tuple[float,float]:
+    initial_size=style.get('initial_font_size')
+    first_char=next((ch for ch in text if ch!='\n'),None)
+    initial_bounds=tuple(v*initial_size/size for v in bounds[first_char]) if initial_size is not None and first_char is not None else (0.,0.,0.,0.)
+    asc=max(font['hhea'].ascent*scale,max((b[3] for b in bounds.values()),default=0),initial_bounds[3])
+    desc=max(-font['hhea'].descent*scale,max((-b[1] for b in bounds.values()),default=0),-initial_bounds[1])
+    def measure(line: str, initial: bool) -> tuple[float,float]:
         pen=0.; lo=0.; hi=0.
         for i,ch in enumerate(line):
-            b=bounds[ch]
+            glyph_size=initial_size if initial and i==0 else size
+            b=tuple(v*glyph_size/size for v in bounds[ch])
             lo=min(lo,pen+b[0]); hi=max(hi,pen+b[2])
-            pen+=round(widths[chars[ch]])*size/1000
+            pen+=round(widths[chars[ch]])*glyph_size/1000
             if i<len(line)-1:
                 pen+=spacing
         return lo,max(hi,pen)
-    lines: list[tuple[str,bool]]=[]
+    lines: list[tuple[str,bool,bool]]=[]
+    first_character_pending=True
     for paragraph in text.split('\n'):
         if not paragraph:
-            lines.append(('',True));continue
+            lines.append(('',True,False));continue
         remaining=paragraph
         while remaining:
             # A bounded character scan preserves every space and breaks long tokens.
             end=0; last_break=0
             pen=0.;lo=0.;hi=0.
             for i,ch in enumerate(remaining):
-                b=bounds[ch]
+                glyph_size=initial_size if initial_size is not None and first_character_pending and i==0 else size
+                b=tuple(v*glyph_size/size for v in bounds[ch])
                 lo=min(lo,pen+b[0]);hi=max(hi,pen+b[2])
-                advance=round(widths[chars[ch]])*size/1000
+                advance=round(widths[chars[ch]])*glyph_size/1000
                 if max(hi,pen+advance)-lo>rect['width']+1e-7:
                     break
                 pen+=advance+spacing
@@ -287,23 +295,31 @@ def _drawing(pdf: pikepdf.Pdf, spec: dict[str,Any], geometry: Geometry) -> Drawi
                 _fail('TEXT_BOX_UNSUPPORTED_TEXT')
             if end<len(remaining) and last_break:
                 end=last_break
-            lines.append((remaining[:end],end==len(remaining)))
+            lines.append((remaining[:end],end==len(remaining),first_character_pending and initial_size is not None))
+            first_character_pending=False
             remaining=remaining[end:]
-    required=asc+desc+max(0,len(lines)-1)*size*style['line_spacing']+sum(style['paragraph_spacing'] for _,last in lines[:-1] if last)
+    required=asc+desc+max(0,len(lines)-1)*size*style['line_spacing']+sum(style['paragraph_spacing'] for _,last,_ in lines[:-1] if last)
     font_obj=embed_type0_font(pdf,subset,widths,{cid:ch for ch,cid in chars.items()})
     resource=_resource(spec)
     commands=['q',' '.join(_fmt(v) for v in geometry.matrix)+' cm','BT',
               f'{resource} {_fmt(size)} Tf',' '.join(_fmt(c) for c in style['color'])+' rg', '0 Tr']
     y=rect['top']+asc
-    for line,last in lines:
-        lo,hi=measure(line)
+    for line,last,initial in lines:
+        lo,hi=measure(line,initial)
         x=rect['left']-lo
         extra=rect['width']-(hi-lo)
         if style['alignment']=='center':x+=extra/2
         elif style['alignment']=='right':x+=extra
-        for ch in line:
+        for i,ch in enumerate(line):
+            glyph_size=initial_size if initial and i==0 else size
+            if initial and i==0:
+                commands.append(f'{resource} {_fmt(glyph_size)} Tf')
+            elif initial and i==1:
+                commands.append(f'{resource} {_fmt(size)} Tf')
             commands.append(f'1 0 0 1 {_fmt(x)} {_fmt(-y)} Tm <{chars[ch]:04X}> Tj')
-            x+=round(widths[chars[ch]])*size/1000+spacing
+            x+=round(widths[chars[ch]])*glyph_size/1000+spacing
+        if initial and len(line)==1:
+            commands.append(f'{resource} {_fmt(size)} Tf')
         y+=size*style['line_spacing']+(style['paragraph_spacing'] if last else 0)
     commands.extend(['ET','Q'])
     return Drawing(('\n'.join(commands)+'\n').encode(),font_obj,

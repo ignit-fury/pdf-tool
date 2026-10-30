@@ -133,6 +133,10 @@ candidate; Apply is one Undo action. Cancel leaves the working PDF unchanged.
 **Grow height to fit text** is enabled by default for new/selected managed boxes.
 Both the typing surface and validated PDF can grow; the PDF uses actual font metrics.
 The selected bundled replacement font is disclosed before Apply.
+For a source word split into an oversized initial letter and smaller remaining
+letters, flexible replacement retains those two point sizes in the native PDF
+text box. It uses one bundled replacement font when the source font program is
+unavailable; the exact preview shows the substitution before Apply.
 Arbitrary multirun paragraph reconstruction and automatically moving neighboring
 content remain unavailable. Growth must fit free space; move/widen the box, choose
 another page or reduce the font if it cannot fit. No text is silently clipped.

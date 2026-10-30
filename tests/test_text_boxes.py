@@ -141,10 +141,22 @@ def test_unsafe_unicode_refuses(text):
         perform(source_pdf(),draft(text=text))
 
 
-@pytest.mark.parametrize('payload',[None,{}, {'operation':'unknown'},draft(page_index=True),draft(style={'font_size':float('nan')}),draft(style={'unknown':1}),draft(allow_overlap=1)])
+@pytest.mark.parametrize('payload',[None,{}, {'operation':'unknown'},draft(page_index=True),draft(style={'font_size':float('nan')}),draft(style={'initial_font_size':513}),draft(style={'unknown':1}),draft(allow_overlap=1)])
 def test_strict_schema(payload):
     with pytest.raises(TextBoxError,match='INVALID_TEXT_BOX'):
         perform(source_pdf(),payload)
+
+
+def test_mixed_initial_size_is_searchable_and_reopens_as_one_owned_box():
+    original=source_pdf()
+    prepared=perform(original,draft(text='FEDERALS',style={
+        'font_family':'Serif','font_size':24,'initial_font_size':30,'bold':True}))
+    candidate=output(prepared)
+    assert 'FEDERALS' in image_and_text(candidate)[1]
+    listed=perform(candidate,{'operation':'list'})
+    assert len(listed['boxes'])==1
+    assert listed['boxes'][0]['style']['initial_font_size']==30
+    assert listed['boxes']==prepared['boxes']
 
 
 def test_reopen_proof_survives_later_clock(monkeypatch):

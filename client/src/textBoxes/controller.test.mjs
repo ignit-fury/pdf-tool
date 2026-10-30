@@ -33,6 +33,14 @@ test('source expansion uploads immutable baseline while binding publication to c
   await f.controller.preview(conversion);assert.strictEqual(calls[0].body,baseline);assert.strictEqual(f.current.bytes,f.bytes);
   f.current.version++;assert.equal(f.controller.take(conversion),null);
 });
+test('preview accepts a verified native box with a separate initial-letter size',async()=>{
+  const f=await fixture();
+  const mixedStyle={...style,initial_font_size:75};
+  f.response.boxes[0].style=mixedStyle;
+  const result=await f.controller.preview({...payload,style:mixedStyle});
+  assert.equal(result.boxes[0].style.initial_font_size,75);
+  assert.equal(f.states.at(-1).status,'ready');
+});
 test('source expansion admits the larger original upload before any network request',async()=>{
   const f=await fixture();f.session.sourceBytes=new Uint8Array(50*1024*1024);f.current.retainedBytes=200*1024*1024;
   await assert.rejects(()=>f.controller.preview({...payload,operation:'replace-source',source_run_id:'original',recipe:[]}),{code:'EXPORT_LIMIT'});
@@ -90,4 +98,6 @@ test('wrong hashes, unknown notices, fake PDF and unbounded metadata refuse befo
   const box={id:'a'.repeat(32),page_index:1,text:'Rotated',rect:payload.rect,style,rotation:90};
   assert.equal(validateBoxes([box])[0].rotation,90);
   assert.throws(()=>validateBoxes([{...box,rotation:45}]),{code:'TEXT_BOX_RESPONSE_INVALID'});
+  assert.equal(validateBoxes([{...box,style:{...style,initial_font_size:75}}])[0].style.initial_font_size,75);
+  assert.throws(()=>validateBoxes([{...box,style:{...style,initial_font_size:513}}]),{code:'TEXT_BOX_RESPONSE_INVALID'});
 });

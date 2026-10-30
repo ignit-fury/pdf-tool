@@ -9,7 +9,7 @@ export function draftError(draft,geometry){
   if(Array.from(draft.text).length>10000)return 'A text box supports at most 10,000 characters.';
   const r=draft.rect,s=draft.style;
   if(!geometry||!Object.values(r).every(Number.isFinite)||r.left<0||r.top<0||r.width<=0||r.height<=0||r.left+r.width>geometry.visibleWidth||r.top+r.height>geometry.visibleHeight)return 'Keep this text box entirely inside the visible page.';
-  if(!Number.isFinite(s.font_size)||s.font_size<1||s.font_size>512||!Number.isFinite(s.character_spacing)||s.character_spacing<0||s.character_spacing>10||!Number.isFinite(s.line_spacing)||s.line_spacing<1||s.line_spacing>3||!Number.isFinite(s.paragraph_spacing)||s.paragraph_spacing<0||s.paragraph_spacing>144)return 'Check font size and spacing limits.';
+  if(!Number.isFinite(s.font_size)||s.font_size<1||s.font_size>512||('initial_font_size' in s&&(!Number.isFinite(s.initial_font_size)||s.initial_font_size<1||s.initial_font_size>512))||!Number.isFinite(s.character_spacing)||s.character_spacing<0||s.character_spacing>10||!Number.isFinite(s.line_spacing)||s.line_spacing<1||s.line_spacing>3||!Number.isFinite(s.paragraph_spacing)||s.paragraph_spacing<0||s.paragraph_spacing>144)return 'Check font size and spacing limits.';
   return null;
 }
 export function expandTextBox(draft,required,geometry){
@@ -26,5 +26,5 @@ export function sourceTextBox({run,text,style,recipe,geometry,box,typography,car
   const left=Math.max(0,box.left),top=Math.max(0,box.top),width=geometry.visibleWidth-left,height=Math.min(Math.max(box.height,typography.fontSize*1.3),geometry.visibleHeight-top);
   const normalize=value=>value.replace(/\r\n?/g,'\n').replace(/[\v\f\u0085\u2028\u2029]/g,'\n').replace(/\t/g,'    ');
   return {...(caret?{caret:{start:normalize(text.slice(0,caret.start)).length,end:normalize(text.slice(0,caret.end)).length}}:{}),...(run.source_run_ids?{source_run_ids:[...run.source_run_ids],source_sizes:run.source_sizes? [...run.source_sizes]:undefined}:{source_run_id:run.run_id}),source_font:run.source_font,recipe:structuredClone(recipe),page_index:run.pageNumber-1,text:text.replace(/\r\n?/g,'\n').replace(/[\v\f\u0085\u2028\u2029]/g,'\n').replace(/\t/g,'    '),rect:{left,top,width,height},auto_expand:true,allow_overlap:false,
-    style:{...structuredClone(DEFAULT_STYLE),font_family:family,font_size:typography.fontSize,bold:style.bold??!!run.bold,italic:style.italic??!!run.italic,color:style.color??run.color??[0,0,0],character_spacing:typography.letterSpacing||0}};
+    style:{...structuredClone(DEFAULT_STYLE),font_family:family,font_size:typography.fontSize,...(run.source_run_ids&&run.source_sizes?.every(Number.isFinite)?{initial_font_size:run.source_sizes[0]}:{}),bold:style.bold??!!run.bold,italic:style.italic??!!run.italic,color:style.color??run.color??[0,0,0],character_spacing:typography.letterSpacing||0}};
 }

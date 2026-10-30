@@ -13,7 +13,7 @@ export function validateBoxes(boxes){
     if(!keys(box,['id','page_index','rect','text','style',...(Object.hasOwn(box,'rotation')?['rotation']:[])])||Object.hasOwn(box,'rotation')&&![90,180,270].includes(box.rotation)||typeof box.id!=='string'||!/^[0-9a-f]{32}$/.test(box.id)||ids.has(box.id)||!Number.isSafeInteger(box.page_index)||box.page_index<0||box.page_index>=2048||typeof box.text!=='string'||!box.text.length||Array.from(box.text).length>10000)fail();
     ids.add(box.id);const r=box.rect,s=box.style;
     if(!keys(r,['left','top','width','height'])||!Object.entries(r).every(([k,v])=>finite(v,['left','top'].includes(k)?0:.01,144000)))fail();
-    if(!keys(s,styleKeys)||!['Sans','Serif','Mono'].includes(s.font_family)||!['left','center','right'].includes(s.alignment)||typeof s.bold!=='boolean'||typeof s.italic!=='boolean'||!Array.isArray(s.color)||s.color.length!==3||!s.color.every(v=>finite(v,0,1))||!finite(s.font_size,1,512)||!finite(s.character_spacing,0,10)||!finite(s.line_spacing,1,3)||!finite(s.paragraph_spacing,0,144))fail();
+    if(!keys(s,[...styleKeys,...(Object.hasOwn(s,'initial_font_size')?['initial_font_size']:[])])||!['Sans','Serif','Mono'].includes(s.font_family)||!['left','center','right'].includes(s.alignment)||typeof s.bold!=='boolean'||typeof s.italic!=='boolean'||!Array.isArray(s.color)||s.color.length!==3||!s.color.every(v=>finite(v,0,1))||!finite(s.font_size,1,512)||Object.hasOwn(s,'initial_font_size')&&!finite(s.initial_font_size,1,512)||!finite(s.character_spacing,0,10)||!finite(s.line_spacing,1,3)||!finite(s.paragraph_spacing,0,144))fail();
   }
   return structuredClone(boxes);
 }

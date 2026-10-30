@@ -117,12 +117,13 @@ def _page_stream_roots(page: object) -> list[object]:
     for _ in range(128):
         if resources is not None:
             break
-        ancestor = ancestor.get('/Parent')
-        if not isinstance(ancestor, pikepdf.Dictionary):
+        parent = ancestor.get('/Parent')
+        if not isinstance(parent, pikepdf.Dictionary):
             break
-        if ancestor.objgen in seen:
+        if parent.objgen in seen:
             raise WorkerRefusal('PDF_CYCLE')
-        seen.add(ancestor.objgen)
+        seen.add(parent.objgen)
+        ancestor = parent
         resources = ancestor.get('/Resources')
     else:
         raise WorkerRefusal('DOCUMENT_LIMIT')

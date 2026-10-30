@@ -10,6 +10,15 @@ test('source expansion keeps the draft/recipe, uses physical formatting and norm
   assert.equal(draft.rect.width,560,'source expansion should use available width before wrapping');
   const payload=textBoxPayload(draft);assert.equal(payload.operation,'replace-source');assert.equal(payload.source_run_id,'source');assert.equal(payload.recipe[0].new_text,'kept');assert.equal(payload.auto_expand,true);
 });
+test('split-initial expansion retains both point sizes in the exact PDF payload',async()=>{
+  const {sourceTextBox}=await import('./model.mjs');
+  const draft=sourceTextBox({run:{run_id:'first',source_run_ids:['first','tail'],source_sizes:[75,60],pageNumber:1,source_font:'Times New Roman',font_size:60},text:'FEDERALS',style:{},recipe:[],geometry:{visibleWidth:612,visibleHeight:792},box:{left:54,top:164.8,width:295.6,height:75},typography:{fontSize:60,letterSpacing:0}});
+  assert.equal(draft.style.initial_font_size,75);
+  assert.equal(draft.style.font_size,60);
+  assert.equal(draftError(draft,{visibleWidth:612,visibleHeight:792}),null);
+  assert.equal(textBoxPayload(draft).style.initial_font_size,75);
+  assert.match(draftError({...draft,style:{...draft.style,initial_font_size:513}},{visibleWidth:612,visibleHeight:792}),/font size/);
+});
 test('page insertion clamps a physical box while retaining a genuine empty draft',()=>{
   const draft=newTextBox(1,{visibleWidth:600,visibleHeight:800},{left:590,top:790});
   assert.deepEqual(draft.rect,{left:360,top:680,width:240,height:120});assert.equal(draft.text,'');
