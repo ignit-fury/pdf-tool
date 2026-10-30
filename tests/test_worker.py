@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import io
 import sys
+from pathlib import Path
 
 import pikepdf
 import pytest
@@ -97,3 +98,49 @@ def test_later_page_bomb_does_not_block_inspection_or_first_page() -> None:
     assert run_worker("inspect", source).get("page_count") == 2
     assert run_worker("page", source, page=0).get("bucket") == "empty"
     assert run_worker("page", source, page=1) == {"error": "DOCUMENT_LIMIT"}
+
+
+def test_page_link_does_not_turn_local_preflight_into_document_walk() -> None:
+    source = decompression_bomb(safe_first_page=True)
+    with pikepdf.open(io.BytesIO(source)) as pdf:
+        link = pikepdf.Dictionary(Type=pikepdf.Name.Annot, Subtype=pikepdf.Name.Link,
+            Rect=pikepdf.Array([0, 0, 10, 10]),
+            A=pikepdf.Dictionary(S=pikepdf.Name.GoTo,
+                D=pikepdf.Array([pdf.pages[1].obj, pikepdf.Name.Fit])))
+        pdf.pages[0].obj.Annots = pikepdf.Array([pdf.make_indirect(link)])
+        output = io.BytesIO()
+        pdf.save(output)
+    linked = output.getvalue()
+    assert run_worker("page", linked, page=0).get("bucket") == "empty"
+    assert run_worker("page", linked, page=1) == {"error": "DOCUMENT_LIMIT"}
+
+
+def test_annotation_appearance_still_receives_stream_limit() -> None:
+    source = decompression_bomb(safe_first_page=True)
+    with pikepdf.open(io.BytesIO(source)) as pdf:
+        annotation = pikepdf.Dictionary(Type=pikepdf.Name.Annot, Subtype=pikepdf.Name.Square,
+            Rect=pikepdf.Array([0, 0, 10, 10]),
+            AP=pikepdf.Dictionary(N=pdf.pages[1].obj.Contents))
+        pdf.pages[0].obj.Annots = pikepdf.Array([pdf.make_indirect(annotation)])
+        output = io.BytesIO()
+        pdf.save(output)
+    assert run_worker("page", output.getvalue(), page=0) == {"error": "DOCUMENT_LIMIT"}
+
+
+def test_inherited_page_resources_still_receive_stream_limit() -> None:
+    source = decompression_bomb(safe_first_page=True)
+    with pikepdf.open(io.BytesIO(source)) as pdf:
+        page = pdf.pages[0].obj
+        del page['/Resources']
+        page.Parent.Resources = pikepdf.Dictionary(
+            XObject=pikepdf.Dictionary(Bomb=pdf.pages[1].obj.Contents))
+        output = io.BytesIO()
+        pdf.save(output)
+    assert run_worker('page', output.getvalue(), page=0) == {'error': 'DOCUMENT_LIMIT'}
+
+
+def test_far_page_with_links_still_analyzes_editable_text() -> None:
+    source = (Path(__file__).resolve().parents[1] / 'corpus/public/far_federal_acquisition_regulation.pdf').read_bytes()
+    page = run_worker('page', source, page=10)
+    assert page.get('bucket') == 'editable', page.get('error')
+    assert len(page['runs']) > 0

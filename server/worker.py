@@ -74,10 +74,14 @@ def _signed(pdf: object) -> bool:
     return False
 
 
-def _reachable_streams(root: object) -> list[object]:
-    """Walk one page's values without following page-tree or annotation backrefs."""
+def _reachable_streams(roots: list[object]) -> list[object]:
+    """Walk only page drawing resources and annotation appearances.
+
+    Annotation actions and destinations can point to other pages. Traversing
+    them turns a page-local guard into a document-wide walk (and can cycle).
+    """
     import pikepdf
-    pending = [root]
+    pending = list(roots)
     seen: set[tuple[int, int]] = set()
     streams: list[object] = []
     visited = 0
@@ -99,8 +103,37 @@ def _reachable_streams(root: object) -> list[object]:
             pending.extend(obj)
         else:
             pending.extend(value for name, value in obj.items()
-                           if name not in {"/Parent", "/P", "/Pg"})
+                           if name not in {"/Parent", "/P", "/Pg", "/Page", "/Pages", "/Kids", "/Annots", "/A", "/Dest"})
     return streams
+
+
+def _page_stream_roots(page: object) -> list[object]:
+    """Content, resource, and visible annotation streams; never link targets."""
+    import pikepdf
+    assert isinstance(page, pikepdf.Page)
+    resources = page.obj.get('/Resources')
+    ancestor = page.obj
+    seen: set[tuple[int, int]] = set()
+    for _ in range(128):
+        if resources is not None:
+            break
+        ancestor = ancestor.get('/Parent')
+        if not isinstance(ancestor, pikepdf.Dictionary):
+            break
+        if ancestor.objgen in seen:
+            raise WorkerRefusal('PDF_CYCLE')
+        seen.add(ancestor.objgen)
+        resources = ancestor.get('/Resources')
+    else:
+        raise WorkerRefusal('DOCUMENT_LIMIT')
+    roots: list[object] = [page.obj.get('/Contents'), resources]
+    annotations = page.obj.get('/Annots', pikepdf.Array())
+    if isinstance(annotations, pikepdf.Array):
+        if len(annotations) > 10000:
+            raise WorkerRefusal('DOCUMENT_LIMIT')
+        roots.extend(annotation.get('/AP') for annotation in annotations
+                     if isinstance(annotation, pikepdf.Dictionary))
+    return roots
 
 
 def _preflight(pdf: object, page: int | None = None) -> None:
@@ -111,7 +144,7 @@ def _preflight(pdf: object, page: int | None = None) -> None:
     """
     import pikepdf
     assert isinstance(pdf, pikepdf.Pdf)
-    candidates = pdf.objects if page is None else _reachable_streams(pdf.pages[page].obj)
+    candidates = pdf.objects if page is None else _reachable_streams(_page_stream_roots(pdf.pages[page]))
     for obj in candidates:
         if not isinstance(obj, pikepdf.Stream):
             continue

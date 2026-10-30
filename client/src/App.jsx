@@ -19,7 +19,7 @@ import ToolbarDetails from './viewer/ToolbarDetails.jsx';
 import {groupedEditTargets,splitSourceWord} from './viewer/groupRuns.mjs';
 import './viewer/viewer.css';
 import './viewer/compactChrome.css';
-import {upsertOperation,withSourceRetry,decodePdf,explainReason,isWidthOverflow,retryWorkerBusy,disposeDocument,explainBucket,passwordHeaders,viewportBox} from './session.mjs';
+import {upsertOperation,withSourceRetry,decodePdf,explainReason,explainPageAnalysisError,isWidthOverflow,retryWorkerBusy,disposeDocument,explainBucket,passwordHeaders,viewportBox} from './session.mjs';
 import FindPanel from './find/FindPanel.jsx';
 import {findMatches,sourceRunForMatch} from './find/search.mjs';
 import {buildReplacementRecipe} from './find/buildRecipe.mjs';
@@ -196,7 +196,7 @@ export default function App(){
     if(target.pages.has(number)){target.pages.get(number).promote?.(priority);return target.pages.get(number);}
     const pending=documentRequest(target,`/pages/${number-1}/runs`,{},priority);
     target.pages.set(number,pending);
-    pending.then(data=>{if(current(target))setIndex(previous=>({...previous,[number]:data}));}).catch(error=>{target.pages.delete(number);if(current(target)&&!ignored(error))setMessage(`Page ${number}: ${error.status===429?'The server is busy. Select the page again to retry.':error.message}`);});
+    pending.then(data=>{if(current(target))setIndex(previous=>({...previous,[number]:data}));}).catch(error=>{target.pages.delete(number);if(current(target)&&!ignored(error)&&priority<20)setMessage(`Page ${number}: ${explainPageAnalysisError(error)}`);});
     return pending;
   },[documentRequest]);
   const makeIndexer=useCallback((target,progress)=>createIndexingController({initialProgress:progress,fetchPage:number=>fetchRuns(number,20),onProgress:setIndexProgress,isCurrent:()=>current(target)&&sessionRef.current===target}),[fetchRuns]);

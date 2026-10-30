@@ -77,6 +77,12 @@ export function isWidthOverflow(reason) {
   const match=/^delta (-?\d+(?:\.\d+)?)pt exceeds/.exec(reason||'');
   return !!match&&Number(match[1])>0;
 }
+export function explainPageAnalysisError(error) {
+  if(error?.code==='DOCUMENT_LIMIT')return 'This page exceeds the safe text-analysis limit. It may still contain editable text; the page remains viewable, but editing its text is unavailable.';
+  if(error?.status===429||error?.code==='WORKER_BUSY')return 'The server is busy. Select the page again to retry.';
+  if(error?.code==='WORKER_TIMEOUT')return 'Text analysis took too long for this page. Select it again to retry.';
+  return error?.message||'Text analysis failed for this page.';
+}
 export function explainReason(reason) {
   if(reason==='managed_text_box')return 'This text belongs to an inserted text box. Use the text-box controls to edit its complete layout.';
   if(reason==='managed_text_box_unverified')return 'This marked text box cannot be verified safely. Other source text and page tools remain available.';

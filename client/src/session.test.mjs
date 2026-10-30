@@ -101,6 +101,12 @@ test('fit refusals use readable copy and never repeat a prose error as a code', 
   assert.match(explainFit('trailing_kern'),/font size/);
 });
 
+test('a true page analysis limit does not imply an image-only page', async () => {
+  const {explainPageAnalysisError}=await import('./session.mjs');
+  assert.match(explainPageAnalysisError({code:'DOCUMENT_LIMIT'}),/may still contain editable text/);
+  assert.match(explainPageAnalysisError({status:429}),/server is busy/);
+});
+
 test('font choice is explicit, removable and restored with whole-recipe undo', async () => {
   const {chooseFontFamily,needsFontChoice,explainReason}=await import('./session.mjs');
   const run={state:'editable_substitution',suggested_font_family:null};
