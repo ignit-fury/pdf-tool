@@ -270,7 +270,7 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
                             pdf, streams[stream_key][0], stream_runs[stream_key],
                             page_start=stream_key == (0, ())))
                     raw, resources = streams[stream_key]
-                    source_font, suggested_family = source_font_info(raw, resources, run.glyphs[0].operator_byte_offset)
+                    source_font, suggested_family, source_font_reusable = source_font_info(raw, resources, run.glyphs[0].operator_byte_offset)
                     ownership: dict[str, object] = {}
                     if (not parts['xobj_path'] and parts['annot'] is None and parts['pattern'] is None
                             and parts['charproc'] is None and parts['part'] in managed_parts):
@@ -284,6 +284,7 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
                         "box": run_box(run, raw, resources), "state": verdict.state,
                         "reason": verdict.reason, "source_font": source_font,
                         "suggested_font_family": suggested_family,
+                        "source_font_reusable": source_font_reusable,
                         **formatting.get(run.run_id, {}), **ownership})
             box = [float(x) for x in pdf.pages[number].cropbox]
             return {"page": number, "bucket": indexed.bucket, "runs": runs,
@@ -434,7 +435,8 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
             report = apply_recipe(path, recipe, output, password=secret.get_secret_value())
         return {"ok": report.ok, "resolved": [
             {"run_id": resolved.op.run_id, "ok": resolved.ok, "reason": resolved.reason,
-             "strategy": resolved.strategy, "delta_pt": resolved.delta_pt}
+             "strategy": resolved.strategy, "delta_pt": resolved.delta_pt,
+             "font_substituted": resolved.substitution_key is not None}
             for resolved in report.resolved], "pdf": base64.b64encode(output.read_bytes()).decode("ascii")
             if request.get("dry_run") is not True and output.exists() and report.ok else None}
 

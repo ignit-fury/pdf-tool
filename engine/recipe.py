@@ -294,21 +294,27 @@ def _base_font_name(font: pikepdf.Object) -> str:
 
 def source_font_info(
     stream_bytes: bytes, resources: pikepdf.Object | None, operator_offset: int
-) -> tuple[str | None, BundledFamily | None]:
-    """Source identity and a known substitute; never guess an unknown font family."""
+) -> tuple[str | None, BundledFamily | None, bool]:
+    """Source identity, known substitute, and whether its program can be reused."""
     active = active_font_name_and_size(stream_bytes, operator_offset)
     if active is None or resources is None:
-        return None, None
+        return None, None, False
     fonts = resources.get("/Font")
     font = fonts.get("/" + active[0].decode("latin-1")) if fonts is not None else None
     if font is None:
-        return None, None
+        return None, None, False
     name = font.get("/BaseFont")
     if name is None:
         descriptor = font.get("/FontDescriptor")
         name = descriptor.get("/FontName") if descriptor is not None else None
+    descriptor = font.get("/FontDescriptor")
+    reusable = font.get("/Subtype") != pikepdf.Name("/Type0") and descriptor is not None and (
+        descriptor.get("/FontFile2") is not None or
+        (font_file3 := descriptor.get("/FontFile3")) is not None and
+        font_file3.get("/Subtype") == pikepdf.Name("/OpenType")
+    )
     return (str(name).lstrip("/") if name is not None else None,
-            lookup_bundled_font(_base_font_name(font)).family)
+            lookup_bundled_font(_base_font_name(font)).family, reusable)
 
 
 def source_formatting_metadata(

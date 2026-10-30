@@ -13,6 +13,8 @@ export function groupedEditTargets(runs, editedIds=new Set()) {
       if(small>0&&overlap>=small*.75&&Math.abs(b[0]-a[2])<=Math.max(.5,small*.03)){
         result.push({...next,run_id:first.run_id,text:first.text+next.text,
           source_run_ids:[first.run_id,next.run_id],
+          source_sizes:[first.font_size,next.font_size],
+          source_font_reusable:first.source_font_reusable===true&&next.source_font_reusable===true,
           box:[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[2],b[2]),Math.max(a[3],b[3])]});
         i++;continue;
       }
@@ -20,4 +22,12 @@ export function groupedEditTargets(runs, editedIds=new Set()) {
     result.push(first);
   }
   return result;
+}
+
+/** Keep each source run's font and size when editing a visually joined word. */
+export function splitSourceWord(run,text){
+  if(!run?.source_run_ids||run.source_run_ids.length!==2)return [{run_id:run.run_id,new_text:text}];
+  const initial=Array.from(text)[0]||'';
+  return [{run_id:run.source_run_ids[0],new_text:initial},
+    {run_id:run.source_run_ids[1],new_text:text.slice(initial.length)}];
 }

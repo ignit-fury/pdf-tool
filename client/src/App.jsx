@@ -16,7 +16,7 @@ import {historyJump} from './viewer/history.mjs';
 import OutlinePanel from './viewer/OutlinePanel.jsx';
 import HistoryPanel from './viewer/HistoryPanel.jsx';
 import ToolbarDetails from './viewer/ToolbarDetails.jsx';
-import {groupedEditTargets} from './viewer/groupRuns.mjs';
+import {groupedEditTargets,splitSourceWord} from './viewer/groupRuns.mjs';
 import './viewer/viewer.css';
 import './viewer/compactChrome.css';
 import {upsertOperation,withSourceRetry,decodePdf,explainReason,retryWorkerBusy,disposeDocument,explainBucket,passwordHeaders,viewportBox} from './session.mjs';
@@ -236,16 +236,12 @@ export default function App(){
     cancelTextBox();setSideOpen(false);
     if(run.text_box_id){startTextBox();await loadTextBoxes(run.text_box_id);return;}
     const number=run.pageNumber||page;
-    if(run.source_run_ids){
-      expandSourceText(run.text,{},undefined,{...run,pageNumber:number});
-      return;
-    }
     if(localMetadata?.pages[number-1]?.rotation||run.direction&&(Math.abs(run.direction[1])>.01||run.direction[0]<=0)){
       setMessage('Inline editing of rotated or directed text is unavailable. Rotate the page with page tools and analyze again, or choose a horizontal text run.');return;
     }
     invalidateBatch();setMode('edit');setPage(number);
     const existing=recipeState.recipe.find(op=>op.run_id===run.run_id);
-    setSelection({...run,pageNumber:number});setDraft(existing?.new_text??run.text);setStyle(existing?.style||{});setPreview(null);
+    setSelection({...run,pageNumber:number});setDraft(run.source_run_ids?run.text:existing?.new_text??run.text);setStyle(run.source_run_ids?{}:existing?.style||{});setPreview(null);
   };
   const navigateMatch=match=>{cancelInline();setActiveMatch(match);gotoPage(match.page);fetchRuns(match.page,0);setNavigationStatus(`Match ${matches.findIndex(item=>item.id===match.id)+1} of ${matches.length}, page ${match.page}`);};
   const refreshIndex=()=>{invalidateBatch();setSourceMismatch(false);setActiveMatch(null);setExcludedIds(new Set());setResultPage(1);setIndexProgress(EMPTY_PROGRESS);setIndexRevision(previous=>previous+1);};
@@ -460,7 +456,11 @@ export default function App(){
     finally{finishWork(owner);}
   };
   const cancelBatchPreview=()=>{editVersion.current++;setBatchReview(null);setBatchError('');const owner=busyOwnerRef.current;if(owner?.kind==='batch-preview')finishWork(owner);};
-  const candidate=()=>upsertOperation(recipeState.recipe,{run_id:selection.run_id,new_text:draft,...(Object.keys(style).length?{style}:{})});
+  const candidate=()=>splitSourceWord(selection,draft).reduce((result,operation)=>{
+    const previous=result.find(item=>item.run_id===operation.run_id);
+    const mergedStyle={...previous?.style,...style};
+    return upsertOperation(result,{...operation,...(Object.keys(mergedStyle).length?{style:mergedStyle}:{})});
+  },recipeState.recipe);
   const checkFit=async()=>{
     if(!selection||draftProblem(draft))return;const owner=beginWork('single-preview','Checking text fit…');if(!owner)return;
     const target=sessionRef.current,version=++editVersion.current,recipe=candidate();setBatchReview(null);setMessage('');
