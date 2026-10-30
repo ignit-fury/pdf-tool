@@ -73,6 +73,10 @@ export async function disposeDocument(document) {
   // Cleanup of a superseded viewer must never roll back a successful edit.
   try {await document?.loadingTask?.destroy();} catch {}
 }
+export function isWidthOverflow(reason) {
+  const match=/^delta (-?\d+(?:\.\d+)?)pt exceeds/.exec(reason||'');
+  return !!match&&Number(match[1])>0;
+}
 export function explainReason(reason) {
   if(reason==='managed_text_box')return 'This text belongs to an inserted text box. Use the text-box controls to edit its complete layout.';
   if(reason==='managed_text_box_unverified')return 'This marked text box cannot be verified safely. Other source text and page tools remain available.';
@@ -81,7 +85,7 @@ export function explainReason(reason) {
   if(reason==='source_font_state_unsupported')return 'The source font state cannot be verified for size or spacing changes. Preserve those settings or choose another text run.';
   if(reason==='normalization_boundary_unreplaceable')return 'This match covers only part of a character or combined character. Search for the complete character to replace it safely.';
   const widthError=/^delta (-?\d+(?:\.\d+)?)pt exceeds/.exec(reason||'');
-  if(widthError)return Number(widthError[1])>0?'The replacement is too wide for this text area. Try shorter text or another replacement font.':'The replacement is shorter than the original text. Preview again with the updated editor.';
+  if(widthError)return isWidthOverflow(reason)?'The replacement needs more room than Preserve layout allows. Open an expandable text box to preview it.':'The replacement is shorter than the original text. Preview again with the updated editor.';
   if(reason?.startsWith('no mapping table entry for BaseFont'))return 'No automatic match for this font. Choose a replacement font, then preview again.';
   if(reason==='stateful_text_showing_unsupported')return 'This text uses line or spacing operators that cannot be safely rewritten yet.';
   if(reason==='part_boundary_truncated')return 'This text crosses PDF content-stream boundaries that cannot be safely rewritten yet. Try another text run.';

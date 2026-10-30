@@ -40,6 +40,14 @@ def test_split_title_word_is_one_atomic_preview_and_unrelated_page_stays_intact(
     assert result['ok'] is True
     assert result['source_hash']==hashlib.sha256(original).hexdigest()
     assert result['layout']['line_count']==1
+    longer=_payload(ids)
+    longer['text']='FEDERALS'
+    longer['rect']['width']=550
+    expanded=prepare_source_text_box(SOURCE,original,longer,tmp_path/'expanded.pdf')
+    assert expanded['ok'] is True
+    assert expanded['layout']['line_count']==1
+    with pdfium.PdfDocument(base64.b64decode(expanded['pdf'])) as widened:
+        assert 'FEDERALS' in widened[0].get_textpage().get_text_range()
     output=base64.b64decode(result['pdf'])
     with pdfium.PdfDocument(original) as before, pdfium.PdfDocument(output) as after:
         assert len(after)==len(before)==2026

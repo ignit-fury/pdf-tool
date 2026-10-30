@@ -19,7 +19,7 @@ import ToolbarDetails from './viewer/ToolbarDetails.jsx';
 import {groupedEditTargets,splitSourceWord} from './viewer/groupRuns.mjs';
 import './viewer/viewer.css';
 import './viewer/compactChrome.css';
-import {upsertOperation,withSourceRetry,decodePdf,explainReason,retryWorkerBusy,disposeDocument,explainBucket,passwordHeaders,viewportBox} from './session.mjs';
+import {upsertOperation,withSourceRetry,decodePdf,explainReason,isWidthOverflow,retryWorkerBusy,disposeDocument,explainBucket,passwordHeaders,viewportBox} from './session.mjs';
 import FindPanel from './find/FindPanel.jsx';
 import {findMatches,sourceRunForMatch} from './find/search.mjs';
 import {buildReplacementRecipe} from './find/buildRecipe.mjs';
@@ -301,7 +301,7 @@ export default function App(){
     textBoxController.invalidate();textBoxPayloadRef.current=null;setTextBoxDraft(value);
     if(value.page_index!==textBoxDraft?.page_index&&Number.isInteger(value.page_index)&&value.page_index>=0&&value.page_index<(pdfRef.current?.numPages||0)){setPage(value.page_index+1);setNavigation(n=>({page:value.page_index+1,serial:n.serial+1}));}
   };
-  const expandSourceText=async(text=draft,format=style,caret,sourceRun)=>{
+  const expandSourceText=async(text=draft,format=style,caret,sourceRun,fromWidthRefusal=false)=>{
     const target=sessionRef.current,run=sourceRun||selection,document=pdfRef.current,version=editVersion.current;
     if(!run||run.state==='not_editable'||busyOwnerRef.current)return;
     const valid=()=>current(target)&&sessionRef.current===target&&pdfRef.current===document&&editVersion.current===version;
@@ -311,7 +311,7 @@ export default function App(){
       const geometry=localMetadata.pages[run.pageNumber-1];
       const next=sourceTextBox({run,text,style:format,recipe:recipeState.recipe,geometry,box:viewportBox(run.box,viewport),typography:sourceTypography(run,format,viewportFontScale(viewport)),caret});
       cancelInline(false);releaseDraft();setManagedSelection(null);setSideOpen(false);setMode('text-box');setTextBoxDraft(next);
-      setMessage(run.source_run_ids?'This word uses two PDF text runs. Preview replaces both with one searchable word using the selected font and size; Apply commits them as one change.':'Flexible text box: grows into free page space. Preview removes the original text and shows the real wrapped PDF; Apply commits it as one change.');
+      setMessage(fromWidthRefusal?'Preserve layout has no room for this replacement. An expandable draft is ready; its font and size are shown below. Preview the exact PDF before applying.':run.source_run_ids?'This word uses two PDF text runs. Preview replaces both with one searchable word using the selected font and size; Apply commits them as one change.':'Flexible text box: grows into free page space. Preview removes the original text and shows the real wrapped PDF; Apply commits it as one change.');
     }catch(error){if(valid()&&!ignored(error))setMessage('Could not prepare this text box. Your draft and PDF are unchanged. Try another text run.');}
   };
   const placeTextBox=(number,point)=>{if(busyOwnerRef.current||!localMetadata?.pages[number])return;textBoxController.invalidate();setTextBoxDraft(newTextBox(number,localMetadata.pages[number],point));setPage(number+1);};
@@ -464,8 +464,10 @@ export default function App(){
   const checkFit=async()=>{
     if(!selection||draftProblem(draft))return;const owner=beginWork('single-preview','Checking text fit…');if(!owner)return;
     const target=sessionRef.current,version=++editVersion.current,recipe=candidate();setBatchReview(null);setMessage('');
-    try{const result=await documentRequest(target,'/edit?dry_run=true',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(recipe)});if(current(target)&&version===editVersion.current)setPreview({result,recipe,key:JSON.stringify(recipe)});}
+    let expand=false;
+    try{const result=await documentRequest(target,'/edit?dry_run=true',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(recipe)});if(current(target)&&version===editVersion.current){expand=!result.ok&&result.resolved?.some(row=>!row.ok&&isWidthOverflow(row.reason));if(!expand)setPreview({result,recipe,key:JSON.stringify(recipe)});}}
     catch(error){if(current(target)&&!ignored(error))setMessage(error.message);}finally{finishWork(owner);}
+    if(expand&&current(target)&&version===editVersion.current)await expandSourceText(draft,style,undefined,selection,true);
   };
   const apply=async()=>{
     const target=sessionRef.current,accepted=preview;

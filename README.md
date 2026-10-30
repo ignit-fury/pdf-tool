@@ -121,7 +121,10 @@ after reopening. A box rotated with its page can be removed or edited after rota
 the page back. Newly inserted boxes on already rotated pages are upright/editable.
 
 Original preserve-layout text edits can be longer or shorter when they fit,
-including by choosing a smaller size. Choose **Expand text box** or **Layout →
+including by choosing a smaller size. When a longer replacement exceeds the
+original run's width, Preview opens an expandable draft with the original text
+and visible font/size disclosure; no PDF change occurs until its separate
+Preview and Apply. You can also choose **Expand text box** or **Layout →
 Flexible text box** for wrapping and growth. Entering/pasting line breaks switches
 there automatically without losing the draft or caret; pasted tabs use four spaces.
 The selected original run is genuinely removed through the validated writer, and

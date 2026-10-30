@@ -23,7 +23,7 @@ export function explainTextBoxError(error){
 
 export function sourceTextBox({run,text,style,recipe,geometry,box,typography,caret}){
   const family=style.font_family||run.suggested_font_family||(/Times|Serif|Roman/i.test(run.source_font||'')?'Serif':/Courier|Mono/i.test(run.source_font||'')?'Mono':'Sans');
-  const left=Math.max(0,box.left),top=Math.max(0,box.top),width=Math.min(Math.max(box.width,240),geometry.visibleWidth-left),height=Math.min(Math.max(box.height,typography.fontSize*1.3),geometry.visibleHeight-top);
+  const left=Math.max(0,box.left),top=Math.max(0,box.top),width=geometry.visibleWidth-left,height=Math.min(Math.max(box.height,typography.fontSize*1.3),geometry.visibleHeight-top);
   const normalize=value=>value.replace(/\r\n?/g,'\n').replace(/[\v\f\u0085\u2028\u2029]/g,'\n').replace(/\t/g,'    ');
   return {...(caret?{caret:{start:normalize(text.slice(0,caret.start)).length,end:normalize(text.slice(0,caret.end)).length}}:{}),...(run.source_run_ids?{source_run_ids:[...run.source_run_ids],source_sizes:run.source_sizes? [...run.source_sizes]:undefined}:{source_run_id:run.run_id}),source_font:run.source_font,recipe:structuredClone(recipe),page_index:run.pageNumber-1,text:text.replace(/\r\n?/g,'\n').replace(/[\v\f\u0085\u2028\u2029]/g,'\n').replace(/\t/g,'    '),rect:{left,top,width,height},auto_expand:true,allow_overlap:false,
     style:{...structuredClone(DEFAULT_STYLE),font_family:family,font_size:typography.fontSize,bold:style.bold??!!run.bold,italic:style.italic??!!run.italic,color:style.color??run.color??[0,0,0],character_spacing:typography.letterSpacing||0}};

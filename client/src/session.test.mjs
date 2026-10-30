@@ -89,13 +89,15 @@ test('find refusals explain normalized boundaries and retain unknown diagnostic 
 });
 
 test('fit refusals use readable copy and never repeat a prose error as a code', async () => {
-  const {explainReason,refusalCode,explainFit}=await import('./session.mjs');
+  const {explainReason,isWidthOverflow,refusalCode,explainFit}=await import('./session.mjs');
   const reason='delta -209.98pt exceeds trailing-kern (+/-3.00pt) and inter-word-kern (+/-0.00pt over 0 gaps) absorption range';
   assert.doesNotMatch(explainReason(reason),/delta|kern/);
   assert.equal(refusalCode(reason),null);
   assert.equal(refusalCode('unknown prose error'),null);
   assert.equal(refusalCode('font_size_change_unsupported'),'font_size_change_unsupported');
-  assert.match(explainReason('delta 20.00pt exceeds trailing-kern absorption range'),/too wide/);
+  assert.equal(isWidthOverflow(reason),false);
+  assert.equal(isWidthOverflow('delta 20.00pt exceeds trailing-kern absorption range'),true);
+  assert.match(explainReason('delta 20.00pt exceeds trailing-kern absorption range'),/expandable text box/);
   assert.match(explainFit('trailing_kern'),/font size/);
 });
 
