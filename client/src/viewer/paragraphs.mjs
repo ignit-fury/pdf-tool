@@ -1,10 +1,17 @@
 /** Paragraph drafts: one string per original PDF line, matching engine.paragraph_edit. */
 export function effectiveLines(paragraph,runsById,recipe){
   const overrides=new Map(recipe.map(op=>[op.run_id,op.new_text]));
-  return paragraph.lines.map(ids=>ids.reduce((line,id)=>{
-    const text=overrides.get(id)??runsById.get(id)?.text??'';
-    return line&&!line.endsWith(' ')&&!text.startsWith(' ')?`${line} ${text}`:line+text;
-  },''));
+  // Gap spaces follow the previous run's text, as engine.paragraph_edit.line_segments does.
+  return paragraph.lines.map(ids=>{
+    let line='',prev=null;
+    for(const id of ids){
+      const text=overrides.get(id)??runsById.get(id)?.text??'';
+      if(prev!==null&&!prev.endsWith(' ')&&!text.startsWith(' ')) line+=' ';
+      line+=text;
+      prev=text;
+    }
+    return line;
+  });
 }
 export function paragraphAt(paragraphs,{x,y}){
   return paragraphs.find(p=>x>=p.box[0]&&x<=p.box[2]&&y>=p.box[1]&&y<=p.box[3])||null;

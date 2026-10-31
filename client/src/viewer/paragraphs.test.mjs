@@ -10,6 +10,16 @@ test('effective lines join runs with gap spaces and apply recipe overrides',()=>
   assert.deepEqual(effectiveLines(paragraph,runs,[{run_id:'b',new_text:'BOLD'}]),['Hello BOLD','Next line']);
 });
 
+test('effective lines mirror engine line_segments gap spaces',()=>{
+  const r=new Map([['a',{run_id:'a',text:'a'}],['e',{run_id:'e',text:'e'}],['b',{run_id:'b',text:'b'}]]);
+  const emptyE=[{run_id:'e',new_text:''}];
+  const line=ids=>effectiveLines({paragraph_id:'x',page_index:0,lines:[ids],box:[0,0,1,1]},r,emptyE)[0];
+  assert.equal(line(['a','e','b']),'a  b');
+  assert.equal(line(['e','b']),' b');
+  assert.equal(effectiveLines({paragraph_id:'x',page_index:0,lines:[['a','e','b']],box:[0,0,1,1]},new Map([...r,['a',{run_id:'a',text:'a '}]]),emptyE)[0],'a  b');
+  assert.equal(line(['a','e']),'a ');
+});
+
 test('paragraphAt hit-tests the box',()=>{
   assert.equal(paragraphAt([paragraph],{x:50,y:20}),paragraph);
   assert.equal(paragraphAt([paragraph],{x:150,y:20}),null);
