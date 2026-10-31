@@ -44,3 +44,17 @@ test('draftChanged ignores unchanged drafts',()=>{
 test('runStyle draws at the visual display size, not the operator size',()=>{
   assert.equal(runStyle({font_display_size:9,font_size:1,bold:true}).font_size,9);
 });
+
+import {insertText,splitLine,mergeLine} from './paragraphs.mjs';
+test('splitLine breaks a line at the caret',()=>{
+  assert.deepEqual(splitLine(['abcd','ef'],0,2),{lines:['ab','cd','ef'],caret:{line:1,offset:0}});
+  assert.deepEqual(splitLine(['ab'],0,2).lines,['ab','']);
+});
+test('mergeLine joins into the previous line',()=>{
+  assert.deepEqual(mergeLine(['ab','cd','ef'],1),{lines:['abcd','ef'],caret:{line:0,offset:2}});
+  assert.deepEqual(mergeLine(['ab'],0).lines,['ab']);
+});
+test('insertText pastes plain text with newlines',()=>{
+  assert.deepEqual(insertText(['abcd'],0,2,'X'),{lines:['abXcd'],caret:{line:0,offset:3}});
+  assert.deepEqual(insertText(['abcd','z'],0,2,'1\n2\n3'),{lines:['ab1','2','3cd','z'],caret:{line:2,offset:1}});
+});

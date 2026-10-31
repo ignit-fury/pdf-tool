@@ -34,3 +34,17 @@ export function runStyle(run){
   const family=run?.suggested_font_family||(/Times|Serif|Roman/i.test(run?.source_font||'')?'Serif':/Courier|Mono/i.test(run?.source_font||'')?'Mono':'Sans');
   return {font_family:family,bold:!!run?.bold,italic:!!run?.italic,font_size:run?.font_display_size??run?.font_size??12,...(run?.color?{color:[...run.color]}:{})};
 }
+
+// Pure line edits for the contenteditable paragraph editor. Each returns {lines, caret:{line,offset}}.
+export function insertText(lines,line,offset,text){
+  const parts=String(text).split(/\r\n|\r|\n/),cur=lines[line]??'',head=cur.slice(0,offset)+parts[0],last=parts.at(-1);
+  const tail=parts.length>1?last:head;
+  const mid=parts.length>1?[head,...parts.slice(1,-1),last+cur.slice(offset)]:[head+cur.slice(offset)];
+  return {lines:[...lines.slice(0,line),...mid,...lines.slice(line+1)],caret:{line:line+parts.length-1,offset:tail.length}};
+}
+export const splitLine=(lines,line,offset)=>insertText(lines,line,offset,'\n');
+export function mergeLine(lines,line){
+  if(line<=0||line>=lines.length)return {lines,caret:{line,offset:0}};
+  const offset=lines[line-1].length;
+  return {lines:[...lines.slice(0,line-1),lines[line-1]+lines[line],...lines.slice(line+1)],caret:{line:line-1,offset}};
+}
