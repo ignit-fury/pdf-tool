@@ -8,7 +8,12 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from engine.index import RunIndex
+from engine.paragraphs import page_paragraphs
+from engine.recipe import RecipeOp, RecipeTooLargeError, _validated_style, apply_recipe, parse_recipe
 from engine.records import RunRecord
+from engine.source_text_box import prepare_source_text_box
+from engine.text_boxes import TextBoxError
 
 Segment = tuple[str | None, str]
 
@@ -64,12 +69,6 @@ def rebuild_text(old_line_count: int, new_lines: Sequence[str]) -> str:
     return (' ' if len(new_lines) == old_line_count else '\n').join(new_lines)
 
 
-import base64
-import hashlib
-import json
-from pathlib import Path
-from typing import Any
-
 
 def styled_runs(old_lines: Sequence[Sequence[Segment]], new_text: str,
                 styles: Mapping[str, dict[str, Any]]) -> list[dict[str, Any]]:
@@ -110,11 +109,6 @@ def styled_runs(old_lines: Sequence[Sequence[Segment]], new_text: str,
 
 def prepare_paragraph_edit(path: Path, source: bytes, payload: dict[str, Any], scratch: Path, *,
                            password: str = '') -> dict[str, object]:
-    from engine.index import RunIndex
-    from engine.paragraphs import page_paragraphs
-    from engine.recipe import RecipeOp, RecipeTooLargeError, apply_recipe, parse_recipe
-    from engine.source_text_box import prepare_source_text_box
-    from engine.text_boxes import TextBoxError
     keys = {'operation', 'paragraph_id', 'source_run_ids', 'page_index', 'lines', 'style',
             'recipe', 'rect', 'allow_rebuild', 'run_styles'}
     lines, page = payload.get('lines'), payload.get('page_index')
@@ -123,6 +117,10 @@ def prepare_paragraph_edit(path: Path, source: bytes, payload: dict[str, Any], s
             or type(page) is not int or not isinstance(payload['style'], dict)
             or type(payload['allow_rebuild']) is not bool or not isinstance(payload['recipe'], list)):
         raise TextBoxError('INVALID_TEXT_BOX')
+    try:
+        _validated_style(payload['style'])
+    except ValueError:
+        raise TextBoxError('INVALID_TEXT_BOX') from None
     try:
         prior = parse_recipe(json.dumps(payload['recipe'], allow_nan=False).encode())
     except (ValueError, TypeError, RecipeTooLargeError):
@@ -136,6 +134,10 @@ def prepare_paragraph_edit(path: Path, source: bytes, payload: dict[str, Any], s
                           if p.paragraph_id == payload['paragraph_id']), None)
     if paragraph is None or list(paragraph.run_ids) != payload['source_run_ids']:
         raise TextBoxError('PARAGRAPH_STALE')
+    run_styles = payload['run_styles']
+    if not isinstance(run_styles, dict) or set(run_styles) != set(paragraph.run_ids) \
+            or not all(isinstance(v, dict) for v in run_styles.values()):
+        raise TextBoxError('INVALID_TEXT_BOX')
     effective = {op.run_id: op.new_text for op in prior}
     style = payload['style'] or None
     if len(lines) == len(paragraph.lines):
@@ -154,7 +156,11 @@ def prepare_paragraph_edit(path: Path, source: bytes, payload: dict[str, Any], s
             for run_id in paragraph.run_ids:
                 changes.setdefault(run_id, effective.get(run_id, next(
                     r.display_text for line in paragraph.lines for r in line if r.run_id == run_id)))
-        new_ops = {run_id: RecipeOp(run_id, text, style) for run_id, text in changes.items()}  # type: ignore[arg-type]
+        if not changes:
+            raise TextBoxError('PARAGRAPH_UNCHANGED')
+        old = {op.run_id: op for op in prior}
+        new_ops = {run_id: RecipeOp(run_id, text, style or (old[run_id].style if run_id in old else None))  # type: ignore[arg-type]
+                   for run_id, text in changes.items()}
         recipe = tuple(new_ops.pop(op.run_id, op) for op in prior) + tuple(new_ops.values())
         output = scratch / 'paragraph-lines.pdf'
         try:
@@ -168,12 +174,9 @@ def prepare_paragraph_edit(path: Path, source: bytes, payload: dict[str, Any], s
                     'source_hash': hashlib.sha256(source).hexdigest()}
     if not payload['allow_rebuild']:
         raise TextBoxError('PARAGRAPH_NEEDS_REBUILD')
-    run_styles = payload['run_styles']
-    if not isinstance(run_styles, dict) or set(run_styles) != set(paragraph.run_ids) \
-            or not all(isinstance(v, dict) for v in run_styles.values()):
-        raise TextBoxError('INVALID_TEXT_BOX')
     text = rebuild_text(len(paragraph.lines), lines)
-    styles = {run_id: {**value, **payload['style']} for run_id, value in run_styles.items()}
+    run_part = {k: v for k, v in payload['style'].items() if k != 'character_spacing'}
+    styles = {run_id: {**value, **run_part} for run_id, value in run_styles.items()}
     runs = styled_runs([line_segments(line, effective) for line in paragraph.lines], text, styles)
     if not runs:
         raise TextBoxError('TEXT_BOX_UNSUPPORTED_TEXT')  # an emptied paragraph has nothing to draw
@@ -182,6 +185,7 @@ def prepare_paragraph_edit(path: Path, source: bytes, payload: dict[str, Any], s
                'source_run_ids': list(paragraph.run_ids), 'recipe': payload['recipe'],
                'page_index': page, 'text': text, 'runs': runs,
                'rect': payload['rect'], 'auto_expand': True,
-               'style': {'font_family': 'Sans', **first_style}}
+               'style': {'font_family': 'Sans', **first_style,
+                         **{k: v for k, v in payload['style'].items() if k == 'character_spacing'}}}
     result = prepare_source_text_box(path, source, rebuild, scratch / 'paragraph-base.pdf', password=password)
     return {**result, 'plan': 'rebuild'}

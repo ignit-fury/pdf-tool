@@ -1,7 +1,15 @@
+import base64
+from pathlib import Path
+
+import pikepdf
+import pypdfium2 as pdfium
 import pytest
 
-from engine.paragraph_edit import line_ops, line_segments, rebuild_text
+from engine.index import RunIndex
+from engine.paragraph_edit import line_ops, line_segments, prepare_paragraph_edit, rebuild_text, styled_runs
+from engine.paragraphs import page_paragraphs
 from engine.records import RunRecord
+from engine.text_boxes import TextBoxError
 
 SEGS = [('r1', 'Hello'), (None, ' '), ('r2', 'bold'), (None, ' '), ('r3', 'world')]
 
@@ -50,13 +58,6 @@ def test_rebuild_text_joins_soft_wraps_with_spaces_and_keeps_new_breaks():
     assert rebuild_text(2, ['Left', 'first', 'Left second']) == 'Left\nfirst\nLeft second'
 
 
-import base64
-from pathlib import Path
-
-import pikepdf
-import pypdfium2 as pdfium
-
-
 def two_line_pdf(path: Path):
     with pikepdf.Pdf.new() as pdf:
         page = pdf.add_blank_page(page_size=(400, 400))
@@ -65,8 +66,6 @@ def two_line_pdf(path: Path):
         page.obj.Contents = pdf.make_stream(b'BT /F1 12 Tf 30 340 Td (First line here) Tj ET\n'
                                             b'BT /F1 12 Tf 30 326 Td (Second line here) Tj ET')
         pdf.save(path)
-    from engine.index import RunIndex
-    from engine.paragraphs import page_paragraphs
     with RunIndex(path) as index:
         return path.read_bytes(), next(p for p in page_paragraphs(0, index.page(0)) if len(p.lines) == 2)
 
@@ -89,7 +88,6 @@ def payload(paragraph, lines, **extra):
 
 
 def test_styled_runs_keep_each_words_style():
-    from engine.paragraph_edit import styled_runs
     S = {'a': {}, 'b': {'bold': True}}
     one = [[('a', 'Hello'), (None, ' '), ('b', 'bold')]]
     assert styled_runs(one, 'Hellobold', S) == [{'text': 'Hello', 'style': {}}, {'text': 'bold', 'style': {'bold': True}}]
@@ -102,7 +100,6 @@ def test_styled_runs_keep_each_words_style():
 
 
 def test_gap_deletion_rebuild_keeps_both_styles(tmp_path):
-    from engine.paragraph_edit import prepare_paragraph_edit
     path = tmp_path / 's.pdf'; source, p = two_line_pdf(path)
     a, b = p.lines[0][0].run_id, p.lines[1][0].run_id
     styles = {a: {'font_family': 'Sans', 'font_size': 12}, b: {'font_family': 'Sans', 'font_size': 12, 'bold': True}}
@@ -114,7 +111,6 @@ def test_gap_deletion_rebuild_keeps_both_styles(tmp_path):
 
 
 def test_small_edit_uses_line_plan(tmp_path):
-    from engine.paragraph_edit import prepare_paragraph_edit
     path = tmp_path / 's.pdf'; source, p = two_line_pdf(path)
     result = prepare_paragraph_edit(path, source, payload(p, ['First line here', 'Second line hers']), tmp_path)
     assert result['plan'] == 'lines'
@@ -124,8 +120,6 @@ def test_small_edit_uses_line_plan(tmp_path):
 
 
 def test_overflow_needs_consent_then_rebuilds(tmp_path):
-    from engine.paragraph_edit import prepare_paragraph_edit
-    from engine.text_boxes import TextBoxError
     path = tmp_path / 's.pdf'; source, p = two_line_pdf(path)
     long = ['First line here with a great deal of extra words added', 'Second line here']
     with pytest.raises(TextBoxError, match='PARAGRAPH_NEEDS_REBUILD'):
@@ -135,7 +129,41 @@ def test_overflow_needs_consent_then_rebuilds(tmp_path):
 
 
 def test_added_line_rebuilds_with_explicit_break(tmp_path):
-    from engine.paragraph_edit import prepare_paragraph_edit
     path = tmp_path / 's.pdf'; source, p = two_line_pdf(path)
     result = prepare_paragraph_edit(path, source, payload(p, ['First', 'line here', 'Second line here'], allow_rebuild=True), tmp_path)
     assert result['plan'] == 'rebuild'
+
+
+@pytest.mark.parametrize('style', [{'font_size': 99999}, {'alignment': 'center'}])
+def test_bad_payload_style_is_invalid(tmp_path, style):
+    path = tmp_path / 's.pdf'; source, p = two_line_pdf(path)
+    with pytest.raises(TextBoxError, match='INVALID_TEXT_BOX'):
+        prepare_paragraph_edit(path, source, payload(p, ['First line here', 'Second line hers'], style=style), tmp_path)
+
+
+def test_edit_keeps_earlier_restyle(tmp_path):
+    path = tmp_path / 's.pdf'; source, p = two_line_pdf(path)
+    b = p.lines[1][0].run_id
+    prior = [{'run_id': b, 'new_text': 'Second line here', 'style': {'bold': True}}]
+    result = prepare_paragraph_edit(path, source, payload(p, ['First line here', 'Second line hers'], recipe=prior), tmp_path)
+    assert result['recipe'] == [{'run_id': b, 'new_text': 'Second line hers', 'style': {'bold': True}}]
+
+
+def test_unchanged_draft_is_refused(tmp_path):
+    path = tmp_path / 's.pdf'; source, p = two_line_pdf(path)
+    with pytest.raises(TextBoxError, match='PARAGRAPH_UNCHANGED'):
+        prepare_paragraph_edit(path, source, payload(p, ['First line here', 'Second line here']), tmp_path)
+
+
+def test_bad_run_styles_invalid_even_when_line_plan_works(tmp_path):
+    path = tmp_path / 's.pdf'; source, p = two_line_pdf(path)
+    with pytest.raises(TextBoxError, match='INVALID_TEXT_BOX'):
+        prepare_paragraph_edit(path, source, payload(p, ['First line here', 'Second line hers'], run_styles={'x': {}}), tmp_path)
+
+
+def test_character_spacing_stays_out_of_run_styles(tmp_path):
+    path = tmp_path / 's.pdf'; source, p = two_line_pdf(path)
+    result = prepare_paragraph_edit(path, source, payload(p, ['First line here Second line here'],
+                                                          allow_rebuild=True, style={'character_spacing': 1}), tmp_path)
+    assert result['plan'] == 'rebuild'
+    assert all('character_spacing' not in r['style'] for r in result['boxes'][0]['runs'])
