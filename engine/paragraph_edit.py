@@ -21,6 +21,8 @@ def line_segments(runs: Sequence[RunRecord], effective: Mapping[str, str]) -> li
 
 
 def line_ops(segments: Sequence[Segment], new_text: str) -> list[tuple[str, str]] | None:
+    """Per-run text changes for one line. `None` means the edit needs a paragraph rebuild:
+    the line has no runs, or the edit deletes only synthetic gap spaces."""
     if not any(run_id for run_id, _ in segments):
         return None
     old = ''.join(text for _, text in segments)
@@ -42,7 +44,11 @@ def line_ops(segments: Sequence[Segment], new_text: str) -> list[tuple[str, str]
             runs.append((run_id, pos, pos + len(text)))
         pos += len(text)
     touched = [r for r in runs if r[1] < end_old and r[2] > start]
-    if not touched:  # pure insertion, or a change inside a gap: the run at or before it
+    if not touched:
+        if end_old > start:  # deletes only gap spaces: no run can absorb it
+            return None
+        # shortcut: emptied runs keep their space, rebuild when users report holes.
+        # Pure insertion, or a change inside a gap: the run at or before it.
         touched = [next((r for r in reversed(runs) if r[1] <= start), runs[0])]
     first, last = touched[0], touched[-1]
     head = old[first[1]:start] if start > first[1] else ''
