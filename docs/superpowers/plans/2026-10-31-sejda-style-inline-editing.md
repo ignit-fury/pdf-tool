@@ -17,7 +17,8 @@
    - Same line count: each line is mapped onto its runs with a prefix/suffix diff (`line_ops`).
    - Different line count (the user pressed Enter or deleted a break): the paragraph is rebuilt.
    - The text is never redistributed across lines. That would be reflow, which the project rules forbid without a rebuild.
-3. **Mixed-style warning.** The toolbar warns as soon as the draft would need a rebuild (line count changed). For other overflow, the refusal message offers **Rebuild as text box**, which is the explicit consent.
+3. **Rebuild consent, styles kept.** When the line plan cannot hold an edit, the refusal offers **Rebuild as text box**, which is the explicit consent. That covers overflow, a changed line count, or a deleted gap space. (Amended 2026-10-31 by the user's decision during Task 2 review.) Rebuilt boxes keep each word's original font family, size, bold, italic and colour through styled runs (Task 3b), like Sejda. So there is no "becomes one style" warning.
+4. **Gap deletion.** The space between two runs belongs to no run. If the user deletes it, `line_ops` returns `None` ("needs rebuild"), and the rebuilt box closes the gap while both words keep their own styles.
 
 ## Global Constraints
 
@@ -433,6 +434,99 @@ git commit -m "feat: rebuild a validated multi-line paragraph as a native text b
 
 ---
 
+### Task 3b: Styled runs in native text boxes
+
+(Added 2026-10-31. Executed after Task 3, before Task 4.)
+
+**Files:**
+- Modify: `engine/text_boxes.py` (`_spec` ~line 76, `_drawing` ~line 219, `_resource` ~line 329; check `_owned`/`_project`/`_collision` still round-trip the extended spec)
+- Test: `tests/test_text_boxes.py` (append)
+
+**Interfaces:**
+- Produces: an `upsert` payload (and so `replace-source`, which forwards to `upsert`) may carry an optional `runs` key: `[{"text": str, "style": {...}}, ...]`.
+  - `''.join(r['text'] for r in runs)` must equal `text` exactly, otherwise `INVALID_TEXT_BOX`.
+  - At most 512 runs, and each run's `text` is non-empty.
+  - A run `style` may only contain `font_family` (`Sans|Serif|Mono`), `bold`, `italic`, `font_size` (1..512) and `color` (3 floats in 0..1). It is merged over the box `style`.
+  - `runs` together with `initial_font_size` is `INVALID_TEXT_BOX`.
+  - Validated runs are stored in the spec as `spec['runs']` with fully merged styles. Without `runs`, behaviour is byte-for-byte unchanged, so existing tests and resource names stay identical.
+- Drawing with runs:
+  - Subset and embed one font per distinct `(family, variant)`. Resource names: the existing `_resource(spec)` plus a `F<n>` suffix per font, in first-use order.
+  - Every glyph is measured and drawn with its own run's font, size and colour. Emit `Tf`/`rg` only when they change.
+  - Line wrapping (the existing bounded character scan) uses per-glyph advances.
+  - Ascent and descent are the max over all fonts and sizes used. Line advance is `max font_size on that line × line_spacing`.
+  - The unsupported-text checks (`has_unmapped_glyph`, `substitution_unicode_reason`, control/combining/bidi) apply per run with that run's font.
+- `engine/source_text_box.py` `prepare_source_text_box` must accept and forward `runs`. Add `'runs'` to its `allowed` key set. It already copies every other key into `insertion`, so `runs` reaches `upsert`.
+- `list` returns the stored spec, so boxes report `runs` when present. Editing a styled box later in Text boxes mode without `runs` makes it single-style. That is out of scope and acceptable.
+
+- [ ] **Step 1: Write failing tests** (append to `tests/test_text_boxes.py`, reusing its `source_pdf`, `perform`, `draft`, `output`, `image_and_text` helpers)
+
+```python
+def styled(**kw):
+    return draft(text='Hello bold', runs=[{'text': 'Hello ', 'style': {}},
+                 {'text': 'bold', 'style': {'bold': True, 'color': [1, 0, 0], 'font_size': 18}}], **kw)
+
+
+def test_styled_runs_draw_each_run_with_its_own_font_and_colour():
+    original = source_pdf()
+    data = output(perform(original, styled()))
+    _, text = image_and_text(data)
+    assert 'Hello bold' in text
+    with pikepdf.Pdf.open(io.BytesIO(data)) as pdf:
+        page = pdf.pages[0]
+        fonts = [str(f.BaseFont) for f in page.Resources.Font.values()]
+        content = b''.join(s.read_bytes() for s in (page.Contents if isinstance(page.Contents, pikepdf.Array) else [page.Contents]))
+    assert any('Bold' in f for f in fonts) and any('Bold' not in f for f in fonts)
+    assert b'1 0 0 rg' in content and b' 18 Tf' in content
+
+
+def test_styled_runs_round_trip_through_list():
+    original = source_pdf()
+    data = output(perform(original, styled()))
+    listed = perform(data, {'operation': 'list'})
+    assert listed['boxes'][0]['runs'][1]['style']['bold'] is True
+
+
+@pytest.mark.parametrize('runs', [
+    [{'text': 'Hello', 'style': {}}],                                   # does not cover text
+    [{'text': 'Hello bold', 'style': {'underline': True}}],              # unknown key
+    [{'text': '', 'style': {}}, {'text': 'Hello bold', 'style': {}}],    # empty run
+])
+def test_styled_runs_refuse_invalid_runs(runs):
+    with pytest.raises(TextBoxError, match='INVALID_TEXT_BOX'):
+        perform(source_pdf(), draft(text='Hello bold', runs=runs))
+
+
+def test_box_without_runs_is_unchanged():
+    original = source_pdf()
+    assert output(perform(original, draft(id='a' * 32))) == output(perform(original, draft(id='a' * 32)))
+    assert 'runs' not in perform(output(perform(original, draft())), {'operation': 'list'})['boxes'][0]
+```
+
+Check that `draft(id=...)` is accepted by `_identifier` (read it). If the existing tests already assert determinism differently, follow their pattern instead of the first assert.
+
+- [ ] **Step 2: Run to see them fail**
+
+Run: `uv run pytest tests/test_text_boxes.py -k styled -v`
+Expected: FAIL with `INVALID_TEXT_BOX` (the `runs` key isn't accepted yet)
+
+- [ ] **Step 3: Implement**
+
+Extend `_spec` to validate and merge `runs` as specified. Refactor `_drawing` so the single-style path becomes the one-run case of the styled path: build a per-character list of `(font_key, size, color)`, collect glyph names per font key, then subset and embed once per key. Keep the existing initial-letter (`initial_font_size`) behaviour working, since it is mutually exclusive with `runs`. The returned `Drawing` must now carry every font: change `Drawing.font` to `fonts: dict[str, pikepdf.Object]` (resource name → font), and update every reader of `.font` (grep `\.font\b` in `engine/text_boxes.py`). If keeping the no-runs output byte-identical becomes awkward, stop and report DONE_WITH_CONCERNS rather than changing existing expectations.
+
+- [ ] **Step 4: Run tests**
+
+Run: `uv run pytest tests/test_text_boxes.py tests/test_source_text_box.py tests/test_text_box_api.py -q`
+Expected: PASS (all old and new)
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add engine/text_boxes.py tests/test_text_boxes.py
+git commit -m "feat: draw native text boxes with per-run styles"
+```
+
+---
+
 ### Task 4: `prepare_paragraph_edit` orchestrator (lines first, rebuild second)
 
 **Files:**
@@ -446,7 +540,19 @@ git commit -m "feat: rebuild a validated multi-line paragraph as a native text b
   def prepare_paragraph_edit(path: Path, source: bytes, payload: dict, scratch: Path, *,
                              password: str = '') -> dict[str, object]
   ```
-  - Payload keys, exactly: `operation='replace-paragraph'`, `paragraph_id`, `source_run_ids`, `page_index`, `lines: list[str]`, `style: dict`, `recipe: list`, `rect`, `allow_rebuild: bool`.
+  - Payload keys, exactly: `operation='replace-paragraph'`, `paragraph_id`, `source_run_ids`, `page_index`, `lines: list[str]`, `style: dict`, `recipe: list`, `rect`, `allow_rebuild: bool`, `run_styles: dict[run_id, style]`.
+    - `run_styles` holds each source run's own style (`font_family`, `bold`, `italic`, `font_size`, `color`), taken by the client from the page runs response.
+    - Its keys must be exactly the paragraph's run IDs, otherwise `INVALID_TEXT_BOX`. Values are validated downstream by Task 3b's run validation.
+  - Also produces the pure helper (amended 2026-10-31, the user's decision: a rebuild keeps each word's style, like Sejda):
+    ```python
+    def styled_runs(old_lines: Sequence[Sequence[Segment]], new_text: str,
+                    styles: Mapping[str, dict]) -> list[dict]
+    ```
+    - Old text is the lines joined with `' '`, using the same segments as `line_segments`. Gap characters and line joins take the nearest run on the left (or the first run).
+    - Matching uses `new_text.replace('\n', ' ')`, which keeps the length, but the output keeps the real characters.
+    - Prefix and suffix characters keep their old owner. Inserted characters take the owner of the character just before the change, or the first run's owner if the change is at the very start.
+    - Adjacent characters with equal style merge into one `{'text', 'style'}`. An empty `new_text` returns `[]`.
+  - The rebuild sends `runs=styled_runs(...)` with the box `style` taken from the first run's `run_styles` entry merged with the payload `style`. A non-empty toolbar `style` applies to every run, because the toolbar restyles the whole paragraph.
   - Returns the line plan as `{'ok': True, 'plan': 'lines', 'pdf': b64, 'recipe': [ops...], 'source_hash': hex}`.
   - Returns the rebuild plan as the `prepare_source_text_box` result plus `'plan': 'rebuild'`.
   - If the line plan refuses and `allow_rebuild` is false, it raises `TextBoxError('PARAGRAPH_NEEDS_REBUILD')`. The client then shows the refusal with **Rebuild as text box**.
@@ -491,7 +597,33 @@ def payload(paragraph, lines, **extra):
     return {'operation': 'replace-paragraph', 'paragraph_id': paragraph.paragraph_id,
             'source_run_ids': list(paragraph.run_ids), 'page_index': 0, 'lines': lines,
             'style': {}, 'recipe': [], 'allow_rebuild': False,
+            'run_styles': {i: {'font_family': 'Sans', 'font_size': 12} for i in paragraph.run_ids},
             'rect': {'left': 30, 'top': 48, 'width': 200, 'height': 28}, **extra}
+
+
+def test_styled_runs_keep_each_words_style():
+    from engine.paragraph_edit import styled_runs
+    S = {'a': {}, 'b': {'bold': True}}
+    one = [[('a', 'Hello'), (None, ' '), ('b', 'bold')]]
+    assert styled_runs(one, 'Hellobold', S) == [{'text': 'Hello', 'style': {}}, {'text': 'bold', 'style': {'bold': True}}]
+    assert styled_runs(one, 'Hello bold!', S) == [{'text': 'Hello ', 'style': {}}, {'text': 'bold!', 'style': {'bold': True}}]
+    assert styled_runs(one, 'Hi bold', S) == [{'text': 'Hi ', 'style': {}}, {'text': 'bold', 'style': {'bold': True}}]
+    two = [[('a', 'First')], [('b', 'Second')]]
+    assert styled_runs(two, 'First more Second', S) == [{'text': 'First more ', 'style': {}}, {'text': 'Second', 'style': {'bold': True}}]
+    assert styled_runs(two, 'First\nSecond', S) == [{'text': 'First\n', 'style': {}}, {'text': 'Second', 'style': {'bold': True}}]
+    assert styled_runs(one, '', S) == []
+
+
+def test_gap_deletion_rebuild_keeps_both_styles(tmp_path):
+    from engine.paragraph_edit import prepare_paragraph_edit
+    path = tmp_path / 's.pdf'; source, p = two_line_pdf(path)
+    a, b = p.lines[0][0].run_id, p.lines[1][0].run_id
+    styles = {a: {'font_family': 'Sans', 'font_size': 12}, b: {'font_family': 'Sans', 'font_size': 12, 'bold': True}}
+    # Joining the two lines into one changes the line count, so the paragraph is rebuilt.
+    result = prepare_paragraph_edit(path, source, payload(p, ['First line here Second line here'],
+                                                          allow_rebuild=True, run_styles=styles), tmp_path)
+    assert result['plan'] == 'rebuild'
+    assert [r['style'].get('bold', False) for r in result['boxes'][0]['runs']] == [False, True]
 
 
 def test_small_edit_uses_line_plan(tmp_path):
@@ -538,6 +670,42 @@ from pathlib import Path
 from typing import Any
 
 
+def styled_runs(old_lines: Sequence[Sequence[Segment]], new_text: str,
+                styles: Mapping[str, dict]) -> list[dict]:
+    """Per-character owners survive the edit, so a rebuild keeps each word's style."""
+    old, owners_old = '', []
+    for n, segments in enumerate(old_lines):
+        if n:
+            old += ' '
+            owners_old.append(None)
+        for run_id, text in segments:
+            old += text
+            owners_old.extend([run_id] * len(text))
+    last = next((o for o in owners_old if o), None)
+    filled: list[str | None] = []
+    for owner in owners_old:  # gaps and line joins belong to the run on their left
+        last = owner or last
+        filled.append(last)
+    probe = new_text.replace('\n', ' ')
+    start = 0
+    while start < min(len(old), len(probe)) and old[start] == probe[start]:
+        start += 1
+    end_old, end_new = len(old), len(probe)
+    while end_old > start and end_new > start and old[end_old - 1] == probe[end_new - 1]:
+        end_old -= 1
+        end_new -= 1
+    inserted = filled[start - 1] if start else (filled[0] if filled else None)
+    owners = filled[:start] + [inserted] * (end_new - start) + filled[end_old:]
+    out: list[dict] = []
+    for ch, owner in zip(new_text, owners):
+        style = dict(styles.get(owner, {})) if owner else {}
+        if out and out[-1]['style'] == style:
+            out[-1]['text'] += ch
+        else:
+            out.append({'text': ch, 'style': style})
+    return out
+
+
 def prepare_paragraph_edit(path: Path, source: bytes, payload: dict[str, Any], scratch: Path, *,
                            password: str = '') -> dict[str, object]:
     from engine.index import RunIndex
@@ -546,7 +714,7 @@ def prepare_paragraph_edit(path: Path, source: bytes, payload: dict[str, Any], s
     from engine.source_text_box import prepare_source_text_box
     from engine.text_boxes import TextBoxError
     keys = {'operation', 'paragraph_id', 'source_run_ids', 'page_index', 'lines', 'style',
-            'recipe', 'rect', 'allow_rebuild'}
+            'recipe', 'rect', 'allow_rebuild', 'run_styles'}
     lines, page = payload.get('lines'), payload.get('page_index')
     if (set(payload) != keys or payload['operation'] != 'replace-paragraph'
             or not isinstance(lines, list) or not all(isinstance(x, str) for x in lines)
@@ -565,12 +733,16 @@ def prepare_paragraph_edit(path: Path, source: bytes, payload: dict[str, Any], s
     effective = {op.run_id: op.new_text for op in prior}
     style = payload['style'] or None
     if len(lines) == len(paragraph.lines):
-        changes: dict[str, str] = {}
+        changes: dict[str, str] | None = {}
         for runs, text in zip(paragraph.lines, lines):
             ops = line_ops(line_segments(runs, effective), text)
-            if ops is None:
-                raise TextBoxError('TEXT_BOX_SOURCE_UNSAFE')
+            if ops is None:  # e.g. a deleted gap space: only a rebuild can close it
+                changes = None
+                break
             changes.update(ops)
+    else:
+        changes = None
+    if changes is not None:
         if style:
             for run_id in paragraph.run_ids:
                 changes.setdefault(run_id, effective.get(run_id, next(
@@ -586,13 +758,21 @@ def prepare_paragraph_edit(path: Path, source: bytes, payload: dict[str, Any], s
                     'source_hash': hashlib.sha256(source).hexdigest()}
     if not payload['allow_rebuild']:
         raise TextBoxError('PARAGRAPH_NEEDS_REBUILD')
-    first = paragraph.lines[0][0]
+    run_styles = payload['run_styles']
+    if not isinstance(run_styles, dict) or set(run_styles) != set(paragraph.run_ids) \
+            or not all(isinstance(v, dict) for v in run_styles.values()):
+        raise TextBoxError('INVALID_TEXT_BOX')
+    text = rebuild_text(len(paragraph.lines), lines)
+    styles = {run_id: {**value, **payload['style']} for run_id, value in run_styles.items()}
+    runs = styled_runs([line_segments(line, effective) for line in paragraph.lines], text, styles)
+    if not runs:
+        raise TextBoxError('TEXT_BOX_UNSUPPORTED_TEXT')  # an emptied paragraph has nothing to draw
+    first_style = styles[paragraph.run_ids[0]]
     rebuild = {'operation': 'replace-source', 'paragraph_id': paragraph.paragraph_id,
                'source_run_ids': list(paragraph.run_ids), 'recipe': payload['recipe'],
-               'page_index': page, 'text': rebuild_text(len(paragraph.lines), lines),
+               'page_index': page, 'text': text, 'runs': runs,
                'rect': payload['rect'], 'auto_expand': True,
-               'style': {'font_family': 'Sans', 'font_size': first.effective_em or 12,
-                         'bold': bool(first.bold), 'italic': bool(first.italic), **payload['style']}}
+               'style': {'font_family': 'Sans', **first_style}}
     result = prepare_source_text_box(path, source, rebuild, scratch / 'paragraph-base.pdf', password=password)
     return {**result, 'plan': 'rebuild'}
 ```
@@ -722,7 +902,7 @@ git commit -m "feat: expose page paragraphs and replace-paragraph over the text-
   ```js
   export function effectiveLines(paragraph, runsById, recipe) // -> string[] (gap spaces as in engine.line_segments)
   export function paragraphAt(paragraphs, point)            // point {x,y} in PDF box space -> paragraph|null
-  export function paragraphPayload({paragraph, lines, style, recipe, rect, allowRebuild, runsById}) // -> body for POST /text-box
+  export function paragraphPayload({paragraph, lines, style, recipe, rect, allowRebuild, runsById}) // -> body for POST /text-box, including run_styles
   export function draftChanged(paragraph, lines, runsById, recipe) // -> boolean
   ```
   - `paragraphPayload` sets `style.font_family` from `style.font_family || first run suggested_font_family || 'Sans'`, but only when the server will need it. It always sends `style`; empty means "no style change".
@@ -754,6 +934,8 @@ test('payload carries ids, lines and consent flag',()=>{
   assert.deepEqual(body.source_run_ids,['a','b','c']);
   assert.equal(body.allow_rebuild,false);
   assert.deepEqual(body.lines,['Hi bold','Next line']);
+  assert.deepEqual(Object.keys(body.run_styles),['a','b','c']);
+  assert.equal(body.run_styles.a.font_family,'Sans');
 });
 
 test('draftChanged ignores unchanged drafts',()=>{
@@ -791,7 +973,13 @@ export function paragraphPayload({paragraph,lines,style,recipe,rect,allowRebuild
   const family=style.font_family||first?.suggested_font_family;
   return {operation:'replace-paragraph',paragraph_id:paragraph.paragraph_id,source_run_ids:paragraph.lines.flat(),
     page_index:paragraph.page_index,lines:[...lines],style:{...style,...(allowRebuild&&family?{font_family:family}:{})},
-    recipe:structuredClone(recipe),rect:{...rect},allow_rebuild:!!allowRebuild};
+    recipe:structuredClone(recipe),rect:{...rect},allow_rebuild:!!allowRebuild,
+    run_styles:Object.fromEntries(paragraph.lines.flat().map(id=>[id,runStyle(runsById.get(id))]))};
+}
+// Each source run's own look, so a rebuild keeps per-word styles (engine.paragraph_edit.styled_runs).
+export function runStyle(run){
+  const family=run?.suggested_font_family||(/Times|Serif|Roman/i.test(run?.source_font||'')?'Serif':/Courier|Mono/i.test(run?.source_font||'')?'Mono':'Sans');
+  return {font_family:family,bold:!!run?.bold,italic:!!run?.italic,font_size:run?.font_size??12,...(run?.color?{color:[...run.color]}:{})};
 }
 ```
 
@@ -828,9 +1016,8 @@ git commit -m "feat: client paragraph draft model"
   // contenteditable root with one <div data-line> per line; caret = {line, offset}
   // status: null | 'saving' | {refused: string, canRebuild: boolean}
   ```
-  `TextToolbar` new props: `({run, style, busy, status, mixedStyle, needsRebuild, onStyle, onDelete, onRevert, onRebuild})`.
+  `TextToolbar` new props: `({run, style, busy, status, onStyle, onDelete, onRevert, onRebuild})`.
   - It renders one row: font select, size −/input/+, Bold, Italic, colour, Delete paragraph, and a `ToolbarDetails` "⋯" holding character spacing.
-  - When `needsRebuild && mixedStyle` it renders a one-line warning: `Wrapping will make this paragraph one style.`
   - When `status.refused` it renders the reason plus **Revert** and **Rebuild as text box** (the latter only if `status.canRebuild`), and the `Server` location label.
   - The Preview fit / Apply edit / Expand buttons and long guidance paragraphs are removed.
 
@@ -887,7 +1074,7 @@ function lineBox(paragraph,index,runsById){
 Replace the body of `TextToolbar` (keep `InlineInput` untouched for text-box drafts) with:
 
 ```jsx
-export default function TextToolbar({run,style,busy,status,mixedStyle,needsRebuild,onStyle,onDelete,onRevert,onRebuild}) {
+export default function TextToolbar({run,style,busy,status,onStyle,onDelete,onRevert,onRebuild}) {
   if(!run)return null;
   const size=style.font_size??run.font_size??12;
   return <section className="context-toolbar compact" aria-label="Text formatting">
@@ -903,7 +1090,6 @@ export default function TextToolbar({run,style,busy,status,mixedStyle,needsRebui
       <ToolbarDetails label="⋯" closeKey={run.run_id}><label>Character spacing<input type="number" aria-label="Character spacing" min="0" max="10" step="0.1" value={style.character_spacing??run.character_spacing??0} onChange={event=>onStyle({...style,character_spacing:Number(event.target.value)})}/></label></ToolbarDetails>
       <span className="action-location">Server</span>
     </fieldset>
-    {needsRebuild&&mixedStyle&&<p className="context-warning" role="status">Wrapping will make this paragraph one style.</p>}
     {status==='saving'&&<p role="status">Saving…</p>}
     {status?.refused&&<p className="context-warning" role="alert">{status.refused} <button onClick={onRevert}>Revert</button>{status.canRebuild&&<button onClick={onRebuild}>Rebuild as text box</button>}</p>}
   </section>;
@@ -975,7 +1161,7 @@ In `renderOverlay`, in `mode==='edit'`, render:
 ```jsx
 {mode==='edit'&&index[number]?.paragraphs&&<ParagraphOutlines paragraphs={index[number].paragraphs.map(p=>({...p,page_index:number-1}))} viewport={viewport} activeId={paragraphSelection?.paragraph.paragraph_id} onChoose={(p,event)=>chooseParagraph(p,number,event)}/>}
 {paragraphSelection?.paragraph.page_index===number-1&&<>
-  <FloatingTextTools box={viewportBox(paragraphSelection.paragraph.box,viewport)}><TextToolbar run={runsFor(number).get(paragraphSelection.paragraph.lines[0][0])} style={paragraphSelection.style} busy={busy} status={paragraphSelection.status} mixedStyle={!paragraphSelection.paragraph.single_style} needsRebuild={paragraphSelection.lines.length!==paragraphSelection.paragraph.lines.length} onStyle={style=>setParagraphSelection(s=>({...s,style,status:null}))} onDelete={()=>setParagraphSelection(s=>({...s,lines:s.lines.map(()=>''),status:null}))} onRevert={cancelParagraph} onRebuild={()=>commitParagraph(true)}/></FloatingTextTools>
+  <FloatingTextTools box={viewportBox(paragraphSelection.paragraph.box,viewport)}><TextToolbar run={runsFor(number).get(paragraphSelection.paragraph.lines[0][0])} style={paragraphSelection.style} busy={busy} status={paragraphSelection.status} onStyle={style=>setParagraphSelection(s=>({...s,style,status:null}))} onDelete={()=>setParagraphSelection(s=>({...s,lines:s.lines.map(()=>''),status:null}))} onRevert={cancelParagraph} onRebuild={()=>commitParagraph(true)}/></FloatingTextTools>
   <ParagraphEditor paragraph={paragraphSelection.paragraph} lines={paragraphSelection.lines} runsById={runsFor(number)} style={paragraphSelection.style} viewport={viewport} caret={paragraphSelection.caret} busy={!!busy} status={paragraphSelection.status} onLines={lines=>setParagraphSelection(s=>({...s,lines,status:null}))} onCommit={()=>commitParagraph(false)} onCancel={cancelParagraph}/>
 </>}
 ```
