@@ -297,3 +297,19 @@ def test_page_runs_lock_owned_content_and_only_verified_boxes_have_ids(valid, me
             assert all(run['reason'] == 'managed_text_box' and run['text_box_id'] == identifier for run in owned)
         else:
             assert all(run['reason'] == 'managed_text_box_unverified' and 'text_box_id' not in run for run in owned)
+
+
+def test_page_runs_include_paragraphs_and_paragraph_commit(tmp_path):
+    from tests.test_paragraph_edit import two_line_pdf, payload
+    source, paragraph = two_line_pdf(tmp_path / 'p.pdf')
+    with TestClient(create_app(cache=SourceCache())) as client:
+        job = client.post('/upload', content=source, headers=PDF_HEADERS).json()['job_id']
+        page = client.get(f'/jobs/{job}/pages/0/runs').json()
+        entry = next(p for p in page['paragraphs'] if p['paragraph_id'] == paragraph.paragraph_id)
+        assert entry['lines'] == [[r.run_id for r in line] for line in paragraph.lines]
+        assert entry['state'] == 'editable' and entry['single_style'] is True
+        body = payload(paragraph, ['First line here', 'Second line hers'])
+        result = client.post(f'/jobs/{job}/text-box', json=body).json()
+        assert result['plan'] == 'lines' and result['location'] == 'server'
+        stale = client.post(f'/jobs/{job}/text-box', json={**body, 'source_run_ids': body['source_run_ids'][:1]})
+        assert stale.status_code == 422 and stale.json()['detail']['code'] == 'PARAGRAPH_STALE'

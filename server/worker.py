@@ -5,6 +5,7 @@ by the parent. No filenames from callers are accepted or propagated.
 """
 from __future__ import annotations
 
+from typing import Any
 import base64
 import binascii
 import io
@@ -207,7 +208,7 @@ def _text_box_payload(encoded: object) -> dict[str, object]:
                                      parse_float=finite, parse_constant=finite)
     except (ValueError, UnicodeError, RecursionError):
         raise WorkerRefusal('INVALID_TEXT_BOX') from None
-    if not isinstance(payload, dict) or payload.get('operation') not in ('list', 'upsert', 'remove', 'replace-source'):
+    if not isinstance(payload, dict) or payload.get('operation') not in ('list', 'upsert', 'remove', 'replace-source', 'replace-paragraph'):
         raise WorkerRefusal('INVALID_TEXT_BOX')
     return payload
 
@@ -288,7 +289,7 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
             managed_parts = _managed_text_box_parts(pdf, source, number)
             with RunIndex(path, password=secret.get_secret_value()) as index:
                 indexed = index.page(number)
-                runs = []
+                runs: list[dict[str, Any]] = []
                 streams: dict[tuple[int, tuple[int, ...]], tuple[bytes, pikepdf.Object | None]] = {}
                 stream_runs: dict[tuple[int, tuple[int, ...]], list[RunRecord]] = {}
                 formatting: dict[str, dict[str, object]] = {}
@@ -320,8 +321,24 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
                         "suggested_font_family": suggested_family,
                         "source_font_reusable": source_font_reusable,
                         **formatting.get(run.run_id, {}), **ownership})
+                from engine.paragraphs import page_paragraphs
+                by_id = {row['run_id']: row for row in runs}
+                paragraphs = []
+                for paragraph in page_paragraphs(number, indexed):
+                    rows = [by_id[i] for i in paragraph.run_ids if i in by_id]
+                    if len(rows) != len(paragraph.run_ids):
+                        continue
+                    blocked = next((r for r in rows if r['state'] == 'not_editable'), None)
+                    style_keys = ('font_identity', 'bold', 'italic', 'color', 'source_font')
+                    paragraphs.append({'paragraph_id': paragraph.paragraph_id, 'kind': paragraph.kind,
+                        'lines': [[r.run_id for r in line] for line in paragraph.lines],
+                        'box': [min(r['box'][0] for r in rows), min(r['box'][1] for r in rows),
+                                max(r['box'][2] for r in rows), max(r['box'][3] for r in rows)],
+                        'single_style': len({tuple(str(r.get(k)) for k in style_keys) for r in rows}) == 1,
+                        'state': 'not_editable' if blocked else 'editable',
+                        'reason': blocked.get('reason') if blocked else None})
             box = [float(x) for x in pdf.pages[number].cropbox]
-            return {"page": number, "bucket": indexed.bucket, "runs": runs,
+            return {"page": number, "bucket": indexed.bucket, "runs": runs, "paragraphs": paragraphs,
                 "width": box[2] - box[0], "height": box[3] - box[1],
                 "rotation": int(pdf.pages[number].get("/Rotate", 0)), "view_box": box}
         _preflight(pdf)
@@ -334,7 +351,11 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
             from server.errors import TEXT_BOX_ERROR_CODES
             encrypted = pdf.is_encrypted
             try:
-                if payload['operation']=='replace-source':
+                if payload['operation']=='replace-paragraph':
+                    from engine.paragraph_edit import prepare_paragraph_edit
+                    result=prepare_paragraph_edit(path,source,payload,Path(scratch),
+                                                  password=secret.get_secret_value())
+                elif payload['operation']=='replace-source':
                     from engine.source_text_box import prepare_source_text_box
                     result=prepare_source_text_box(path,source,payload,Path(scratch)/'source-without-run.pdf',
                                                    password=secret.get_secret_value())
