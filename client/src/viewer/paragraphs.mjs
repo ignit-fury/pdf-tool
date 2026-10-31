@@ -48,3 +48,16 @@ export function mergeLine(lines,line){
   const offset=lines[line-1].length;
   return {lines:[...lines.slice(0,line-1),lines[line-1]+lines[line],...lines.slice(line+1)],caret:{line:line-1,offset}};
 }
+
+// Remove the text between two {line,offset} positions (start before end), joining the end lines.
+export function deleteRange(lines,start,end){
+  const head=lines[start.line].slice(0,start.offset),tail=lines[end.line].slice(end.offset);
+  return {lines:[...lines.slice(0,start.line),head+tail,...lines.slice(end.line+1)],caret:{...start}};
+}
+// Line tops after an edit: source layout when the count matches the source, else lines after editIndex restack by step.
+export function layoutTops(current,source,step,count,editIndex){
+  if(count===source.length)return [...source];
+  const out=[];
+  for(let i=0;i<count;i++)out.push(i===0?(current[0]??source[0]??0):i<=editIndex&&current[i]!=null?current[i]:out[i-1]+step);
+  return out;
+}

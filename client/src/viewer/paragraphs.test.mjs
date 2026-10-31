@@ -58,3 +58,18 @@ test('insertText pastes plain text with newlines',()=>{
   assert.deepEqual(insertText(['abcd'],0,2,'X'),{lines:['abXcd'],caret:{line:0,offset:3}});
   assert.deepEqual(insertText(['abcd','z'],0,2,'1\n2\n3'),{lines:['ab1','2','3cd','z'],caret:{line:2,offset:1}});
 });
+
+import {deleteRange,layoutTops} from './paragraphs.mjs';
+test('deleteRange joins endpoint lines',()=>{
+  assert.deepEqual(deleteRange(['abc','def','ghi'],{line:0,offset:1},{line:2,offset:1}),{lines:['ahi'],caret:{line:0,offset:1}});
+  assert.deepEqual(deleteRange(['abc'],{line:0,offset:1},{line:0,offset:2}).lines,['ac']);
+});
+test('layoutTops restacks lines after the edit point',()=>{
+  const src=[0,10,20];
+  assert.deepEqual(layoutTops(src,src,10,3,0),src);                    // same count: source layout
+  assert.deepEqual(layoutTops(src,src,10,4,0),[0,10,20,30]);           // split mid (line 0)
+  assert.deepEqual(layoutTops([0,10,20,30],src,10,3,1),src);           // merge back to source count
+  assert.deepEqual(layoutTops([0,10,20,30],src,10,2,0),[0,10]);        // merge mid
+  assert.deepEqual(layoutTops(src,src,10,6,0),[0,10,20,30,40,50]);     // paste of 3 extra lines mid
+  assert.deepEqual(layoutTops([0,10,20,30],src,10,5,1),[0,10,20,30,40]);// split later keeps earlier tops
+});

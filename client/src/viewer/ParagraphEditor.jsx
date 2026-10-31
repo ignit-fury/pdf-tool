@@ -1,5 +1,5 @@
 import React,{useEffect,useLayoutEffect,useRef} from 'react';
-import {insertText,splitLine,mergeLine} from './paragraphs.mjs';
+import {insertText,splitLine,mergeLine,deleteRange,layoutTops} from './paragraphs.mjs';
 import {viewportBox,explainReason} from '../session.mjs';
 import {sourceTypography,viewportFontScale} from './model.mjs';
 
@@ -14,17 +14,15 @@ export function ParagraphOutlines({paragraphs,viewport,activeId,onChoose}){
 }
 
 export default function ParagraphEditor({paragraph,lines,runsById,style,viewport,caret,busy,status,onLines,onCommit,onCancel}){
-  const root=useRef(null),latest=useRef(),pointer=useRef(null),saved=useRef(null),tops=useRef([]);
-  latest.current={lines,runsById,viewport,caret,paragraph,onLines,onCommit};
+  const root=useRef(null),latest=useRef(),pointer=useRef(null),saved=useRef(null),tops=useRef([]),src=useRef([]),step=useRef(14);
+  latest.current={lines,runsById,viewport,caret,paragraph,onLines,onCommit,busy};
   const first=runsById.get(paragraph.lines[0][0]);
   const typography=sourceTypography(first||{},style,viewportFontScale(viewport));
   const origin=viewportBox(paragraph.box,viewport);
   // The line DOM is uncontrolled: React never re-renders it, so typing and Enter cannot fight the browser.
-  const paint=(next,at)=>{
+  const paint=(next,at,editIndex)=>{
     const node=root.current,{viewport:vp,paragraph:para,runsById:runs}=latest.current,o=viewportBox(para.box,vp);
-    const step=tops.current.length>1&&tops.current[1]!=null&&tops.current[0]!=null?tops.current[1]-tops.current[0]:0;
-    for(let k=0;k<next.length;k++)if(tops.current[k]==null)tops.current[k]=k?tops.current[k-1]+(step||node.children[k-1]?.offsetHeight||14):0;
-    tops.current.length=next.length;
+    tops.current=layoutTops(tops.current,src.current,step.current,next.length,editIndex);
     node.replaceChildren(...next.map((text,k)=>{
       const div=document.createElement('div');div.dataset.line=k;div.textContent=text;
       Object.assign(div.style,{position:'absolute',left:`${leftOf(k)}px`,top:`${tops.current[k]}px`,whiteSpace:'pre',minHeight:'1em'});
@@ -34,52 +32,87 @@ export default function ParagraphEditor({paragraph,lines,runsById,style,viewport
     function leftOf(k){const b=viewportBox(lineBox(para,Math.min(k,para.lines.length-1),runs),vp);return b.left-o.left;}
   };
   const read=()=>[...root.current.children].map(div=>div.textContent.replace(/\u00a0/g,' '));
+  const endOfDoc=()=>{const n=root.current.children.length-1;return {line:n,offset:root.current.children[n]?.textContent.length??0};};
+  const position=(node,offset)=>{
+    const kids=[...root.current.children];
+    if(node===root.current)return offset>=kids.length?endOfDoc():{line:offset,offset:0};
+    const div=(node.nodeType===1?node:node.parentNode).closest?.('[data-line]');if(!div)return endOfDoc();
+    const pre=document.createRange();pre.selectNodeContents(div);pre.setEnd(node,offset);
+    return {line:kids.indexOf(div),offset:pre.toString().length};
+  };
+  // Selection as {start,end,collapsed}; falls back to the end of the last line when the range sits on the root.
   const where=()=>{
     const sel=getSelection();if(!sel.rangeCount||!root.current.contains(sel.anchorNode))return null;
-    const div=(sel.anchorNode.nodeType===1?sel.anchorNode:sel.anchorNode.parentNode).closest('[data-line]');if(!div)return null;
-    const pre=sel.getRangeAt(0).cloneRange();pre.selectNodeContents(div);pre.setEnd(sel.anchorNode,sel.anchorOffset);
-    return {line:[...root.current.children].indexOf(div),offset:pre.toString().length,collapsed:sel.isCollapsed};
+    const r=sel.getRangeAt(0),start=position(r.startContainer,r.startOffset),end=position(r.endContainer,r.endOffset);
+    return {start,end,line:start.line,offset:start.offset,collapsed:sel.isCollapsed};
   };
-  const apply=(edit)=>{const r=edit(read(),where());if(!r)return;
-    const at=r.caret.line,idx=r.lines.length-read().length;
-    // Keep tops aligned with the structural change; new rows get a position in paint().
-    if(idx>0)tops.current.splice(at-idx+1,0,...Array(idx).fill(null));else if(idx<0)tops.current.splice(at+1,-idx);
-    paint(r.lines,r.caret);latest.current.onLines(r.lines);};
+  // Run a pure edit on the lines, after removing any selected text.
+  const apply=(edit)=>{
+    const w=where();if(!w)return;
+    let cur=read(),from=w.start;
+    if(!w.collapsed){const d=deleteRange(cur,w.start,w.end);cur=d.lines;from=d.caret;}
+    const r=edit(cur,from);if(!r)return;
+    paint(r.lines,r.caret,Math.min(from.line,r.caret.line));latest.current.onLines(r.lines);
+  };
   useLayoutEffect(()=>{
-    const {lines:init,caret:c}=latest.current,{viewport:vp,paragraph:para,runsById:runs}=latest.current,o=viewportBox(para.box,vp);
-    tops.current=init.map((_,k)=>k<para.lines.length?viewportBox(lineBox(para,k,runs),vp).top-o.top:null);
-    paint(init,null);
+    const {lines:init,caret:c,viewport:vp,paragraph:para,runsById:runs}=latest.current,o=viewportBox(para.box,vp);
+    src.current=para.lines.map((_,k)=>viewportBox(lineBox(para,k,runs),vp).top-o.top);
+    step.current=src.current.length>1?src.current[1]-src.current[0]:0;
+    tops.current=[...src.current];
+    paint(init,null,src.current.length-1);
+    if(!step.current)step.current=root.current.children[0]?.offsetHeight||14;
+    paint(init,null,src.current.length-1);
     root.current.focus({preventScroll:true});
     place(root.current,{line:c?.line??0,offset:c?.offset??Infinity});
   },[paragraph.paragraph_id]);
   useEffect(()=>{
     const inside=target=>target.closest?.('.floating-text-tools')?'toolbar':root.current?.contains(target)?'editor':'outside';
+    const control=target=>!!target.closest?.('input,select,textarea');
     const down=event=>{
       pointer.current=inside(event.target);
-      if(pointer.current==='outside'&&document.activeElement===root.current)latest.current.onCommit();
+      if(pointer.current==='outside'&&!latest.current.busy)latest.current.onCommit();
     };
-    const up=event=>{
-      if(pointer.current==='toolbar'&&event.target.closest?.('button'))setTimeout(()=>{
+    const end=event=>{
+      if(pointer.current==='toolbar'&&!control(event.target))setTimeout(()=>{
         if(!root.current)return;root.current.focus({preventScroll:true});
         const r=saved.current,sel=getSelection();if(r){sel.removeAllRanges();sel.addRange(r);}
       },0);
       setTimeout(()=>{pointer.current=null;},0);
     };
-    document.addEventListener('pointerdown',down,true);document.addEventListener('pointerup',up,true);
-    return()=>{document.removeEventListener('pointerdown',down,true);document.removeEventListener('pointerup',up,true);};
+    // A toolbar form control keeps focus; when it blurs to somewhere outside, commit.
+    const out=event=>{
+      if(!control(event.target)||!event.target.closest('.floating-text-tools'))return;
+      const to=event.relatedTarget;
+      if(pointer.current==='outside'||pointer.current==='editor'||to?.closest?.('.floating-text-tools')||root.current?.contains(to))return;
+      if(pointer.current==='toolbar'&&!to)return;
+      if(!latest.current.busy)latest.current.onCommit();
+    };
+    const before=event=>{
+      const t=event.inputType;
+      if(t==='insertFromDrop'||t==='historyUndo'||t==='historyRedo'){event.preventDefault();return;}
+      const w=where();if(!w)return;
+      const multi=!w.collapsed&&w.start.line!==w.end.line;
+      if(t==='deleteContentForward'&&w.collapsed&&w.offset===read()[w.line]?.length&&w.line<root.current.children.length-1){event.preventDefault();apply(cur=>mergeLine(cur,w.line+1));}
+      else if(multi&&/^delete/.test(t)){event.preventDefault();apply(cur=>({lines:cur,caret:w.start}));}
+      else if(multi&&t==='insertText'&&event.data){event.preventDefault();apply((cur,at)=>insertText(cur,at.line,at.offset,event.data));}
+    };
+    document.addEventListener('pointerdown',down,true);document.addEventListener('pointerup',end,true);document.addEventListener('pointercancel',end,true);
+    document.addEventListener('focusout',out,true);root.current.addEventListener('beforeinput',before);
+    const node=root.current;
+    return()=>{document.removeEventListener('pointerdown',down,true);document.removeEventListener('pointerup',end,true);document.removeEventListener('pointercancel',end,true);
+      document.removeEventListener('focusout',out,true);node.removeEventListener('beforeinput',before);};
   },[]);
   return <div ref={root} className="paragraph-editor" data-status={status==='saving'?'saving':status?.refused?'refused':'editing'}
     contentEditable={!busy} suppressContentEditableWarning role="textbox" aria-multiline="true" aria-label="Edit paragraph on page" spellCheck={false}
     style={{position:'absolute',...origin,...typography}}
     onInput={()=>latest.current.onLines(read())}
-    onPaste={event=>{event.preventDefault();const text=event.clipboardData.getData('text/plain');apply((cur,w)=>{if(!w)return null;return insertText(cur,w.line,w.offset,text);});}}
+    onPaste={event=>{event.preventDefault();const text=event.clipboardData.getData('text/plain');apply((cur,at)=>insertText(cur,at.line,at.offset,text));}}
     onKeyDown={event=>{
       if(event.key==='Escape'){event.preventDefault();onCancel();}
       else if(event.key==='Tab'){event.preventDefault();onCommit();}
       else if(event.key==='Enter'&&!event.nativeEvent.isComposing){event.preventDefault();
-        if(!getSelection().isCollapsed)getSelection().deleteFromDocument();
-        apply((cur,w)=>w&&splitLine(cur,w.line,w.offset));}
-      else if(event.key==='Backspace'){const w=where();if(w?.collapsed&&w.offset===0&&w.line>0){event.preventDefault();apply((cur,w2)=>mergeLine(cur,w2.line));}}
+        apply((cur,at)=>splitLine(cur,at.line,at.offset));}
+      else if(event.key==='Backspace'){const w=where();if(w?.collapsed&&w.offset===0&&w.line>0){event.preventDefault();apply(cur=>mergeLine(cur,w.line));}}
     }}
     onBlur={event=>{
       const sel=getSelection();if(sel.rangeCount&&root.current.contains(sel.anchorNode))saved.current=sel.getRangeAt(0).cloneRange();
