@@ -54,7 +54,12 @@ def _validated_paragraph(path: Path, password: str, page: object,
     if type(page) is not int or not isinstance(identifier, str) or not identifiers:
         raise TextBoxError('INVALID_TEXT_BOX')
     with RunIndex(path, password=password) as index:
-        indexed = index.page(page)
+        try:
+            if page < 0:
+                raise IndexError(page)
+            indexed = index.page(page)
+        except (IndexError, KeyError, ValueError):
+            raise TextBoxError('INVALID_TEXT_BOX') from None
         match = next((p for p in page_paragraphs(page, indexed) if p.paragraph_id == identifier), None)
         if match is None or list(match.run_ids) != identifiers:
             raise TextBoxError('PARAGRAPH_STALE')

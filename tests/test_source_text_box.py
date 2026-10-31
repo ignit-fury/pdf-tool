@@ -121,3 +121,15 @@ def test_paragraph_rebuild_refuses_stale_ids(tmp_path):
         'rect':{'left':30,'top':48,'width':200,'height':28},'style':{'font_family':'Sans'}}
     with pytest.raises(TextBoxError,match='PARAGRAPH_STALE'):
         prepare_source_text_box(path,source,payload,tmp_path/'base.pdf')
+
+
+@pytest.mark.parametrize('page',[5,-1])
+def test_paragraph_rebuild_refuses_out_of_range_page(tmp_path,page):
+    from engine.source_text_box import prepare_source_text_box
+    from engine.text_boxes import TextBoxError
+    path=tmp_path/'p.pdf';source,paragraph=paragraph_pdf(path)
+    payload={'operation':'replace-source','paragraph_id':paragraph.paragraph_id,
+        'source_run_ids':list(paragraph.run_ids),'recipe':[],'page_index':page,'text':'x',
+        'rect':{'left':30,'top':48,'width':200,'height':28},'style':{'font_family':'Sans'}}
+    with pytest.raises(TextBoxError,match='INVALID_TEXT_BOX'):
+        prepare_source_text_box(path,source,payload,tmp_path/'base.pdf')
