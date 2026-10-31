@@ -313,12 +313,12 @@ def _drawing(pdf: pikepdf.Pdf, spec: dict[str,Any], geometry: Geometry) -> Drawi
         face,glyph_size,_,_=cells[i]
         return round(faces[face].widths[faces[face].chars[text[i]]])*glyph_size/1000
     if styled:
-        visible=[i for i,ch in enumerate(text) if ch!='\n'] or list(range(len(text)))
-        used={cells[i][:2] for i in visible}
+        visible=[i for i,ch in enumerate(text) if ch!='\n']
+        used={cells[i][:2] for i in visible or range(len(text))}
         asc=max(max(faces[f].font['hhea'].ascent*s/faces[f].font['head'].unitsPerEm for f,s in used),
-                max(bound(i)[3] for i in visible))
+                max((bound(i)[3] for i in visible),default=0))
         desc=max(max(-faces[f].font['hhea'].descent*s/faces[f].font['head'].unitsPerEm for f,s in used),
-                 max(-bound(i)[1] for i in visible))
+                 max((-bound(i)[1] for i in visible),default=0))
     else:
         main=faces[0]; scale=size/main.font['head'].unitsPerEm
         initial_bounds=tuple(v*initial_size/size for v in main.bounds[text[first]]) if initial_size is not None and first is not None else (0.,0.,0.,0.)
@@ -361,11 +361,12 @@ def _drawing(pdf: pikepdf.Pdf, spec: dict[str,Any], geometry: Geometry) -> Drawi
             lines.append((position,end,end==stop))
             position=end
         start=stop+1
-    # A line's advance from the previous baseline is its own largest glyph size.
+    # The advance into a line clears the larger of it and the line above it.
     heights=[max((cells[i][1] for i in range(a,b)),default=cells[min(a,len(text)-1)][1]) if styled else size
              for a,b,_ in lines]
+    gaps=[max(above,below) for above,below in zip(heights,heights[1:])]
     if styled:
-        required=asc+desc+sum(h*style['line_spacing'] for h in heights[1:])+sum(style['paragraph_spacing'] for _,_,last in lines[:-1] if last)
+        required=asc+desc+sum(g*style['line_spacing'] for g in gaps)+sum(style['paragraph_spacing'] for _,_,last in lines[:-1] if last)
     else:
         required=asc+desc+max(0,len(lines)-1)*size*style['line_spacing']+sum(style['paragraph_spacing'] for _,_,last in lines[:-1] if last)
     resource=_resource(spec)
@@ -379,7 +380,7 @@ def _drawing(pdf: pikepdf.Pdf, spec: dict[str,Any], geometry: Geometry) -> Drawi
     y=rect['top']+asc
     for k,(line_start,line_end,_) in enumerate(lines):
         if k:
-            y+=heights[k]*style['line_spacing']+(style['paragraph_spacing'] if lines[k-1][2] else 0)
+            y+=gaps[k-1]*style['line_spacing']+(style['paragraph_spacing'] if lines[k-1][2] else 0)
         lo,hi=measure(line_start,line_end)
         x=rect['left']-lo
         extra=rect['width']-(hi-lo)

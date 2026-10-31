@@ -472,3 +472,23 @@ def test_replace_source_forwards_runs(tmp_path):
                                                      {'text': 'bold', 'style': {'bold': True}}])
     result = prepare_source_text_box(path, source, payload, tmp_path / 'base.pdf')
     assert result['ok'] is True and result['boxes'][0]['runs'][1]['style']['bold'] is True
+
+
+@pytest.mark.parametrize('text,runs', [
+    ('\n', [{'text': '\n', 'style': {}}]),
+    ('A\n\nB', [{'text': 'A\n', 'style': {}}, {'text': '\nB', 'style': {'bold': True}}]),
+])
+def test_styled_runs_handle_newline_only_and_blank_paragraphs(text, runs):
+    candidate = output(perform(source_pdf(), draft(text=text, runs=runs)))
+    assert perform(candidate, {'operation': 'list'})['boxes'][0]['text'] == text
+
+
+def test_styled_line_gap_clears_the_larger_line_above():
+    import re
+    result = perform(source_pdf(), draft(text='gyp\nHHH', auto_expand=True,
+        rect={'left': 20, 'top': 20, 'width': 300, 'height': 60},
+        runs=[{'text': 'gyp\n', 'style': {'font_size': 48}}, {'text': 'HHH', 'style': {}}]))
+    with pikepdf.Pdf.open(io.BytesIO(output(result))) as pdf:
+        drawing = next(s for s in pdf.pages[0].Contents if s.get('/NativeTextBox')).read_bytes()
+    ys = sorted({-float(y) for y in re.findall(rb' (-?[\d.]+) Tm', drawing)})
+    assert len(ys) == 2 and ys[1] - ys[0] >= 48 * 1.2 - 1e-6
