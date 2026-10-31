@@ -379,3 +379,96 @@ def test_ordinary_unrelated_source_edit_preserves_box_reopenability(tmp_path):
     report=apply_recipe(source,(RecipeOp(run.run_id,'Hallo source'),),destination)
     assert report.ok,report
     assert perform(destination.read_bytes(),{'operation':'list'})['boxes']==result['boxes']
+
+
+def styled(**kw):
+    return draft(text='Hello bold', runs=[{'text': 'Hello ', 'style': {}},
+                 {'text': 'bold', 'style': {'bold': True, 'color': [1, 0, 0], 'font_size': 18}}], **kw)
+
+
+def test_styled_runs_draw_each_run_with_its_own_font_and_colour():
+    original = source_pdf()
+    data = output(perform(original, styled()))
+    _, text = image_and_text(data)
+    assert 'Hello bold' in text
+    with pikepdf.Pdf.open(io.BytesIO(data)) as pdf:
+        page = pdf.pages[0]
+        # BaseFont omits the variant, so read the embedded program's own subfamily name.
+        from fontTools.ttLib import TTFont
+        fonts = [TTFont(io.BytesIO(f.DescendantFonts[0].FontDescriptor.FontFile2.read_bytes()))['name'].getDebugName(2)
+                 for f in page.Resources.Font.values()]
+        content = b''.join(s.read_bytes() for s in (page.Contents if isinstance(page.Contents, pikepdf.Array) else [page.Contents]))
+    assert any('Bold' in f for f in fonts) and any('Bold' not in f for f in fonts)
+    assert b'1 0 0 rg' in content and b' 18 Tf' in content
+
+
+def test_styled_runs_round_trip_through_list():
+    original = source_pdf()
+    data = output(perform(original, styled()))
+    listed = perform(data, {'operation': 'list'})
+    assert listed['boxes'][0]['runs'][1]['style']['bold'] is True
+    removed = output(perform(data, {'operation': 'remove', 'id': listed['boxes'][0]['id']}))
+    assert perform(removed, {'operation': 'list'})['boxes'] == []
+
+
+def test_styled_runs_wrap_with_per_glyph_advances_and_tallest_line():
+    rect = {'left': 20, 'top': 20, 'width': 60, 'height': 200}
+    plain = perform(source_pdf(), draft(text='aa bb cc', rect=rect))
+    big = perform(source_pdf(), draft(text='aa bb cc', rect=rect, runs=[
+        {'text': 'aa ', 'style': {}}, {'text': 'bb cc', 'style': {'font_size': 30}}]))
+    assert big['layout']['line_count'] > plain['layout']['line_count']
+    assert big['layout']['required_height'] > plain['layout']['required_height']
+
+
+@pytest.mark.parametrize('runs', [
+    [{'text': 'Hello', 'style': {}}],                                   # does not cover text
+    [{'text': 'Hello bold', 'style': {'underline': True}}],              # unknown key
+    [{'text': '', 'style': {}}, {'text': 'Hello bold', 'style': {}}],    # empty run
+    [{'text': 'Hello bold', 'style': {'font_size': 513}}],
+    [{'text': 'Hello bold', 'style': {'font_family': 'Comic'}}],
+    [{'text': 'Hello bold', 'style': {'color': [1, 0]}}],
+    [{'style': {}}, {'text': 'Hello bold', 'style': {}}],
+    'Hello bold',
+])
+def test_styled_runs_refuse_invalid_runs(runs):
+    with pytest.raises(TextBoxError, match='INVALID_TEXT_BOX'):
+        perform(source_pdf(), draft(text='Hello bold', runs=runs))
+
+
+def test_styled_runs_refuse_more_than_512_runs():
+    perform(source_pdf(), draft(text='x' * 512, rect={'left': 0, 'top': 0, 'width': 400, 'height': 300},
+                                runs=[{'text': 'x', 'style': {}}] * 512))
+    with pytest.raises(TextBoxError, match='INVALID_TEXT_BOX'):
+        perform(source_pdf(), draft(text='x' * 513, runs=[{'text': 'x', 'style': {}}] * 513))
+
+
+def test_styled_runs_refuse_initial_size():
+    with pytest.raises(TextBoxError, match='INVALID_TEXT_BOX'):
+        perform(source_pdf(), styled(style={'initial_font_size': 30}))
+
+
+def test_styled_runs_check_unsupported_text_per_run_font():
+    with pytest.raises(TextBoxError, match='TEXT_BOX_UNSUPPORTED_TEXT'):
+        perform(source_pdf(), draft(text='Hi😀', runs=[{'text': 'Hi', 'style': {}}, {'text': '😀', 'style': {'bold': True}}]))
+
+
+def test_box_without_runs_is_unchanged(monkeypatch):
+    import secrets
+    monkeypatch.setattr(secrets, 'token_hex', lambda n: 'a' * 32)
+    original = source_pdf()
+    first = output(perform(original, draft()))
+    assert first == output(perform(original, draft()))
+    with pikepdf.Pdf.open(io.BytesIO(first)) as pdf:
+        assert len(pdf.pages[0].Resources.Font) == 1
+    assert 'runs' not in perform(first, {'operation': 'list'})['boxes'][0]
+
+
+def test_replace_source_forwards_runs(tmp_path):
+    from engine.source_text_box import prepare_source_text_box
+    from tests.test_source_text_box import request, source_pdf as run_source_pdf
+    path = tmp_path / 'source.pdf'
+    source, ids = run_source_pdf(path)
+    payload = request(ids, text='Longer bold', runs=[{'text': 'Longer ', 'style': {}},
+                                                     {'text': 'bold', 'style': {'bold': True}}])
+    result = prepare_source_text_box(path, source, payload, tmp_path / 'base.pdf')
+    assert result['ok'] is True and result['boxes'][0]['runs'][1]['style']['bold'] is True

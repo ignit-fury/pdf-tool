@@ -71,7 +71,7 @@ def _validated_paragraph(path: Path, password: str, page: object,
 
 def prepare_source_text_box(path: Path, source: bytes, payload: dict[str, Any],
                             intermediate: Path, *, password: str = '') -> dict[str, object]:
-    allowed={'operation','source_run_id','source_run_ids','paragraph_id','recipe','page_index','text','rect','style','allow_overlap','auto_expand'}
+    allowed={'operation','source_run_id','source_run_ids','paragraph_id','recipe','page_index','text','rect','style','runs','allow_overlap','auto_expand'}
     if set(payload)-allowed or payload.get('operation')!='replace-source' or ('source_run_id' in payload)==('source_run_ids' in payload):
         raise TextBoxError('INVALID_TEXT_BOX')
     group=payload.get('source_run_ids')

@@ -39,6 +39,7 @@ MAX_TEXT_BOX_PAGES = 2048
 DEFAULT_STYLE: dict[str, object] = dict(font_family='Sans', font_size=12, bold=False,
     italic=False, color=[0,0,0], character_spacing=0, line_spacing=1.2,
     paragraph_spacing=0, alignment='left')
+RUN_STYLE_KEYS = ('font_family','bold','italic','font_size','color')
 
 
 class TextBoxError(ValueError):
@@ -103,8 +104,30 @@ def _spec(payload: dict[str, Any], count: int) -> dict[str, Any]:
     if not isinstance(color,list) or len(color) != 3:
         _fail()
     style['color'] = [_number(c,0,1) for c in color]
-    return dict(id=_identifier(payload['id']) if 'id' in payload else secrets.token_hex(16),
-                page_index=page, rect=normalized_rect, text=text, style=style)
+    result = dict(id=_identifier(payload['id']) if 'id' in payload else secrets.token_hex(16),
+                  page_index=page, rect=normalized_rect, text=text, style=style)
+    if 'runs' in payload:
+        runs = payload['runs']
+        if 'initial_font_size' in supplied or not isinstance(runs, list) or not 1 <= len(runs) <= 512:
+            _fail()
+        merged: list[dict[str, Any]] = []
+        for run in runs:
+            if set(_dict(run, {'text','style'})) != {'text','style'} or not isinstance(run['text'], str) or not run['text']:
+                _fail()
+            run_style = {k: style[k] for k in RUN_STYLE_KEYS}
+            run_style.update(_dict(run['style'], set(RUN_STYLE_KEYS)))
+            if run_style['font_family'] not in ('Sans','Serif','Mono') or type(run_style['bold']) is not bool or type(run_style['italic']) is not bool:
+                _fail()
+            run_style['font_size'] = _number(run_style['font_size'],1,512)
+            run_color = run_style['color']
+            if not isinstance(run_color,list) or len(run_color) != 3:
+                _fail()
+            run_style['color'] = [_number(c,0,1) for c in run_color]
+            merged.append(dict(text=run['text'], style=run_style))
+        if ''.join(r['text'] for r in merged) != text:
+            _fail()
+        result['runs'] = merged
+    return result
 
 
 @dataclass(frozen=True)
@@ -213,117 +236,170 @@ def _json(value: object) -> bytes:
 @dataclass
 class Drawing:
     stream: bytes
-    font: pikepdf.Object
+    fonts: dict[str,pikepdf.Object]
     layout: dict[str,object]
+
+
+@dataclass
+class _Face:
+    subset: Any
+    widths: dict[int,float]
+    chars: dict[str,int]
+    font: Any
+    bounds: dict[str,tuple[float,float,float,float]]
 
 
 def _drawing(pdf: pikepdf.Pdf, spec: dict[str,Any], geometry: Geometry) -> Drawing:
     text=cast(str,spec['text'])
     style=spec['style']; rect=spec['rect']
-    family=cast(BundledFamily,style['font_family'])
-    variant=cast(BundledVariant,('Bold' if style['bold'] else '')+('Italic' if style['italic'] else '') or 'Regular')
-    clean=text.replace('\n','')
+    styled='runs' in spec
+    # The single-style box is the one-run case; its arithmetic is kept exactly.
+    runs=cast(list[dict[str,Any]],spec['runs']) if styled else [dict(text=text,style=style)]
     if any(ch!='\n' and (unicodedata.category(ch)[0]=='C' or unicodedata.combining(ch) or unicodedata.bidirectional(ch) in ('R','AL','AN')) for ch in text):
         _fail('TEXT_BOX_UNSUPPORTED_TEXT')
-    if has_unmapped_glyph(family,variant,clean) or substitution_unicode_reason(family,variant,tuple(text.split('\n'))) is not None:
-        _fail('TEXT_BOX_UNSUPPORTED_TEXT')
-    paragraphs=tuple(text.split('\n'))
-    names=frozenset(name for paragraph in paragraphs for name in shape_glyph_names(family,variant,paragraph))
-    if not names:
-        names=frozenset(shape_glyph_names(family,variant,' '))
-    subset=subset_font_for_family(family,variant,names)
-    # FontTools defaults to a wall-clock modified timestamp. Normalize it before
-    # embedding so the proof remains reproducible after reopening in a new worker.
-    stable_font=TTFont(io.BytesIO(subset.data),recalcTimestamp=False)
-    stable_font['head'].modified=stable_font['head'].created
-    stable_bytes=io.BytesIO()
-    stable_font.save(stable_bytes)
-    subset=replace(subset,data=stable_bytes.getvalue())
-    widths=subset_cid_widths(subset)
-    try:
-        chars=dict((ch,cid) for paragraph in paragraphs for cid,ch in shape_cids(subset,paragraph))
-    except ValueError:
-        _fail('TEXT_BOX_UNSUPPORTED_TEXT')
-    font=TTFont(io.BytesIO(subset.data))
-    scale=style['font_size']/font['head'].unitsPerEm
-    order=font.getGlyphOrder()
-    bounds: dict[str,tuple[float,float,float,float]]={}
-    for ch,cid in chars.items():
-        glyph=font['glyf'][order[cid]]
-        if glyph.numberOfContours:
-            glyph.recalcBounds(font['glyf'])
-            bounds[ch]=(glyph.xMin*scale,glyph.yMin*scale,glyph.xMax*scale,glyph.yMax*scale)
-        else:
-            bounds[ch]=(0,0,0,0)
+    keys: dict[tuple[BundledFamily,BundledVariant],list[str]]={}
+    # Per character: (face, glyph size, colour, is-initial-letter).
+    cells: list[tuple[int,float,list[float],bool]]=[]
+    for run in runs:
+        run_text=cast(str,run['text']); run_style=run['style']
+        family=cast(BundledFamily,run_style['font_family'])
+        variant=cast(BundledVariant,('Bold' if run_style['bold'] else '')+('Italic' if run_style['italic'] else '') or 'Regular')
+        if has_unmapped_glyph(family,variant,run_text.replace('\n','')) or substitution_unicode_reason(family,variant,tuple(run_text.split('\n'))) is not None:
+            _fail('TEXT_BOX_UNSUPPORTED_TEXT')
+        if (family,variant) not in keys:
+            keys[(family,variant)]=[]
+        keys[(family,variant)].extend(run_text.split('\n'))
+        face=list(keys).index((family,variant))
+        cells.extend((face,run_style['font_size'],run_style['color'],False) for _ in run_text)
     size=style['font_size']; spacing=style['character_spacing']
     initial_size=style.get('initial_font_size')
-    first_char=next((ch for ch in text if ch!='\n'),None)
-    initial_bounds=tuple(v*initial_size/size for v in bounds[first_char]) if initial_size is not None and first_char is not None else (0.,0.,0.,0.)
-    asc=max(font['hhea'].ascent*scale,max((b[3] for b in bounds.values()),default=0),initial_bounds[3])
-    desc=max(-font['hhea'].descent*scale,max((-b[1] for b in bounds.values()),default=0),-initial_bounds[1])
-    def measure(line: str, initial: bool) -> tuple[float,float]:
+    first=next((i for i,ch in enumerate(text) if ch!='\n'),None)
+    if initial_size is not None and first is not None:
+        cells[first]=(0,initial_size,style['color'],True)
+    faces: list[_Face]=[]
+    for (family,variant),paragraphs in keys.items():
+        names=frozenset(name for paragraph in paragraphs for name in shape_glyph_names(family,variant,paragraph))
+        if not names:
+            names=frozenset(shape_glyph_names(family,variant,' '))
+        subset=subset_font_for_family(family,variant,names)
+        # FontTools defaults to a wall-clock modified timestamp. Normalize it before
+        # embedding so the proof remains reproducible after reopening in a new worker.
+        stable_font=TTFont(io.BytesIO(subset.data),recalcTimestamp=False)
+        stable_font['head'].modified=stable_font['head'].created
+        stable_bytes=io.BytesIO()
+        stable_font.save(stable_bytes)
+        subset=replace(subset,data=stable_bytes.getvalue())
+        widths=subset_cid_widths(subset)
+        try:
+            chars=dict((ch,cid) for paragraph in paragraphs for cid,ch in shape_cids(subset,paragraph))
+        except ValueError:
+            _fail('TEXT_BOX_UNSUPPORTED_TEXT')
+        font=TTFont(io.BytesIO(subset.data))
+        scale=size/font['head'].unitsPerEm
+        order=font.getGlyphOrder()
+        bounds: dict[str,tuple[float,float,float,float]]={}
+        for ch,cid in chars.items():
+            glyph=font['glyf'][order[cid]]
+            if glyph.numberOfContours:
+                glyph.recalcBounds(font['glyf'])
+                bounds[ch]=(glyph.xMin*scale,glyph.yMin*scale,glyph.xMax*scale,glyph.yMax*scale)
+            else:
+                bounds[ch]=(0,0,0,0)
+        faces.append(_Face(subset,widths,chars,font,bounds))
+    def bound(i: int) -> tuple[float,...]:
+        face,glyph_size,_,_=cells[i]
+        return tuple(v*glyph_size/size for v in faces[face].bounds[text[i]])
+    def advance(i: int) -> float:
+        face,glyph_size,_,_=cells[i]
+        return round(faces[face].widths[faces[face].chars[text[i]]])*glyph_size/1000
+    if styled:
+        visible=[i for i,ch in enumerate(text) if ch!='\n'] or list(range(len(text)))
+        used={cells[i][:2] for i in visible}
+        asc=max(max(faces[f].font['hhea'].ascent*s/faces[f].font['head'].unitsPerEm for f,s in used),
+                max(bound(i)[3] for i in visible))
+        desc=max(max(-faces[f].font['hhea'].descent*s/faces[f].font['head'].unitsPerEm for f,s in used),
+                 max(-bound(i)[1] for i in visible))
+    else:
+        main=faces[0]; scale=size/main.font['head'].unitsPerEm
+        initial_bounds=tuple(v*initial_size/size for v in main.bounds[text[first]]) if initial_size is not None and first is not None else (0.,0.,0.,0.)
+        asc=max(main.font['hhea'].ascent*scale,max((b[3] for b in main.bounds.values()),default=0),initial_bounds[3])
+        desc=max(-main.font['hhea'].descent*scale,max((-b[1] for b in main.bounds.values()),default=0),-initial_bounds[1])
+    def measure(start: int, end: int) -> tuple[float,float]:
         pen=0.; lo=0.; hi=0.
-        for i,ch in enumerate(line):
-            glyph_size=initial_size if initial and i==0 else size
-            b=tuple(v*glyph_size/size for v in bounds[ch])
+        for i in range(start,end):
+            b=bound(i)
             lo=min(lo,pen+b[0]); hi=max(hi,pen+b[2])
-            pen+=round(widths[chars[ch]])*glyph_size/1000
-            if i<len(line)-1:
+            pen+=advance(i)
+            if i<end-1:
                 pen+=spacing
         return lo,max(hi,pen)
-    lines: list[tuple[str,bool,bool]]=[]
-    first_character_pending=True
+    lines: list[tuple[int,int,bool]]=[]
+    start=0
     for paragraph in text.split('\n'):
+        stop=start+len(paragraph)
         if not paragraph:
-            lines.append(('',True,False));continue
-        remaining=paragraph
-        while remaining:
+            lines.append((start,start,True))
+        position=start
+        while position<stop:
             # A bounded character scan preserves every space and breaks long tokens.
-            end=0; last_break=0
+            end=position; last_break=position
             pen=0.;lo=0.;hi=0.
-            for i,ch in enumerate(remaining):
-                glyph_size=initial_size if initial_size is not None and first_character_pending and i==0 else size
-                b=tuple(v*glyph_size/size for v in bounds[ch])
+            for i in range(position,stop):
+                b=bound(i)
                 lo=min(lo,pen+b[0]);hi=max(hi,pen+b[2])
-                advance=round(widths[chars[ch]])*glyph_size/1000
-                if max(hi,pen+advance)-lo>rect['width']+1e-7:
+                glyph_advance=advance(i)
+                if max(hi,pen+glyph_advance)-lo>rect['width']+1e-7:
                     break
-                pen+=advance+spacing
+                pen+=glyph_advance+spacing
                 end=i+1
-                if ch==' ':
+                if text[i]==' ':
                     last_break=end
-            if not end:
+            if end==position:
                 _fail('TEXT_BOX_UNSUPPORTED_TEXT')
-            if end<len(remaining) and last_break:
+            if end<stop and last_break>position:
                 end=last_break
-            lines.append((remaining[:end],end==len(remaining),first_character_pending and initial_size is not None))
-            first_character_pending=False
-            remaining=remaining[end:]
-    required=asc+desc+max(0,len(lines)-1)*size*style['line_spacing']+sum(style['paragraph_spacing'] for _,last,_ in lines[:-1] if last)
-    font_obj=embed_type0_font(pdf,subset,widths,{cid:ch for ch,cid in chars.items()})
+            lines.append((position,end,end==stop))
+            position=end
+        start=stop+1
+    # A line's advance from the previous baseline is its own largest glyph size.
+    heights=[max((cells[i][1] for i in range(a,b)),default=cells[min(a,len(text)-1)][1]) if styled else size
+             for a,b,_ in lines]
+    if styled:
+        required=asc+desc+sum(h*style['line_spacing'] for h in heights[1:])+sum(style['paragraph_spacing'] for _,_,last in lines[:-1] if last)
+    else:
+        required=asc+desc+max(0,len(lines)-1)*size*style['line_spacing']+sum(style['paragraph_spacing'] for _,_,last in lines[:-1] if last)
     resource=_resource(spec)
+    resources=[resource+f'F{n}' for n in range(len(faces))] if styled else [resource]
+    fonts={name:embed_type0_font(pdf,face.subset,face.widths,{cid:ch for ch,cid in face.chars.items()})
+           for name,face in zip(resources,faces)}
+    head=cells[first] if styled and first is not None else (0,size,style['color'],False)
+    state=(head[0],head[1],head[3]); color=head[2]
     commands=['q',' '.join(_fmt(v) for v in geometry.matrix)+' cm','BT',
-              f'{resource} {_fmt(size)} Tf',' '.join(_fmt(c) for c in style['color'])+' rg', '0 Tr']
+              f'{resources[state[0]]} {_fmt(state[1])} Tf',' '.join(_fmt(c) for c in color)+' rg', '0 Tr']
     y=rect['top']+asc
-    for line,last,initial in lines:
-        lo,hi=measure(line,initial)
+    for k,(line_start,line_end,_) in enumerate(lines):
+        if k:
+            y+=heights[k]*style['line_spacing']+(style['paragraph_spacing'] if lines[k-1][2] else 0)
+        lo,hi=measure(line_start,line_end)
         x=rect['left']-lo
         extra=rect['width']-(hi-lo)
         if style['alignment']=='center':x+=extra/2
         elif style['alignment']=='right':x+=extra
-        for i,ch in enumerate(line):
-            glyph_size=initial_size if initial and i==0 else size
-            if initial and i==0:
-                commands.append(f'{resource} {_fmt(glyph_size)} Tf')
-            elif initial and i==1:
-                commands.append(f'{resource} {_fmt(size)} Tf')
-            commands.append(f'1 0 0 1 {_fmt(x)} {_fmt(-y)} Tm <{chars[ch]:04X}> Tj')
-            x+=round(widths[chars[ch]])*glyph_size/1000+spacing
-        if initial and len(line)==1:
-            commands.append(f'{resource} {_fmt(size)} Tf')
-        y+=size*style['line_spacing']+(style['paragraph_spacing'] if last else 0)
+        for i in range(line_start,line_end):
+            face,glyph_size,glyph_color,initial=cells[i]
+            if (face,glyph_size,initial)!=state:
+                state=(face,glyph_size,initial)
+                commands.append(f'{resources[face]} {_fmt(glyph_size)} Tf')
+            if glyph_color!=color:
+                color=glyph_color
+                commands.append(' '.join(_fmt(c) for c in color)+' rg')
+            commands.append(f'1 0 0 1 {_fmt(x)} {_fmt(-y)} Tm <{faces[face].chars[text[i]]:04X}> Tj')
+            x+=advance(i)+spacing
+    if state[2]:
+        # A lone initial letter restores the body size before ET, as it always has.
+        commands.append(f'{resources[0]} {_fmt(size)} Tf')
     commands.extend(['ET','Q'])
-    return Drawing(('\n'.join(commands)+'\n').encode(),font_obj,
+    return Drawing(('\n'.join(commands)+'\n').encode(),fonts,
                    dict(required_height=round(required,6),available_height=rect['height'],line_count=len(lines)))
 
 
@@ -351,7 +427,7 @@ def _owned(pdf: pikepdf.Pdf) -> list[tuple[dict[str,Any],pikepdf.Object]]:
                 if not isinstance(meta,dict) or set(meta)!={'version','spec'} or type(meta['version']) is not int or meta['version']!=1 or raw!=_json(meta):
                     _fail('TEXT_BOX_UNSAFE')
                 spec=meta['spec']
-                if not isinstance(spec,dict) or set(spec)!={'id','page_index','rect','text','style'}:
+                if not isinstance(spec,dict) or set(spec)-{'runs'}!={'id','page_index','rect','text','style'}:
                     _fail('TEXT_BOX_UNSAFE')
                 normalized=_spec(spec,MAX_TEXT_BOX_PAGES)
                 if normalized!=spec or spec['id'] in seen:
@@ -367,9 +443,12 @@ def _owned(pdf: pikepdf.Pdf) -> list[tuple[dict[str,Any],pikepdf.Object]]:
                     expected=_drawing(expected_pdf,spec,geometry)
                     page_resources: Any=page.obj.get('/Resources',{})
                     resources: Any=page_resources.get('/Font',{})
-                    actual=resources.get(_resource(spec))
-                    if actual is None or _canonical(actual)!=_canonical(expected.font) or drawing_bytes!=expected.stream:
+                    if drawing_bytes!=expected.stream:
                         _fail('TEXT_BOX_UNSAFE')
+                    for name,font in expected.fonts.items():
+                        actual=resources.get(name)
+                        if actual is None or _canonical(actual)!=_canonical(font):
+                            _fail('TEXT_BOX_UNSAFE')
                 if set(str(k) for k in stream.keys())-{'/Length','/Filter','/DecodeParms','/NativeTextBox'}:
                     _fail('TEXT_BOX_UNSAFE')
                 result.append((_project(spec,index,geometry,current_geometry),stream))
@@ -587,10 +666,10 @@ def _isolate(pdf: pikepdf.Pdf, page: pikepdf.Page) -> None:
 
 def prepare_text_box(pdf: pikepdf.Pdf, source: bytes, payload: object) -> dict[str,object]:
     """Return a source-bound list, exact candidate PDF, or finite layout refusal."""
-    request=_dict(payload,{'operation','page_index','id','text','rect','style','allow_overlap','auto_expand'})
+    request=_dict(payload,{'operation','page_index','id','text','rect','style','runs','allow_overlap','auto_expand'})
     operation=cast(str,request.get('operation'))
     if operation not in ('list','upsert','remove'):_fail()
-    keys={'list':{'operation'},'remove':{'operation','id'},'upsert':{'operation','page_index','id','text','rect','style','allow_overlap','auto_expand'}}[operation]
+    keys={'list':{'operation'},'remove':{'operation','id'},'upsert':{'operation','page_index','id','text','rect','style','runs','allow_overlap','auto_expand'}}[operation]
     if set(request)-keys:_fail()
     if len(source)>50*1024*1024 or len(pdf.pages)>MAX_TEXT_BOX_PAGES:_fail('TEXT_BOX_LIMIT')
     source_hash=hashlib.sha256(source).hexdigest()
@@ -630,19 +709,21 @@ def prepare_text_box(pdf: pikepdf.Pdf, source: bytes, payload: object) -> dict[s
                 layout=drawing.layout
         if cast(float,layout['required_height'])>spec['rect']['height']+1e-6:
             return dict(ok=False,source_hash=source_hash,code='TEXT_BOX_OVERFLOW',required_height=layout['required_height'],available_height=layout['available_height'])
+        metadata=_json(dict(version=1,spec=spec))
+        if len(metadata)>MAX_METADATA:_fail('TEXT_BOX_LIMIT')  # would not reopen
         if not request.get('allow_overlap',False):_collision(pdf,spec,geometry)
         _isolate(pdf,page)
         # Copy dictionaries to avoid modifying inherited/shared resource dictionaries.
         resources=pikepdf.Dictionary(page.obj.get('/Resources',{}))
         fonts=pikepdf.Dictionary(cast(Any,resources.get('/Font',{})))
-        name=_resource(spec)
-        if fonts.get(name) is not None and _canonical(fonts[name])!=_canonical(drawing.font):
-            _fail('TEXT_BOX_UNSAFE')
-        fonts[name]=drawing.font
+        for name,font in drawing.fonts.items():
+            if fonts.get(name) is not None and _canonical(fonts[name])!=_canonical(font):
+                _fail('TEXT_BOX_UNSAFE')
+            fonts[name]=font
         resources.Font=fonts
         page.obj.Resources=resources
         stream=pikepdf.Stream(pdf,drawing.stream)
-        stream.NativeTextBox=pikepdf.String(_json(dict(version=1,spec=spec)))
+        stream.NativeTextBox=pikepdf.String(metadata)
         page.obj.Contents=pikepdf.Array([*_contents(page),stream])
         boxes.append(spec)
         page_index=spec['page_index']
