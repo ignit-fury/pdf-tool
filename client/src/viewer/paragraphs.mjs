@@ -61,3 +61,8 @@ export function layoutTops(current,source,step,count,editIndex){
   for(let i=0;i<count;i++)out.push(i===0?(current[0]??source[0]??0):i<=editIndex&&current[i]!=null?current[i]:out[i-1]+step);
   return out;
 }
+// Keep a rebuild rect inside the visible page (as sourceTextBox did); geometry is localMetadata.pages[i].
+export function clampRect(rect,{visibleWidth:w,visibleHeight:h}){
+  const left=Math.min(Math.max(0,rect.left),w-1),top=Math.min(Math.max(0,rect.top),h-1);
+  return {left,top,width:Math.min(Math.max(1,rect.width),w-left),height:Math.min(Math.max(1,rect.height),h-top)};
+}

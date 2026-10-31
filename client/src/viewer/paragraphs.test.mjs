@@ -73,3 +73,10 @@ test('layoutTops restacks lines after the edit point',()=>{
   assert.deepEqual(layoutTops(src,src,10,6,0),[0,10,20,30,40,50]);     // paste of 3 extra lines mid
   assert.deepEqual(layoutTops([0,10,20,30],src,10,5,1),[0,10,20,30,40]);// split later keeps earlier tops
 });
+import {clampRect} from './paragraphs.mjs';
+test('clampRect keeps a rebuild rect inside the visible page',()=>{
+  const page={visibleWidth:400,visibleHeight:300};
+  assert.deepEqual(clampRect({left:-5,top:10,width:500,height:0},page),{left:0,top:10,width:400,height:1});
+  assert.deepEqual(clampRect({left:390,top:299.5,width:30,height:20},page),{left:390,top:299,width:10,height:1});
+  assert.deepEqual(clampRect({left:30,top:50,width:90,height:26},page),{left:30,top:50,width:90,height:26});
+});

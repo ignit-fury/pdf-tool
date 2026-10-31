@@ -3,17 +3,19 @@ import {insertText,splitLine,mergeLine,deleteRange,layoutTops} from './paragraph
 import {viewportBox,explainReason} from '../session.mjs';
 import {sourceTypography,viewportFontScale} from './model.mjs';
 
+// zIndex 4 sits above the per-run .edit-layer (z-index 3), so paragraph targets win the click;
+// refused paragraphs let clicks through to their runs (e.g. inserted text boxes open in text-box mode).
 export function ParagraphOutlines({paragraphs,viewport,activeId,onChoose}){
   return paragraphs.filter(p=>p.paragraph_id!==activeId).map(p=>{
     const box=viewportBox(p.box,viewport);
     return <button key={p.paragraph_id} type="button" className="paragraph-outline" data-state={p.state}
-      style={{position:'absolute',...box}} title={p.state==='not_editable'?explainReason(p.reason):'Edit paragraph'}
+      style={{position:'absolute',zIndex:4,...box,...(p.state==='not_editable'?{pointerEvents:'none'}:{})}} title={p.state==='not_editable'?explainReason(p.reason):'Edit paragraph'}
       aria-label={p.state==='not_editable'?`Not editable: ${explainReason(p.reason)}`:'Edit paragraph'}
       disabled={p.state==='not_editable'} onClick={event=>onChoose(p,event)}/>;
   });
 }
 
-export default function ParagraphEditor({paragraph,lines,runsById,style,viewport,caret,busy,status,onLines,onCommit,onCancel}){
+export default function ParagraphEditor({paragraph,resetKey,lines,runsById,style,viewport,caret,busy,status,onLines,onCommit,onCancel}){
   const root=useRef(null),latest=useRef(),pointer=useRef(null),saved=useRef(null),tops=useRef([]),src=useRef([]),step=useRef(14);
   latest.current={lines,runsById,viewport,caret,paragraph,onLines,onCommit,busy};
   const first=runsById.get(paragraph.lines[0][0]);
@@ -64,7 +66,7 @@ export default function ParagraphEditor({paragraph,lines,runsById,style,viewport
     paint(init,null,src.current.length-1);
     root.current.focus({preventScroll:true});
     place(root.current,{line:c?.line??0,offset:c?.offset??Infinity});
-  },[paragraph.paragraph_id]);
+  },[paragraph.paragraph_id,resetKey]); // resetKey repaints from the current draft lines (toolbar Delete)
   useEffect(()=>{
     const inside=target=>target.closest?.('.floating-text-tools')?'toolbar':root.current?.contains(target)?'editor':'outside';
     const control=target=>!!target.closest?.('input,select,textarea');
@@ -104,7 +106,7 @@ export default function ParagraphEditor({paragraph,lines,runsById,style,viewport
   },[]);
   return <div ref={root} className="paragraph-editor" data-status={status==='saving'?'saving':status?.refused?'refused':'editing'}
     contentEditable={!busy} suppressContentEditableWarning role="textbox" aria-multiline="true" aria-label="Edit paragraph on page" spellCheck={false}
-    style={{position:'absolute',...origin,...typography}}
+    style={{position:'absolute',zIndex:4,...origin,...typography}}
     onInput={()=>latest.current.onLines(read())}
     onPaste={event=>{event.preventDefault();const text=event.clipboardData.getData('text/plain');apply((cur,at)=>insertText(cur,at.line,at.offset,text));}}
     onKeyDown={event=>{
