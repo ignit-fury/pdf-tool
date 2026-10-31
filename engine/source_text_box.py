@@ -46,13 +46,36 @@ def _validated_initial_pair(path: Path, password: str, page: object,
         raise TextBoxError('TEXT_BOX_SOURCE_UNSAFE') from None
 
 
+def _validated_paragraph(path: Path, password: str, page: object,
+                         identifier: object, identifiers: list[str]) -> None:
+    from engine.index import RunIndex
+    from engine.paragraphs import page_paragraphs
+    from engine.run_id import decode_run_id
+    if type(page) is not int or not isinstance(identifier, str) or not identifiers:
+        raise TextBoxError('INVALID_TEXT_BOX')
+    with RunIndex(path, password=password) as index:
+        indexed = index.page(page)
+        match = next((p for p in page_paragraphs(page, indexed) if p.paragraph_id == identifier), None)
+        if match is None or list(match.run_ids) != identifiers:
+            raise TextBoxError('PARAGRAPH_STALE')
+        states = {run.run_id: verdict.state for run, verdict in indexed.runs}
+    streams = {(a['part'], a['xobj_path']) for a in map(decode_run_id, identifiers)}
+    if any(states.get(i) == 'not_editable' for i in identifiers) or len(streams) != 1:
+        raise TextBoxError('TEXT_BOX_SOURCE_UNSAFE')
+
+
 def prepare_source_text_box(path: Path, source: bytes, payload: dict[str, Any],
                             intermediate: Path, *, password: str = '') -> dict[str, object]:
-    allowed={'operation','source_run_id','source_run_ids','recipe','page_index','text','rect','style','allow_overlap','auto_expand'}
+    allowed={'operation','source_run_id','source_run_ids','paragraph_id','recipe','page_index','text','rect','style','allow_overlap','auto_expand'}
     if set(payload)-allowed or payload.get('operation')!='replace-source' or ('source_run_id' in payload)==('source_run_ids' in payload):
         raise TextBoxError('INVALID_TEXT_BOX')
     group=payload.get('source_run_ids')
-    if group is not None:
+    if 'paragraph_id' in payload:
+        if not isinstance(group,list) or not all(isinstance(item,str) for item in group):
+            raise TextBoxError('INVALID_TEXT_BOX')
+        identifiers=group
+        _validated_paragraph(path,password,payload.get('page_index'),payload['paragraph_id'],identifiers)
+    elif group is not None:
         if not isinstance(group,list) or len(group)!=2 or not all(isinstance(item,str) for item in group):
             raise TextBoxError('INVALID_TEXT_BOX')
         identifiers=group
@@ -83,7 +106,7 @@ def prepare_source_text_box(path: Path, source: bytes, payload: dict[str, Any],
     if not report.ok or not intermediate.exists():
         raise TextBoxError('TEXT_BOX_SOURCE_UNSAFE')
     materialized=intermediate.read_bytes()
-    insertion={k:v for k,v in payload.items() if k not in ('source_run_id','source_run_ids','recipe')}
+    insertion={k:v for k,v in payload.items() if k not in ('source_run_id','source_run_ids','paragraph_id','recipe')}
     insertion['operation']='upsert'
     with pikepdf.open(intermediate) as pdf:
         result=prepare_text_box(pdf,materialized,insertion)

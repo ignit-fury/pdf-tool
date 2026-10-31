@@ -79,3 +79,45 @@ def test_existing_managed_box_survives_but_its_glyph_cannot_be_converted(tmp_pat
     with pytest.raises(TextBoxError,match='TEXT_BOX_SOURCE_UNSAFE'):
         prepare_source_text_box(path,source,request(ids,source_run_id=owned.run_id),tmp_path/'bad-owned.pdf')
     assert path.read_bytes()==source
+
+
+def paragraph_pdf(path: Path):
+    with pikepdf.Pdf.new() as pdf:
+        page=pdf.add_blank_page(page_size=(400,400))
+        page.obj.Resources=pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=pdf.make_indirect(
+            pikepdf.Dictionary(Type=pikepdf.Name.Font,Subtype=pikepdf.Name.Type1,BaseFont=pikepdf.Name.Helvetica))))
+        page.obj.Contents=pdf.make_stream(b'BT /F1 12 Tf 1 0 0 1 30 340 Td (First line here) Tj ET\n'
+            b'BT /F1 12 Tf 1 0 0 1 30 326 Td (Second line here) Tj ET\n'
+            b'BT /F1 12 Tf 1 0 0 1 30 100 Td (Keep neighbor) Tj ET')
+        pdf.save(path)
+    from engine.index import RunIndex
+    from engine.paragraphs import page_paragraphs
+    with RunIndex(path) as index:
+        paragraph=next(p for p in page_paragraphs(0,index.page(0)) if len(p.lines)==2)
+    return path.read_bytes(),paragraph
+
+
+def test_paragraph_rebuild_removes_every_line(tmp_path):
+    from engine.source_text_box import prepare_source_text_box
+    path=tmp_path/'p.pdf';source,paragraph=paragraph_pdf(path)
+    payload={'operation':'replace-source','paragraph_id':paragraph.paragraph_id,
+        'source_run_ids':list(paragraph.run_ids),'recipe':[],'page_index':0,
+        'text':'First line here and much more text Second line here',
+        'rect':{'left':30,'top':48,'width':200,'height':28},
+        'style':{'font_family':'Sans','font_size':12},'auto_expand':True}
+    result=prepare_source_text_box(path,source,payload,tmp_path/'base.pdf')
+    text=extract(base64.b64decode(result['pdf']))
+    assert 'much more text' in text and 'Keep neighbor' in text
+    assert text.count('First line here')==1
+    assert path.read_bytes()==source
+
+
+def test_paragraph_rebuild_refuses_stale_ids(tmp_path):
+    from engine.source_text_box import prepare_source_text_box
+    from engine.text_boxes import TextBoxError
+    path=tmp_path/'p.pdf';source,paragraph=paragraph_pdf(path)
+    payload={'operation':'replace-source','paragraph_id':paragraph.paragraph_id,
+        'source_run_ids':list(paragraph.run_ids)[:1],'recipe':[],'page_index':0,'text':'x',
+        'rect':{'left':30,'top':48,'width':200,'height':28},'style':{'font_family':'Sans'}}
+    with pytest.raises(TextBoxError,match='PARAGRAPH_STALE'):
+        prepare_source_text_box(path,source,payload,tmp_path/'base.pdf')
