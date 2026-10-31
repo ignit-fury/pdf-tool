@@ -101,3 +101,26 @@ test('wrong hashes, unknown notices, fake PDF and unbounded metadata refuse befo
   assert.equal(validateBoxes([{...box,style:{...style,initial_font_size:75}}])[0].style.initial_font_size,75);
   assert.throws(()=>validateBoxes([{...box,style:{...style,initial_font_size:513}}]),{code:'TEXT_BOX_RESPONSE_INVALID'});
 });
+test('paragraph edits upload the source baseline and expose the server plan',async()=>{
+  const baseline=new TextEncoder().encode('%PDF-baseline'),hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',baseline)),v=>v.toString(16).padStart(2,'0')).join('');
+  const recipe=[{run_id:'r1',new_text:'New line'}],lines={ok:true,plan:'lines',source_hash:hash,pdf:btoa('%PDF-lines'),recipe,notices:[],location:'server'};
+  let reply,f;const calls=[];
+  f=await fixture({request:async(path,options)=>{calls.push({path,...options});return path==='/upload'?{job_id:'baseline',source_hash:hash}:reply;}});
+  f.session.sourceBytes=baseline;
+  const edit={operation:'replace-paragraph',paragraph_id:'p',source_run_ids:['r1'],page_index:0,lines:['New line'],style:{},recipe:[],rect:payload.rect,allow_rebuild:false,run_styles:{}};
+  reply=lines;const result=await f.controller.preview(edit);
+  assert.strictEqual(calls[0].body,baseline);assert.equal(result.plan,'lines');assert.deepEqual(result.recipe,recipe);
+  assert.equal(new TextDecoder().decode(result.prepared.bytes),'%PDF-lines');assert.strictEqual(f.controller.take(edit),result);
+  reply={...f.response,source_hash:hash,plan:'rebuild'};const rebuilt=await f.controller.preview({...edit,allow_rebuild:true});
+  assert.equal(rebuilt.plan,'rebuild');assert.equal(rebuilt.boxes.length,1);
+  reply={...lines,boxes:[]};await assert.rejects(()=>f.controller.preview(edit),{code:'TEXT_BOX_RESPONSE_INVALID'});
+  reply={...lines,plan:'other'};await assert.rejects(()=>f.controller.preview(edit),{code:'TEXT_BOX_RESPONSE_INVALID'});
+  reply={...f.response,source_hash:hash,plan:'lines'};await assert.rejects(()=>f.controller.preview(edit),{code:'TEXT_BOX_RESPONSE_INVALID'});
+});
+test('boxes may carry per-run styles that spell the box text',()=>{
+  const runStyle={font_family:'Serif',font_size:11,bold:true,italic:false,color:[0,0,0]};
+  const box={id:'b'.repeat(32),page_index:0,text:'Ab',rect:{left:1,top:1,width:10,height:10},style,runs:[{text:'A',style:runStyle},{text:'b',style:runStyle}]};
+  assert.deepEqual(validateBoxes([box])[0].runs,box.runs);
+  assert.throws(()=>validateBoxes([{...box,runs:[{text:'A',style:runStyle}]}]),{code:'TEXT_BOX_RESPONSE_INVALID'});
+  assert.throws(()=>validateBoxes([{...box,runs:[{text:'Ab',style:{...runStyle,font_family:'Comic'}}]}]),{code:'TEXT_BOX_RESPONSE_INVALID'});
+});
