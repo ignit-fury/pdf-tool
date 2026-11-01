@@ -13,7 +13,6 @@
 .document-actions .document-tools{display:flex;align-items:center;gap:4px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:thin;white-space:nowrap}
 .document-bar .document-actions button{min-height:30px;flex:none;padding:5px 8px;font-size:11px;white-space:nowrap}
 .document-bar .document-actions>button{order:0;flex:none}
-.document-actions .action-location{font-size:8px}
 .document-workspace .viewer-toolbar{height:42px;min-height:42px;padding:4px 12px;gap:8px;flex-wrap:nowrap;overflow-x:auto}
 .viewer-toolbar .mode-switch{display:flex;flex:none}
 .viewer-toolbar .mode-switch button{padding:5px 9px;min-height:30px;font-size:11px}
@@ -53,8 +52,8 @@
 .viewer-analysis-gate>.toolbar-details{margin-left:auto}
 .document-workspace .viewer-caption{padding:5px 12px;font-size:10px;line-height:1.3}
 .viewer-caption .back-results{min-height:30px;padding:4px 8px}
-.app:has(.document-workspace)>.app-footer{padding:4px 12px;gap:16px;min-height:24px;flex-direction:row;flex-wrap:nowrap;font-size:9px;line-height:1.4}
-.app:has(.document-workspace)>.app-footer span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.app:has(.document-workspace)>.app-footer{padding:4px 12px;gap:16px;min-height:24px;flex-direction:row;flex-wrap:nowrap;font-size:10px;line-height:1.4}
+.app:has(.document-workspace)>.app-footer span{min-width:0}
 .replacement-tour{padding:6px 12px}
 .replacement-tour>p{margin:4px 0;max-height:30px;overflow:auto}
 @media(max-width:760px){
@@ -84,7 +83,7 @@
   .context-toolbar>.toolbar-details{order:3}
   .context-actions{flex:1;min-width:0;overflow-x:auto;scrollbar-width:thin;gap:4px;order:2;flex-wrap:nowrap}
   .context-actions>button{flex:none}
-  .context-toolbar>.context-warning,.context-toolbar>.inline-fit,.context-toolbar>p[role=status]{order:4;max-height:55px;overflow:auto;white-space:normal}
+  .context-toolbar>.context-warning,.context-toolbar>.inline-fit,.context-toolbar>p[role=status]{order:4;white-space:normal}
   .toolbar-popover{right:8px;width:calc(100% - 16px);padding:12px;max-height:38dvh}
   .viewer-analysis-gate{gap:6px;padding:4px 8px;flex-wrap:wrap}
   .viewer-analysis-gate>strong{flex:1;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -104,9 +103,9 @@
 .paper .run-box:not(.selected):not(:hover):not(:focus-visible){border-color:transparent;background:transparent}
 .paper .run-box:hover{cursor:text}
 .paragraph-outline{background:transparent;border:1px dashed transparent;border-radius:2px;cursor:text;padding:0}
-.paragraph-outline:hover,.paragraph-outline:focus-visible{border-color:var(--accent,#2f6fed)}
+.paragraph-outline:focus-visible{border-color:var(--accent,#2f6fed)}@media(hover:hover){.paragraph-outline:hover{border-color:var(--accent,#2f6fed)}}
 .paragraph-outline[data-state="not_editable"]{cursor:not-allowed}
-.paragraph-outline[data-state="not_editable"]:hover{border-color:#999}
+@media(hover:hover){.paragraph-outline[data-state="not_editable"]:hover{border-color:#999}}
 .paragraph-editor{outline:1px solid var(--accent,#2f6fed);background:rgba(255,255,255,.96);color:inherit;white-space:pre;overflow:visible}
 .paragraph-editor[data-status="saving"]{animation:paragraph-pulse 1s ease-in-out infinite}
 .paragraph-editor[data-status="refused"]{outline-color:#c62828}

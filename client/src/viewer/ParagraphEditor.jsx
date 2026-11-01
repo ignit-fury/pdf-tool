@@ -10,10 +10,12 @@ export function ParagraphOutlines({paragraphs,runs=[],viewport,activeId,onChoose
   return paragraphs.filter(p=>p.paragraph_id!==activeId).map(p=>{
     const box=viewportBox(p.box,viewport);
     const words=p.lines.flat().map(id=>text.get(id)||'').join(' ').replace(/\s+/g,' ').trim(),label=words?`Edit paragraph: ${words.length>40?words.slice(0,40)+'…':words}`:'Edit paragraph';
+    // Inserted text boxes pass clicks through to their own editor; other refusals stay reachable so the reason can be read.
+    const passThrough=p.state==='not_editable'&&String(p.reason).startsWith('managed_text_box');
     return <button key={p.paragraph_id} type="button" className="paragraph-outline" data-state={p.state}
-      style={{position:'absolute',zIndex:4,...box,...(p.state==='not_editable'?{pointerEvents:'none'}:{})}} title={p.state==='not_editable'?explainReason(p.reason):'Edit paragraph'}
+      style={{position:'absolute',zIndex:4,...box,...(passThrough?{pointerEvents:'none'}:{})}} title={p.state==='not_editable'?explainReason(p.reason):'Edit paragraph'}
       aria-label={p.state==='not_editable'?`Not editable: ${explainReason(p.reason)}`:label}
-      disabled={p.state==='not_editable'} onClick={event=>onChoose(p,event)}/>;
+      aria-disabled={p.state==='not_editable'||undefined} disabled={passThrough} onClick={event=>onChoose(p,event)}/>;
   });
 }
 
@@ -32,8 +34,15 @@ export default function ParagraphEditor({paragraph,resetKey,lines,runsById,style
       Object.assign(div.style,{position:'absolute',left:`${leftOf(k)}px`,top:`${tops.current[k]}px`,whiteSpace:'pre',minHeight:'1em'});
       return div;
     }));
+    fit();
     if(at)place(node,at);
     function leftOf(k){const b=viewportBox(lineBox(para,Math.min(k,para.lines.length-1),runs),vp);return b.left-o.left;}
+  };
+  // Lines are absolute, so the box cannot size itself: grow it to cover typed text and hide the page beneath.
+  const fit=()=>{
+    const node=root.current,o=viewportBox(latest.current.paragraph.box,latest.current.viewport);let w=o.width,h=o.height;
+    for(const line of node.children){w=Math.max(w,line.offsetLeft+line.offsetWidth+2);h=Math.max(h,line.offsetTop+line.offsetHeight);}
+    node.style.width=`${w}px`;node.style.height=`${h}px`;
   };
   const read=()=>[...root.current.children].map(div=>div.textContent.replace(/\u00a0/g,' '));
   const endOfDoc=()=>{const n=root.current.children.length-1;return {line:n,offset:root.current.children[n]?.textContent.length??0};};
@@ -109,7 +118,7 @@ export default function ParagraphEditor({paragraph,resetKey,lines,runsById,style
   return <div ref={root} className="paragraph-editor" data-status={status==='saving'?'saving':status?.refused?'refused':'editing'}
     contentEditable={!busy} suppressContentEditableWarning role="textbox" aria-multiline="true" aria-label="Edit paragraph on page" spellCheck={false}
     style={{position:'absolute',zIndex:4,...origin,...typography}}
-    onInput={()=>latest.current.onLines(read())}
+    onInput={()=>{fit();latest.current.onLines(read());}}
     onDragStart={event=>event.preventDefault()} // a drag-move would delete text the blocked drop never re-inserts
     onPaste={event=>{event.preventDefault();const text=event.clipboardData.getData('text/plain');apply((cur,at)=>insertText(cur,at.line,at.offset,text));}}
     onKeyDown={event=>{
