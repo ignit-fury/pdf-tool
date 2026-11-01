@@ -115,6 +115,8 @@ test('paragraph edits upload the source baseline and expose the server plan',asy
   assert.equal(rebuilt.plan,'rebuild');assert.equal(rebuilt.boxes.length,1);
   reply={...f.response,source_hash:hash,plan:'rebuild',pushed:12.5};assert.equal((await f.controller.preview({...edit,allow_rebuild:true})).pushed,12.5);
   reply={...f.response,source_hash:hash,plan:'rebuild',pushed:-1};await assert.rejects(()=>f.controller.preview(edit),{code:'TEXT_BOX_RESPONSE_INVALID'});
+  reply={...lines,pushed:0};assert.equal((await f.controller.preview(edit)).plan,'lines');
+  reply={...lines,pushed:3};await assert.rejects(()=>f.controller.preview(edit),{code:'TEXT_BOX_RESPONSE_INVALID'});
   reply={...lines,boxes:[]};await assert.rejects(()=>f.controller.preview(edit),{code:'TEXT_BOX_RESPONSE_INVALID'});
   reply={...lines,plan:'other'};await assert.rejects(()=>f.controller.preview(edit),{code:'TEXT_BOX_RESPONSE_INVALID'});
   reply={...f.response,source_hash:hash,plan:'lines'};await assert.rejects(()=>f.controller.preview(edit),{code:'TEXT_BOX_RESPONSE_INVALID'});
