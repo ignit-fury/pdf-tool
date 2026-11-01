@@ -329,14 +329,15 @@ def _execute(request: dict[str, object]) -> dict[str, object]:
                     if len(rows) != len(paragraph.run_ids):
                         continue
                     blocked = next((r for r in rows if r['state'] == 'not_editable'), None)
+                    reason = blocked.get('reason') if blocked else ('unsupported_text_direction' if paragraph.angled else None)
                     style_keys = ('font_identity', 'bold', 'italic', 'color', 'source_font')
                     paragraphs.append({'paragraph_id': paragraph.paragraph_id, 'kind': paragraph.kind,
                         'lines': [[r.run_id for r in line] for line in paragraph.lines],
                         'box': [min(r['box'][0] for r in rows), min(r['box'][1] for r in rows),
                                 max(r['box'][2] for r in rows), max(r['box'][3] for r in rows)],
                         'single_style': len({tuple(str(r.get(k)) for k in style_keys) for r in rows}) == 1,
-                        'state': 'not_editable' if blocked else 'editable',
-                        'reason': blocked.get('reason') if blocked else None})
+                        'state': 'not_editable' if blocked or reason else 'editable',
+                        'reason': reason})
             box = [float(x) for x in pdf.pages[number].cropbox]
             return {"page": number, "bucket": indexed.bucket, "runs": runs, "paragraphs": paragraphs,
                 "width": box[2] - box[0], "height": box[3] - box[1],

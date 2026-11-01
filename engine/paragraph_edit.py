@@ -117,7 +117,7 @@ def prepare_paragraph_edit(path: Path, source: bytes, payload: dict[str, Any], s
     lines, page = payload.get('lines'), payload.get('page_index')
     if (set(payload) != keys or payload['operation'] != 'replace-paragraph'
             or not isinstance(lines, list) or not all(isinstance(x, str) for x in lines)
-            or type(page) is not int or not isinstance(payload['style'], dict)
+            or type(page) is not int or page < 0 or not isinstance(payload['style'], dict)
             or type(payload['allow_rebuild']) is not bool or not isinstance(payload['recipe'], list)):
         raise TextBoxError('INVALID_TEXT_BOX')
     try:
@@ -137,6 +137,8 @@ def prepare_paragraph_edit(path: Path, source: bytes, payload: dict[str, Any], s
                           if p.paragraph_id == payload['paragraph_id']), None)
     if paragraph is None or list(paragraph.run_ids) != payload['source_run_ids']:
         raise TextBoxError('PARAGRAPH_STALE')
+    if paragraph.angled:
+        raise TextBoxError('TEXT_BOX_SOURCE_UNSAFE')
     run_styles = payload['run_styles']
     if not isinstance(run_styles, dict) or set(run_styles) != set(paragraph.run_ids) \
             or not all(isinstance(v, dict) for v in run_styles.values()):
@@ -178,11 +180,11 @@ def prepare_paragraph_edit(path: Path, source: bytes, payload: dict[str, Any], s
     if not payload['allow_rebuild']:
         raise TextBoxError('PARAGRAPH_NEEDS_REBUILD')
     text = rebuild_text(len(paragraph.lines), lines)
+    if not text.strip():
+        raise TextBoxError('TEXT_BOX_UNSUPPORTED_TEXT')  # an emptied paragraph has nothing to draw
     run_part = {k: v for k, v in payload['style'].items() if k != 'character_spacing'}
     styles = {run_id: {**value, **run_part} for run_id, value in run_styles.items()}
     runs = styled_runs([line_segments(line, effective) for line in paragraph.lines], text, styles)
-    if not runs:
-        raise TextBoxError('TEXT_BOX_UNSUPPORTED_TEXT')  # an emptied paragraph has nothing to draw
     first_style = styles[paragraph.run_ids[0]]
     rebuild = {'operation': 'replace-source', 'paragraph_id': paragraph.paragraph_id,
                'source_run_ids': list(paragraph.run_ids), 'recipe': payload['recipe'],

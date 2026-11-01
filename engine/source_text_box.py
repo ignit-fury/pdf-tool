@@ -63,6 +63,8 @@ def _validated_paragraph(path: Path, password: str, page: object,
         match = next((p for p in page_paragraphs(page, indexed) if p.paragraph_id == identifier), None)
         if match is None or list(match.run_ids) != identifiers:
             raise TextBoxError('PARAGRAPH_STALE')
+        if match.angled:
+            raise TextBoxError('TEXT_BOX_SOURCE_UNSAFE')
         states = {run.run_id: verdict.state for run, verdict in indexed.runs}
     streams = {(a['part'], a['xobj_path']) for a in map(decode_run_id, identifiers)}
     if any(states.get(i) == 'not_editable' for i in identifiers) or len(streams) != 1:

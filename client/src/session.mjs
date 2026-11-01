@@ -84,6 +84,7 @@ export function explainPageAnalysisError(error) {
   return error?.message||'Text analysis failed for this page.';
 }
 export function explainReason(reason) {
+  if(reason==='unsupported_text_direction')return "Rotated or angled text can't be edited inline.";
   if(reason==='managed_text_box')return 'This text belongs to an inserted text box. Use the text-box controls to edit its complete layout.';
   if(reason==='managed_text_box_unverified')return 'This marked text box cannot be verified safely. Other source text and page tools remain available.';
   if(reason==='font_size_growth_unsupported')return 'Increasing source text height could overlap nearby content. Choose the original size or a smaller size; automatic reflow is unavailable.';

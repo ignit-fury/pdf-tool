@@ -179,3 +179,55 @@ def test_character_spacing_stays_out_of_run_styles(tmp_path):
                                                           allow_rebuild=True, style={'character_spacing': 1}), tmp_path)
     assert result['plan'] == 'rebuild'
     assert all('character_spacing' not in r['style'] for r in result['boxes'][0]['runs'])
+
+
+def rotated_pdf(path: Path):
+    with pikepdf.Pdf.new() as pdf:
+        page = pdf.add_blank_page(page_size=(400, 400))
+        page.obj.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=pdf.make_indirect(
+            pikepdf.Dictionary(Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name.Helvetica))))
+        page.obj.Contents = pdf.make_stream(b'BT /F1 12 Tf 0 1 -1 0 100 50 Tm (Rotated words here) Tj ET')
+        pdf.save(path)
+    with RunIndex(path) as index:
+        return path.read_bytes(), page_paragraphs(0, index.page(0))[0]
+
+
+def test_rotated_paragraph_is_refused(tmp_path):
+    from engine.source_text_box import prepare_source_text_box
+    path = tmp_path / 'r.pdf'; source, p = rotated_pdf(path)
+    assert p.angled
+    with pytest.raises(TextBoxError, match='TEXT_BOX_SOURCE_UNSAFE'):
+        prepare_paragraph_edit(path, source, payload(p, ['Rotated words there'], allow_rebuild=True), tmp_path)
+    with pytest.raises(TextBoxError, match='TEXT_BOX_SOURCE_UNSAFE'):
+        prepare_source_text_box(path, source, {'operation': 'replace-source', 'paragraph_id': p.paragraph_id,
+            'source_run_ids': list(p.run_ids), 'recipe': [], 'page_index': 0, 'text': 'x',
+            'rect': {'left': 30, 'top': 48, 'width': 200, 'height': 28}, 'style': {'font_family': 'Sans'}},
+            tmp_path / 'base.pdf')
+
+
+def test_rotated_paragraph_is_not_editable_in_page_listing():
+    import io
+    from server.isolation import run_worker
+    buf = io.BytesIO()
+    with pikepdf.Pdf.new() as pdf:
+        page = pdf.add_blank_page(page_size=(400, 400))
+        page.obj.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=pdf.make_indirect(
+            pikepdf.Dictionary(Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name.Helvetica))))
+        page.obj.Contents = pdf.make_stream(b'BT /F1 12 Tf 0 1 -1 0 100 50 Tm (Rotated words here) Tj ET\n'
+                                            b'BT /F1 12 Tf 30 340 Td (Level words here) Tj ET')
+        pdf.save(buf)
+    paragraphs = run_worker('page', buf.getvalue(), page=0)['paragraphs']
+    states = {p['state']: p['reason'] for p in paragraphs}
+    assert states == {'not_editable': 'unsupported_text_direction', 'editable': None}
+
+
+def test_whitespace_only_rebuild_is_refused(tmp_path):
+    path = tmp_path / 's.pdf'; source, p = two_line_pdf(path)
+    with pytest.raises(TextBoxError, match='TEXT_BOX_UNSUPPORTED_TEXT'):
+        prepare_paragraph_edit(path, source, payload(p, ['   '], allow_rebuild=True), tmp_path)
+
+
+def test_negative_page_is_invalid(tmp_path):
+    path = tmp_path / 's.pdf'; source, p = two_line_pdf(path)
+    with pytest.raises(TextBoxError, match='INVALID_TEXT_BOX'):
+        prepare_paragraph_edit(path, source, payload(p, ['x', 'y'], page_index=-1), tmp_path)

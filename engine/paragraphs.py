@@ -25,6 +25,12 @@ class Paragraph:
     def run_ids(self) -> tuple[str, ...]:
         return tuple(run.run_id for line in self.lines for run in line)
 
+    @property
+    def angled(self) -> bool:
+        """Rotated, vertical or right-to-left-advancing text: a horizontal box cannot replace it."""
+        return any(run.direction is not None and (abs(run.direction[1]) > .01 or run.direction[0] <= 0)
+                   for line in self.lines for run in line)
+
 
 def page_paragraphs(page_index: int, page: PageIndex) -> tuple[Paragraph, ...]:
     out: list[Paragraph] = []
