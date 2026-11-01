@@ -24,8 +24,9 @@ happened.** If everything else on this list fails, this one capability must work
   pages. An edit that fits keeps each original line in place; one that doesn't rebuilds the
   paragraph as a wrapped native text box automatically, and on simple pages the content below
   it is pushed down by translating whole drawing items (never redrawing them). Pages where that
-  cannot be done safely (content straddling the cut, managed images below, overflow past the
-  page bottom) are refused with a stated reason. Decided by the user 2026-11-01.
+  cannot be done safely (content straddling the cut, multi-column layouts, managed images below,
+  unsupported constructs such as clipping text or vertical writing, overflow past the page
+  bottom) are refused with a stated reason. Decided by the user 2026-11-01.
 - **Fonts**: Bundled open-license families only (Liberation, Noto, Source, DejaVu or similar),
   subset and embedded on save. Fixed set means fixed metrics to test against.
 - **Privacy**: Ephemerality is a *structural property*, not a retention policy — "the server has no
