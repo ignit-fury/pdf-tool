@@ -676,6 +676,41 @@ def page_text_boxes(pdf: pikepdf.Pdf, source: bytes, page: int) -> list[dict[str
     return [spec for spec,_ in _owned(pdf,page)]
 
 
+def _move_boxes(pdf: pikepdf.Pdf, page_index: int, ids: list[str], dy: float, limit: float) -> None:
+    """Redraw the owned boxes `ids` on one page `dy` lower, each in its own /Contents slot
+    (so z-order holds). Ownership is proven once for the page; the caller's final
+    `prepare_text_box` re-proves the whole document. Refuses PUSH_DOWN_PAGE_FULL when a
+    moved rect would cross the visible y `limit`."""
+    page=pdf.pages[page_index]
+    owned={spec['id']:(spec,stream) for spec,stream in _owned(pdf,page_index)}
+    geometry=_geometry(page)
+    specs=[owned[box_id][0] for box_id in ids]
+    if any(spec.get('rotation',0) for spec in specs):
+        _fail('PUSH_DOWN_UNSUPPORTED')  # a quarter-turned box does not move down by `top`
+    if any(spec['rect']['top']+dy+spec['rect']['height']>limit+1e-6 for spec in specs):
+        _fail('PUSH_DOWN_PAGE_FULL')
+    contents=_contents(page)
+    resources=pikepdf.Dictionary(cast(Any,page.obj.get('/Resources',{})))
+    fonts=pikepdf.Dictionary(cast(Any,resources.get('/Font',{})))
+    for spec in specs:
+        moved=_spec({**spec,'rect':{**spec['rect'],'top':spec['rect']['top']+dy}},len(pdf.pages))
+        _in_page(moved,geometry)
+        drawing=_drawing(pdf,moved,geometry)
+        metadata=_json(dict(version=1,spec=moved))
+        if len(metadata)>MAX_METADATA:_fail('TEXT_BOX_LIMIT')
+        for name,font in drawing.fonts.items():
+            if fonts.get(name) is not None and _canonical(fonts[name])!=_canonical(font):
+                _fail('TEXT_BOX_UNSAFE')
+            fonts[name]=font
+        stream=pikepdf.Stream(pdf,drawing.stream)
+        stream.NativeTextBox=pikepdf.String(metadata)
+        old=owned[spec['id']][1].objgen
+        contents=[stream if s.objgen==old else s for s in contents]
+    resources.Font=fonts
+    page.obj.Resources=resources
+    page.obj.Contents=pikepdf.Array(contents)
+
+
 def prepare_text_box(pdf: pikepdf.Pdf, source: bytes, payload: object) -> dict[str,object]:
     """Return a source-bound list, exact candidate PDF, or finite layout refusal."""
     request=_dict(payload,{'operation','page_index','id','text','rect','style','runs','allow_overlap','auto_expand'})

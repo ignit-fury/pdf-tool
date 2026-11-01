@@ -10,7 +10,7 @@ from typing import Any
 import pikepdf
 
 from engine.recipe import RecipeOp, RecipeTooLargeError, apply_recipe, parse_recipe
-from engine.text_boxes import TextBoxError, _geometry, page_text_boxes, prepare_text_box
+from engine.text_boxes import TextBoxError, _geometry, _move_boxes, prepare_text_box
 
 
 def _validated_initial_pair(path: Path, password: str, page: object,
@@ -147,20 +147,27 @@ def _columns(path: Path, password: str, page: int) -> bool:
 def _pushed_insert(intermediate: Path, materialized: bytes, insertion: dict[str, Any],
                    required: float) -> tuple[dict[str, object], float]:
     """Grow the box by exactly the height its text needs and move the content below
-    down by the same amount; one more line if it still collides. Each attempt works on
+    down by the same amount; on a collision, cut at the bottom itself, then one more line. Each attempt works on
     a fresh copy of the intermediate, so a refusal leaves nothing half-applied."""
     rect=insertion['rect']
     dy=math.ceil(required*100)/100-float(rect['height'])  # the height auto_expand grows to
     style=insertion['style']
     size=float(style.get('font_size',12))
-    for extra in (0.0,size*float(style.get('line_spacing',1.2))):
+    line=size*float(style.get('line_spacing',1.2))
+    # An overlap first retries with the cut at the paragraph bottom itself (an item in the
+    # margin zone then moves too), then with one more line of push.
+    attempts=[(0.0,size*.1),(0.0,0.0),(line,0.0)]
+    for attempt,(extra,margin) in enumerate(attempts):
         try:
             with pikepdf.open(intermediate) as pdf:
-                _push(pdf,materialized,insertion['page_index'],rect,dy+extra,size*.1)
+                _push(pdf,insertion['page_index'],rect,dy+extra,margin)
                 result=prepare_text_box(pdf,materialized,insertion)
         except TextBoxError as error:
-            if error.code!='TEXT_BOX_OVERLAP' or extra:
+            if attempt==len(attempts)-1 or error.code not in (
+                    'TEXT_BOX_OVERLAP',*(('PUSH_DOWN_STRADDLE',) if attempt==1 else ())):
                 raise
+            if error.code=='PUSH_DOWN_STRADDLE':
+                attempts[2]=(line,size*.1)  # the bottom cut splits an item: keep the margin cut
             continue
         if not result['ok']:
             raise TextBoxError('PUSH_DOWN_PAGE_FULL')  # the box itself would cross the page bottom
@@ -168,10 +175,10 @@ def _pushed_insert(intermediate: Path, materialized: bytes, insertion: dict[str,
     raise AssertionError
 
 
-def _push(pdf: pikepdf.Pdf, source: bytes, page_index: int, rect: dict[str, float],
+def _push(pdf: pikepdf.Pdf, page_index: int, rect: dict[str, float],
           dy: float, margin: float) -> None:
     """Move everything below the paragraph's bottom (visible top-left coordinates)
-    down by `dy`, including the native boxes there, which are re-upserted lower."""
+    down by `dy`, including the native boxes there, which are redrawn lower in place."""
     from engine.push_down import PushDownRefused, push_down
     geometry=_geometry(pdf.pages[page_index])
     a,b,c,d,e,f=geometry.matrix
@@ -179,6 +186,7 @@ def _push(pdf: pikepdf.Pdf, source: bytes, page_index: int, rect: dict[str, floa
         raise TextBoxError('PUSH_DOWN_UNSUPPORTED')  # rotated page: "down" is not -y
     bottom=rect['top']+rect['height']
     kept: list[str]=[]
+    floors: list[float]=[]
     def keep(box_id: str) -> bool:
         kept.append(box_id)
         return True
@@ -186,24 +194,16 @@ def _push(pdf: pikepdf.Pdf, source: bytes, page_index: int, rect: dict[str, floa
         try:
             # Cut half a line gap below the bottom; ink above the next line's ascender is
             # outside push_down's extents. shortcut: 0.1em (half the 1.2 leading), not measured.
-            push_down(pdf,page_index,f-d*(bottom+margin),dy*d,keep=keep)
+            push_down(pdf,page_index,f-d*(bottom+margin),dy*d,keep=keep,floor=floors.append)
         except PushDownRefused as refused:
-            if refused.code!='PUSH_DOWN_STRADDLE':
+            if refused.code!='PUSH_DOWN_STRADDLE' or not margin:
                 raise
             kept.clear()  # the margin reached into the next item: cut at the bottom itself
-            push_down(pdf,page_index,f-d*bottom,dy*d,keep=keep)
+            floors.clear()
+            push_down(pdf,page_index,f-d*bottom,dy*d,keep=keep,floor=floors.append)
     except PushDownRefused as refused:
         raise TextBoxError(refused.code) from None
-    if not kept:
-        return
-    boxes={box['id']:box for box in page_text_boxes(pdf,source,page_index)}
-    for box_id in kept:
-        spec=boxes[box_id]
-        moved={**spec['rect'],'top':spec['rect']['top']+dy}
-        if moved['top']+moved['height']>geometry.height+1e-6:
-            raise TextBoxError('PUSH_DOWN_PAGE_FULL')
-        # Its neighbours moved by the same dy, so its overlap state is unchanged.
-        prepare_text_box(pdf,source,{'operation':'upsert','id':box_id,'page_index':page_index,
-                                     'text':spec['text'],'rect':moved,'style':spec['style'],
-                                     **({'runs':spec['runs']} if 'runs' in spec else {}),
-                                     'allow_overlap':True})
+    if kept:
+        # A moved box must stay above a staying page frame, like the content push_down moved.
+        limit=min(geometry.height,(f-floors[0])/d) if floors and math.isfinite(floors[0]) else geometry.height
+        _move_boxes(pdf,page_index,kept,dy,limit)

@@ -316,3 +316,21 @@ def test_group_ending_before_a_staying_line_restores_the_line_matrix() -> None:
     before_lines, after_lines = text_lines(data), text_lines(after)
     assert after_lines == {text: (left, round(bottom - (0 if text == 'High line' else 30), 3))
                            for text, (left, bottom) in before_lines.items()}
+
+
+def test_undecodable_part_refuses_as_unsupported() -> None:
+    with pikepdf.open(io.BytesIO(one_page(MULTILINE))) as pdf:
+        bad = pikepdf.Stream(pdf, b'not flate at all')
+        bad.Filter = pikepdf.Name.FlateDecode  # read_bytes() raises pikepdf.DataDecodingError
+        pdf.pages[0].Contents = pikepdf.Array([pdf.pages[0].Contents, bad])
+        with pytest.raises(PushDownRefused) as caught:
+            push_down(pdf, 0, 479, 30)
+        assert (caught.value.code, caught.value.detail) == ('PUSH_DOWN_UNSUPPORTED', 'unreadable_stream')
+
+
+def test_glyphless_show_draws_nothing_and_cannot_straddle() -> None:
+    # A deleted run leaves `[() -5000] TJ`: an advance with no ink, here crossing the cut.
+    placeholder = b'BT /F1 12 Tf 72 480 Td [() -5000] TJ ET '
+    moved, after = push(one_page(placeholder + MULTILINE.replace(b'500', b'470')), 479, 30)
+    assert moved == 4  # the four lines below; the placeholder stays
+    assert refused(one_page(placeholder.replace(b'()', b'(x)') + MULTILINE), 479, 30) == 'PUSH_DOWN_STRADDLE'

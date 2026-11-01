@@ -7,12 +7,13 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import math
 import unicodedata
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from engine.index import RunIndex
-from engine.paragraphs import page_paragraphs
+from engine.paragraphs import Paragraph, page_paragraphs
 from engine.recipe import RecipeOp, RecipeTooLargeError, _validated_style, apply_recipe, parse_recipe
 from engine.records import RunRecord
 from engine.source_text_box import prepare_source_text_box
@@ -113,6 +114,43 @@ def styled_runs(old_lines: Sequence[Sequence[Segment]], new_text: str,
     return out
 
 
+RECT_TOLERANCE = 2.0  # points: pdf.js and engine float rounding of the same run boxes
+
+
+def _checked_rect(path: Path, password: str, page: int, paragraph: Paragraph,
+                  client: object) -> dict[str, float]:
+    """The client's rect, refused unless it holds the paragraph's own run boxes (as the
+    page listing boxes them) within RECT_TOLERANCE, with the bottom set from those boxes:
+    the bottom is the push cut line, so the browser never decides what moves."""
+    import pikepdf
+    from engine.boxes import run_box
+    from engine.classify_run import stream_bytes_and_resources
+    from engine.run_id import decode_run_id
+    from engine.text_boxes import _geometry
+    if not isinstance(client, dict) or set(client) != {'left', 'top', 'width', 'height'} \
+            or not all(type(v) in (int, float) and math.isfinite(v) for v in client.values()):
+        raise TextBoxError('INVALID_TEXT_BOX')
+    points: list[tuple[float, float]] = []
+    with pikepdf.open(path, password=password) as pdf:
+        geometry = _geometry(pdf.pages[page])
+        streams: dict[tuple[int, tuple[int, ...]], tuple[bytes, Any]] = {}
+        for run in (r for line in paragraph.lines for r in line):
+            address = decode_run_id(run.run_id)
+            key = (address['part'], address['xobj_path'])
+            if key not in streams:
+                streams[key] = stream_bytes_and_resources(pdf, page, *key)
+            x0, y0, x1, y1 = run_box(run, *streams[key])
+            points += [geometry.visible(x, y) for x in (x0, x1) for y in (y0, y1)]
+    left, top = min(x for x, _ in points), min(y for _, y in points)
+    right, bottom = max(x for x, _ in points), min(max(y for _, y in points), geometry.height)
+    c = {k: float(v) for k, v in client.items()}
+    t = RECT_TOLERANCE
+    if (c['left'] > left + t or c['top'] > top + t or c['left'] + c['width'] < right - t
+            or abs(c['top'] + c['height'] - bottom) > t or bottom - c['top'] <= 0):
+        raise TextBoxError('INVALID_TEXT_BOX')
+    return {**c, 'height': bottom - c['top']}
+
+
 def prepare_paragraph_edit(path: Path, source: bytes, payload: dict[str, Any], scratch: Path, *,
                            password: str = '') -> dict[str, object]:
     keys = {'operation', 'paragraph_id', 'source_run_ids', 'page_index', 'lines', 'style',
@@ -187,10 +225,11 @@ def prepare_paragraph_edit(path: Path, source: bytes, payload: dict[str, Any], s
     styles = {run_id: {**value, **run_part} for run_id, value in run_styles.items()}
     runs = styled_runs([line_segments(line, effective) for line in paragraph.lines], text, styles)
     first_style = styles[paragraph.run_ids[0]]
+    rect = _checked_rect(path, password, page, paragraph, payload['rect'])
     rebuild = {'operation': 'replace-source', 'paragraph_id': paragraph.paragraph_id,
                'source_run_ids': list(paragraph.run_ids), 'recipe': payload['recipe'],
                'page_index': page, 'text': text, 'runs': runs,
-               'rect': payload['rect'], 'auto_expand': True,
+               'rect': rect, 'auto_expand': True,
                'style': {'font_family': 'Sans', **first_style,
                          **{k: v for k, v in payload['style'].items() if k == 'character_spacing'}}}
     result = prepare_source_text_box(path, source, rebuild, scratch / 'paragraph-base.pdf',

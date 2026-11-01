@@ -444,11 +444,14 @@ class _Walker:
                 line = lines[-1]
                 line.last = index
                 line.advance += self._advance(op, args, state)
-                size = abs(state.font_size)
-                # Every show on the line is bounded by [origin, origin + summed advance].
-                ys = _ys(line.origin, [(x, y) for x in (0.0, line.advance)
-                                       for y in (state.rise+state.descent*size, state.rise+state.ascent*size)])
-                line.lo, line.hi = min(line.lo, *ys), max(line.hi, *ys)
+                shown = args[-1:] if op in ("'", '"', 'Tj') else (list(args[0]) if args else [])
+                # No glyph, no ink: e.g. a deleted run's `[() -7504] TJ` placeholder.
+                if any(isinstance(item, (pikepdf.String, bytes)) and len(bytes(item)) for item in shown):
+                    size = abs(state.font_size)
+                    # Every show on the line is bounded by [origin, origin + summed advance].
+                    ys = _ys(line.origin, [(x, y) for x in (0.0, line.advance)
+                                           for y in (state.rise+state.descent*size, state.rise+state.ascent*size)])
+                    line.lo, line.hi = min(line.lo, *ys), max(line.hi, *ys)
             else:
                 self._state_op(op, args, state)
             clipping |= state.render >= 4
@@ -541,7 +544,10 @@ def _parse_parts(contents: list[pikepdf.Object], tags: list[str | None]) -> tupl
     exactly those operators, the whole page parsed at once gives their operands. Returns
     the parts and each truncated part index: rewriting part p or p+1 then rewrites both.
     """
-    raw = [stream.read_bytes() for stream in contents]
+    try:
+        raw = [stream.read_bytes() for stream in contents]
+    except (pikepdf.PdfError, pikepdf.DataDecodingError):
+        raise _refuse(detail='unreadable_stream') from None  # e.g. a corrupt filter
     alone = [_parse(data) for data in raw]
     truncated = [p for p, (_, cut) in enumerate(alone) if cut]
     if not truncated:
@@ -615,7 +621,8 @@ def _annotation_moves(pdf: pikepdf.Pdf, page: pikepdf.Page, y_cut: float, dy: fl
 
 
 def push_down(pdf: pikepdf.Pdf, page_index: int, y_cut: float, dy: float, *,
-              keep: Callable[[str], bool] = lambda _: False) -> int:
+              keep: Callable[[str], bool] = lambda _: False,
+              floor: Callable[[float], None] = lambda _: None) -> int:
     """Translate every top-level drawing item whose top lies at or below `y_cut`
     (default user space, PDF y-up) down by `dy` points. Mutates the page in place and
     returns the number of moved items. Raises PushDownRefused without mutating anything.
@@ -625,21 +632,25 @@ def push_down(pdf: pikepdf.Pdf, page_index: int, y_cut: float, dy: float, *,
     re-upserts it lower). A box that crosses the cut refuses with PUSH_DOWN_STRADDLE,
     and one the caller does not keep refuses with PUSH_DOWN_UNSUPPORTED. `keep` is
     called only after every other check has passed, and only for boxes wholly below.
+    Before that, `floor(y)` receives the highest bottom of any staying page-spanning frame
+    (PDF y, -inf when none): the caller must keep the boxes it moves above it.
     """
     if not (math.isfinite(y_cut) and math.isfinite(dy) and dy > 0):
         raise ValueError('y_cut must be finite and dy positive')
     page = pdf.pages[page_index]
     try:
-        return _push_down(pdf, page_index, page, y_cut, dy, keep)
+        return _push_down(pdf, page_index, page, y_cut, dy, keep, floor)
     except PushDownRefused:
         raise
     except (TypeError, ValueError, IndexError):
         # Malformed operands or dictionaries; raised before the first write.
         raise _refuse(detail='bad_operand') from None
+    except (pikepdf.PdfError, pikepdf.DataDecodingError):
+        raise _refuse(detail='unreadable_stream') from None  # an undecodable object, read lazily
 
 
 def _push_down(pdf: pikepdf.Pdf, page_index: int, page: pikepdf.Page, y_cut: float, dy: float,
-               keep: Callable[[str], bool]) -> int:
+               keep: Callable[[str], bool], floor: Callable[[float], None]) -> int:
     if int(page.obj.get('/Rotate', 0)) % 360:
         raise _refuse(detail='rotated_page')  # "down" would not be -y on screen
     raw = page.obj.get('/Contents')
@@ -669,6 +680,7 @@ def _push_down(pdf: pikepdf.Pdf, page_index: int, page: pikepdf.Page, y_cut: flo
         raise _refuse('PUSH_DOWN_STRADDLE', plan.straddle)
     if plan.lowest < max(crop[0], plan.background_floor):
         raise _refuse('PUSH_DOWN_PAGE_FULL', 'page' if plan.lowest < crop[0] else 'background')
+    floor(plan.background_floor)
     if not all([keep(box) for box in below]):  # every id is reported, even after a False
         raise _refuse(detail='native_box_not_kept')
 
