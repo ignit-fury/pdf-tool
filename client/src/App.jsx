@@ -12,7 +12,7 @@ import FloatingTextTools from './viewer/FloatingTextTools.jsx';
 import ImageToolbar,{ImageHandles} from './viewer/ImageEditor.jsx';
 import TextBoxToolbar,{TextBoxOverlay} from './textBoxes/TextBoxEditor.jsx';
 import {createTextBoxController} from './textBoxes/controller.mjs';
-import {newTextBox,textBoxPayload,draftError,explainTextBoxError} from './textBoxes/model.mjs';
+import {newTextBox,textBoxPayload,draftError,explainTextBoxError,explainParagraphError} from './textBoxes/model.mjs';
 import './textBoxes/textBoxes.css';
 import {historyJump} from './viewer/history.mjs';
 import OutlinePanel from './viewer/OutlinePanel.jsx';
@@ -278,7 +278,7 @@ export default function App(){
       const payload=paragraphPayload({paragraph:sel.paragraph,lines:sel.lines,style:sel.style,recipe:recipeState.recipe,rect,runsById:runs});
       const result=await textBoxController.preview(payload,{acknowledged});
       if(!stillOpen()){textBoxController.cancel();return;}
-      if(!result?.prepared){refuse(explainTextBoxError(result));return;}
+      if(!result?.prepared){refuse(explainParagraphError(result));return;}
       if(result.plan==='rebuild'){rebuild=payload;pushed=result.pushed||0;} // published below, after this owner is released
       else if((accepted=textBoxController.take(payload))){
         // Same publish as the old inline apply(): source kept, recipe replaced, one history entry.
@@ -295,7 +295,7 @@ export default function App(){
         target.pages.delete(number);
         fetchRuns(number,0).then(data=>{const fresh=data?.paragraphs?.find(p=>p.paragraph_id===sel.paragraph.paragraph_id);if(fresh&&paragraphRef.current?.paragraph.paragraph_id===fresh.paragraph_id)setParagraph(s=>({...s,paragraph:{...fresh,page_index:number-1}}));}).catch(()=>{});
       }
-      else refuse(['RETENTION_LIMIT','TRANSIENT_LIMIT','HISTORY_LIMIT'].includes(error.code)?localFailure(error):explainTextBoxError(error));
+      else refuse(['RETENTION_LIMIT','TRANSIENT_LIMIT','HISTORY_LIMIT'].includes(error.code)?localFailure(error):explainParagraphError(error));
     }finally{accepted?.prepared.dispose?.();finishWork(owner);if(!rebuild){committingRef.current=false;settle();}}
     if(!rebuild)return;
     // Rebuild publishes exactly like an applied text box, then re-analyzes so the next click is editable.
@@ -627,7 +627,7 @@ export default function App(){
           {mode==='edit'&&index[number]?.paragraphs&&<ParagraphOutlines paragraphs={index[number].paragraphs} runs={index[number].runs} viewport={viewport} activeId={paragraphSelection?.paragraph.page_index===number-1?paragraphSelection.paragraph.paragraph_id:null} onChoose={(paragraph,event)=>chooseParagraph(paragraph,number,event)}/>}
           {paragraphSelection?.paragraph.page_index===number-1&&<>
             <FloatingTextTools box={viewportBox(paragraphSelection.paragraph.box,viewport)}><TextToolbar run={runsFor(number).get(paragraphSelection.paragraph.lines[0][0])||{run_id:paragraphSelection.paragraph.paragraph_id}} style={paragraphSelection.style} busy={busy} status={paragraphSelection.status} onStyle={value=>setParagraph(s=>({...s,style:value,status:null}))} onDelete={()=>{setParagraph(s=>({...s,lines:s.lines.map(()=>''),caret:{line:0,offset:0},status:null,reset:s.reset+1}));commitParagraph();}} onRevert={cancelParagraph}/></FloatingTextTools>
-            <ParagraphEditor key={paragraphSelection.paragraph.paragraph_id} resetKey={paragraphSelection.reset} paragraph={paragraphSelection.paragraph} lines={paragraphSelection.lines} runsById={runsFor(number)} style={paragraphSelection.style} viewport={viewport} caret={paragraphSelection.caret} busy={!!busy} status={paragraphSelection.status} onLines={lines=>setParagraph(s=>({...s,lines,status:null}))} onCommit={()=>commitParagraph(false)} onCancel={cancelParagraph}/>
+            <ParagraphEditor key={paragraphSelection.paragraph.paragraph_id} resetKey={paragraphSelection.reset} paragraph={paragraphSelection.paragraph} lines={paragraphSelection.lines} runsById={runsFor(number)} style={paragraphSelection.style} viewport={viewport} caret={paragraphSelection.caret} busy={!!busy} status={paragraphSelection.status} onLines={lines=>setParagraph(s=>({...s,lines,status:null}))} onCommit={()=>commitParagraph()} onCancel={cancelParagraph}/>
           </>}
           {mode==='text-box'&&localMetadata&&<TextBoxOverlay number={number} viewport={viewport} geometry={localMetadata.pages[number-1]} draft={textBoxDraft} boxes={textBoxes} state={textBoxState} disabled={!!busy} onPlace={placeTextBox} onSelect={selectTextBox} onDraft={changeTextBox}/>}
           {mode==='image'&&localMetadata&&<ImageHandles images={localMetadata.pages[number-1].managedImages||[]} selected={(activeImage?.pageNumber||activeImage?.page)===number?activeImage:null} geometry={localMetadata.pages[number-1]} viewport={viewport} disabled={!!busy} onSelect={image=>chooseManaged(image,number)} onChange={value=>imageDraft?.inline?setImageDraft(value):setManagedSelection(value)}/>}

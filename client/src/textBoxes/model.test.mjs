@@ -36,3 +36,10 @@ test('expansion never silently clips text at the page edge',()=>{
   assert.equal(expandTextBox(draft,200.111,{visibleHeight:800}).rect.height,200.12);
   assert.equal(expandTextBox(draft,900,{visibleHeight:800}),null);
 });
+
+test('paragraph overlap tells the user to shorten; text-box mode keeps its own advice',async()=>{
+  const {explainParagraphError,explainTextBoxError}=await import('./model.mjs');
+  assert.equal(explainParagraphError({code:'TEXT_BOX_OVERLAP'}),'The longer text would cover other content on this page (for example a shaded area or a frame). Shorten the text to fit.');
+  assert.match(explainTextBoxError({code:'TEXT_BOX_OVERLAP'}),/allow transparent overlap/);
+  assert.equal(explainParagraphError({code:'PUSH_DOWN_PAGE_FULL'}),explainTextBoxError({code:'PUSH_DOWN_PAGE_FULL'}));
+});
