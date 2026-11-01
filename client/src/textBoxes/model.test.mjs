@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {newTextBox,textBoxPayload,draftError,expandTextBox,wordRect,fitTextRect,growTextBox,explainInsertError,draftSignature,relocateRefused,DEFAULT_STYLE} from './model.mjs';
+import {newTextBox,textBoxPayload,draftError,expandTextBox,wordRect,fitTextRect,growTextBox,fixedOnOpen,explainInsertError,draftSignature,relocateRefused,DEFAULT_STYLE} from './model.mjs';
 
 test('source expansion keeps the draft/recipe, uses physical formatting and normalizes tabs',async()=>{
   const {sourceTextBox}=await import('./model.mjs');
@@ -83,4 +83,17 @@ test('paragraph overlap tells the user to shorten; text-box mode keeps its own a
   assert.equal(explainParagraphError({code:'TEXT_BOX_OVERLAP'}),'The longer text would cover other content on this page (for example a shaded area or a frame). Shorten the text to fit.');
   assert.match(explainTextBoxError({code:'TEXT_BOX_OVERLAP'}),/allow transparent overlap/);
   assert.equal(explainParagraphError({code:'PUSH_DOWN_PAGE_FULL'}),explainTextBoxError({code:'PUSH_DOWN_PAGE_FULL'}));
+});
+test('on open, a natural-width box keeps growing; a soft-wrapped box holds its width',()=>{
+  const geometry={visibleWidth:600,visibleHeight:800},style={...DEFAULT_STYLE};
+  const note={page_index:0,text:'Note',style,rect:{left:100,top:200,width:26,height:12*1.2}};
+  assert.equal(fixedOnOpen(note.rect,[20]),null,'auto-width: line fits the saved width');
+  const appended=growTextBox({...note,text:'Note: paging is covered in 5.3',fixed:fixedOnOpen(note.rect,[20])},geometry,[170]);
+  assert.ok(appended.rect.width>170,'appended text widens the box');assert.equal(appended.rect.height,12*1.2,'still one line');
+  const wrapped={...note,rect:{left:100,top:200,width:80,height:43.2}};
+  const fixed=fixedOnOpen(wrapped.rect,[230]);assert.deepEqual(fixed,{width:80,height:43.2});
+  assert.equal(growTextBox({...wrapped,fixed},geometry,[260]).rect.width,80,'wrapped box keeps its width');
+  assert.equal(fixedOnOpen({width:105},[100]),null,'a line exactly at the width counts as auto-width');
+  assert.equal(fixedOnOpen({width:105,height:14},[100,10]),null,'every hard line must fit');
+  assert.notEqual(fixedOnOpen({width:105,height:14},[100,101]),null);
 });

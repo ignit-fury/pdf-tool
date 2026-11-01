@@ -31,6 +31,12 @@ export function measureLineWidths(text,style){
   context.font=`${style.italic?'italic ':''}${style.bold?'700 ':''}${style.font_size}px ${FONT_STACKS[style.font_family]||FONT_STACKS.Sans}`;
   return text.split('\n').map(line=>context.measureText(line).width+(style.character_spacing||0)*Array.from(line).length);
 }
+/** On open, decide per box. If every hard line of the saved text fits the saved width (with slack),
+ * the box sat at its natural width: return null so it keeps growing in width like a new draft.
+ * Otherwise its text soft-wraps inside that width (e.g. a paragraph rebuild): hold the width, grow height. */
+export function fixedOnOpen(rect,widths){
+  return widths.every(w=>slack(w)<=rect.width+0.5)?null:{width:rect.width,height:rect.height}; // 0.5pt: font rounding
+}
 export function growTextBox(draft,geometry,widths=measureLineWidths(draft.text,draft.style)){
   return {...draft,rect:fitTextRect(draft.rect,widths,draft.style,geometry,draft.fixed)};
 }

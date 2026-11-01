@@ -12,7 +12,7 @@ import FloatingTextTools from './viewer/FloatingTextTools.jsx';
 import ImageToolbar,{ImageHandles} from './viewer/ImageEditor.jsx';
 import {TextBoxOverlay} from './textBoxes/TextBoxEditor.jsx';
 import {createTextBoxController} from './textBoxes/controller.mjs';
-import {newTextBox,growTextBox,draftSignature,relocateRefused,textBoxPayload,draftError,explainTextBoxError,explainParagraphError,explainInsertError} from './textBoxes/model.mjs';
+import {newTextBox,growTextBox,fixedOnOpen,measureLineWidths,draftSignature,relocateRefused,textBoxPayload,draftError,explainTextBoxError,explainParagraphError,explainInsertError} from './textBoxes/model.mjs';
 import './textBoxes/textBoxes.css';
 import {historyJump} from './viewer/history.mjs';
 import OutlinePanel from './viewer/OutlinePanel.jsx';
@@ -375,7 +375,7 @@ export default function App(){
   const openTextBox=box=>{
     const geometry=localMetadata?.pages[box.page_index];if(busyOwnerRef.current||committingRef.current||!geometry)return;
     textBoxController.invalidate();setParagraph(null);
-    const base={...structuredClone(box),allow_overlap:false,auto_expand:true,fixed:{width:box.rect.width,height:box.rect.height},serial:++textSerial.current,status:null};
+    const base={...structuredClone(box),allow_overlap:false,auto_expand:true,fixed:box.rotation?null:fixedOnOpen(box.rect,measureLineWidths(box.text,box.style)),serial:++textSerial.current,status:null};
     // A box rotated with its page opens read-only (its layout is not editable); Delete still works.
     const opened=box.rotation?{...base,readOnly:true}:growTextBox(base,geometry);
     setTextDraft({...opened,original:draftSignature(opened)});setPage(box.page_index+1);
@@ -394,7 +394,9 @@ export default function App(){
     if(mode!=='edit'||!meta||!target||busyOwnerRef.current||committingRef.current||(binding?.session===target&&binding.bytes===target.bytes))return;
     const bytes=target.bytes;
     textBoxController.list().then(boxes=>{if(current(target)&&sessionRef.current===target&&target.bytes===bytes){textBoxListRef.current={session:target,bytes};setTextBoxes(boxes);}}).catch(()=>{});
-  },[mode,meta,textBoxController]);
+  // Re-run on any new document bytes (publish, Undo/Redo), when work goes idle, and when a draft opens,
+  // closes or is refused, so a list aborted by a draft's invalidate() is retried. Bound lists are skipped.
+  },[mode,meta,textBoxController,session,session?.bytes,busy,textBoxDraft?.serial,textBoxDraft?.status]);
   const applyTextBox=async()=>{
     const candidate=textBoxController.previewResult,payload=textBoxPayloadRef.current,target=sessionRef.current;
     if(!candidate||!payload||typeof localMetadata?.signed!=='boolean'||localMetadata.signed&&!acknowledged)return;
