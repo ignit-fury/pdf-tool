@@ -1,0 +1,218 @@
+filename,pages,pages_with_editable_candidates,pages_with_restricted_runs,editable_original_runs,editable_substitution_runs,restricted_runs,read_errors,preflight_refused_pages,edit_sample_pages,edit_outcome,independently_verified_outputs,manual_font_tested,sample_refusals,source_sha256,source_unchanged
+far_federal_acquisition_regulation.pdf,2026,2019,0,139600,20,0,0,0,1,Verified pair,2,False,,f22a17e30ff99682edcba9f6827e349cac0ecbe8908888c08616a81397e85bca,True
+govdocs1_000_000009.pdf,4,4,1,48,2897,2224,0,0,1,Sampled edits refused,0,False,operator_shared_by_multiple_runs; part_boundary_truncated,3fcfd899850be006b2d6616f8161e49479bc41424fa80e404f41233b77256ff3,True
+govdocs1_000_000010.pdf,4,4,1,331,0,2115,0,0,1,Sampled edits refused,0,False,operator_shared_by_multiple_runs; part_boundary_truncated,7832f844839ed04e2979bc565642f36bf76e1682137071f0786d4c7418bf81d7,True
+govdocs1_000_000011.pdf,1,1,0,15,7,0,0,0,1,Verified pair,2,False,,44d4296ee6750f96a34455cf5d6d6e0a574ffe1419928780b5d2fddea0af3778,True
+govdocs1_000_000013.pdf,2,2,0,413,74,0,0,0,1,Verified pair,2,True,unmapped original font,76c4dfb49667db90af7acdfba9e1d366fe14c4af6197d9f1daacb39a6511d0a1,True
+govdocs1_000_000015.pdf,2,2,0,704,0,0,0,0,1,Verified pair,2,True,unmapped original font,eca0f217f9fdbc5f9509894e45b247dc4cb611f534832bd368f791f4bd14796b,True
+govdocs1_000_000016.pdf,4,4,2,349,0,1688,0,0,1,Sampled edits refused,0,False,part_boundary_truncated; stale_run_index,58fe21359f9caba5bb1224d65026c5333f9747c1fe8d9d94d8f21294ecc1f53a,True
+govdocs1_000_000018.pdf,9,9,3,297,322,99,0,0,1,Verified pair,2,False,,ed65a432e4091cf9a7b9ff7983055dbeee91752c864dca14baa35b1e85ce1103,True
+govdocs1_000_000019.pdf,3,3,0,186,0,0,0,0,1,Verified pair,2,False,,dc738585d318b2992a41b12832788b24fed94d318ef962103fbeaa613c7ca93c,True
+govdocs1_000_000024.pdf,1,1,1,0,65,272,0,0,1,Verified pair,2,False,,dfa3b40bd8422184f589df4329e3f5a5f07884905d3d82e529cc75f6082eb8bb,True
+govdocs1_000_000025.pdf,4,4,3,384,0,1569,0,0,1,Sampled edits refused,0,False,part_boundary_truncated,c6df45d7788b84731ab863999834f7e196b8561f15541690c6a096bedd1a22eb,True
+govdocs1_000_000026.pdf,5,5,1,1515,0,2312,0,0,1,Some edits verified,1,True,operator_shared_by_multiple_runs; unmapped original font; width/fit limit,7f0d5dffdf7aebaf5a6aa5c9344b8685a68a670fe0904c3162c770e68cc8da2e,True
+govdocs1_000_000028.pdf,13,13,5,907,0,7,0,0,1,Verified pair,2,False,,99ec2ff852b8692a7f1a2a27de8b6d8125faa8aba8a35c6f88b4a0c68ca6e3fc,True
+govdocs1_000_000029.pdf,1,1,1,993,0,66,0,0,1,Sampled edits refused,0,False,stale_run_index,0688ba309c87485dd8d96c1d9d29db420f59973b50c65324ce040dca8d34a817,True
+govdocs1_000_000135.pdf,8,8,3,1287,0,3790,0,0,1,Text verification inconclusive,0,False,,677d1055b3490d275fb9abfadc03d0b5be9d9ae5f17e89e0aed6935a59c1bce7,True
+govdocs1_000_000137.pdf,4,4,1,0,219,349,0,0,1,Verified pair,2,False,,a17891eddc4266fab4282fd397372a5e188eec545359d7a85e87c8a2b2fd0ece,True
+govdocs1_001_001024.pdf,59,59,0,38815,0,0,0,0,1,Verified pair,2,False,,58711fbe3c949f107873eb89d423a682422e891a9dda9a6404a14596ff9d4d19,True
+govdocs1_001_001028.pdf,59,59,1,38604,0,2465,0,0,1,Verified pair,2,False,,944a15d32ff64dc2fce0836f502c2f29e8b6c650dc9f3949b455de943d2f2de2,True
+govdocs1_001_001029.pdf,129,123,2,9208,8,1233,0,0,1,Verified pair,2,True,unmapped original font,ec2bee6100dd9d7d50a4f6f5400618403ccfadf5f82cb1a3ca8b6b2cebcd8b49,True
+govdocs1_001_001030.pdf,3,3,0,642,0,0,0,0,1,Verified pair,2,True,unmapped original font,51af1f89b9a4747d75f8777908eedf8b945d5aaeced9211651ca6c881110811e,True
+govdocs1_001_001031.pdf,4,4,0,231,0,0,0,0,1,Verified pair,2,False,,068bd51d5c74ad032d97a0ccf7964a92c48e19c3b51a87929f35c11018322ad6,True
+govdocs1_001_001032.pdf,78,77,3,2718,0,10,0,0,1,Verified pair,2,False,,4674cd019e9463f5766ee553e16cd067fcb7b793ac0a82e6973d3d95e4654cea,True
+govdocs1_001_001033.pdf,24,24,1,1022,0,5,0,0,1,Verified pair,2,False,,055db9930276ac42d0c12f3ea0babb65ef8ff4414b6c5033e415450a16afc84d,True
+govdocs1_001_001034.pdf,99,99,0,4411,0,0,0,0,1,Verified pair,2,False,,72fa826808b7e0fa049692c93ea59155cd0c6d3e77641d5b7cc85d21ab258e77,True
+govdocs1_001_001035.pdf,30,30,0,1808,64,0,0,0,1,Verified pair,2,False,,cdbc61c3ebb7ea0724706028f8b9f43f85a5790bfef89a4da0de3c5f550e3b88,True
+govdocs1_001_001036.pdf,37,37,0,3814,62,0,0,0,1,Verified pair,2,False,,24cf5b6736214b8c47fdce90c5dffdd1148a9230b8731eee1fc1252af5a1d268,True
+govdocs1_001_001037.pdf,15,15,1,6310,0,484,0,0,1,Verified pair,2,False,,40056fcc4f430680f3a98ad73e5b6ad6a3504de8fe9862e1cc27e367ca05d274,True
+govdocs1_001_001038.pdf,46,46,1,1888,153,154,0,0,1,Verified pair,2,False,,feb775427f37db1f5c41581098499663784bff7cd3f5b8d88e744532f1b6279b,True
+govdocs1_002_002014.pdf,71,0,0,0,0,0,0,0,"1,2,3",No eligible sample candidate,0,False,,355eb1d1398055718992c2c1a0b7d3457fd5d7028e84ee33d56ca4b1ff364ad4,True
+govdocs1_002_002021.pdf,142,134,1,14577,0,1547,0,0,1,Verified pair,2,True,resolution_failed; unmapped original font,7d8fb27fddb49ac74466b31bf8c6788e763073df226bda04eaca5e80bd217f31,True
+govdocs1_002_002145.pdf,7,7,6,631,0,7,0,0,1,Verified pair,2,False,,248bde7e3d07bf0a696c84b64e86a06c92a2284a5a93d3645ad8610e621f4739,True
+govdocs1_002_002154.pdf,6,6,0,697,18,0,0,0,1,Verified pair,2,True,unmapped original font,997463fa22b20f63904cbde4f2635c611cabc8fe4da703b985d49524e1a655eb,True
+govdocs1_002_002166.pdf,102,102,0,4701,0,0,0,102,"1,2,3",Server page error,0,False,DOCUMENT_LIMIT,257f0d64f33090ebc1fd4bd9408dfd25ad0829d4eaf56bc23c89c24d78493a9f,True
+govdocs1_002_002167.pdf,6,6,4,379,2,2271,0,0,1,Sampled edits refused,0,False,part_boundary_truncated,5c73fa3f6a97fad9ebf0072241f5bdf1264186d4b8aeb7352713451e6c5dade2,True
+govdocs1_002_002168.pdf,12,12,1,32,2090,3108,0,0,1,Verified pair,2,True,unmapped original font,d87258f2ce60b9a826a12535c710266bf5d1dde552634f2b29aacb6715eccaa2,True
+govdocs1_002_002169.pdf,19,19,0,645,0,0,0,0,1,Verified pair,2,False,,302c8024884e70074735e24d237bdc0bdc311c4318b70f51fba84dd4fef11ebb,True
+govdocs1_002_002173.pdf,2,2,0,79,0,0,0,0,1,Verified pair,2,False,,37ab57b022081ccbcbb5f02b1937d07667494c2ff42f00dfac15ad47eb8e0a2b,True
+govdocs1_002_002174.pdf,32,32,15,922,0,176,0,0,1,Text verification inconclusive,0,False,,c11fa6fc26ead66fcde1b4466a4386184d10816266393871287083d10110216f,True
+govdocs1_002_002176.pdf,20,20,0,5424,0,0,0,0,"1,2,3",No eligible sample candidate,0,False,,8745c527425a4e1dd2316a0833a29f180cfe5d3276e1af113f83d1e959f1b91a,True
+govdocs1_002_002177.pdf,1,1,0,37,0,0,0,0,1,Verified pair,2,False,,b1883cc51949f3342648e912c8623ffd4abd741636699e7b222a01b121980751,True
+govdocs1_003_003005.pdf,10,10,1,1298,0,2612,0,0,1,Verified pair,2,False,stale_run_index,db3412e1da245380a51ea4b8f5c3aa0b6ff69bf8b2919f4221de5df4a08a3952,True
+govdocs1_003_003039.pdf,17,17,0,0,530,0,0,0,1,Verified pair,2,False,,c8fe93a52ec79022cdd15e7a5a01d320ec0a293d0c46d6a05733c53222ed8150,True
+govdocs1_003_003049.pdf,3,3,0,324,0,0,0,0,1,Verified pair,2,False,,25939f6e30d56d8a5913543a5c6ffd28cdf977ddc1eebd580ca96fe745160c95,True
+govdocs1_003_003060.pdf,3,3,3,129,0,10965,0,0,1,Sampled edits refused,0,False,part_boundary_truncated; stale_run_index,8ccbe657a9685855143a23fa3fbb3236a4adefb567a668851041c1a490d27d32,True
+govdocs1_003_003063.pdf,30,30,1,753,0,2769,0,0,1,Sampled edits refused,0,False,part_boundary_truncated,769381194e634a1229e8ce71f050d6bcf03618a650d49bddc9567e25e3e7dc2a,True
+govdocs1_003_003064.pdf,3,3,0,79,0,0,0,0,1,Verified pair,2,False,,646fcf2204726344805c65ea599750011e170eaac04bb8150151c9559d767009,True
+govdocs1_003_003065.pdf,20,20,20,0,2347,60,0,0,1,Verified pair,2,False,,525206257fe8b42c2f86c9c5cd1fc35061bea3f87091b1d9a3bbd0d14c068ed5,True
+govdocs1_003_003066.pdf,16,16,14,379,0,19793,0,0,1,Verified pair,2,True,unmapped original font,ec37ba182af8ba3e72a56bb7704d3f66c99ed12139e7b2b00b8b27ed6f126f2f,True
+govdocs1_003_003067.pdf,21,21,0,5047,0,0,0,0,1,Verified pair,2,False,,e7fef1f5d9cef07ee72842920ca6d567daf74ab8c015da71ef39448ef3ff4593,True
+govdocs1_003_003072.pdf,15,15,15,6080,0,1412,0,0,1,Sampled edits refused,0,False,part_boundary_truncated; stale_run_index,3e3ab387eef4bb30dbb5d9c3d7e1915a3c8bc5adf54936310eda0671e9d2147b,True
+govdocs1_003_003073.pdf,9,9,2,2294,0,10,0,0,1,Verified pair,2,True,unmapped original font,2801d6993cab320fe123e06371489654e9feff0dfb61d99cfdb50a80605d6d8a,True
+govdocs1_003_003074.pdf,8,8,1,1054,0,168,0,0,1,Some edits verified,1,True,stale_run_index; unmapped original font; width/fit limit,b01ee0f33bf49401620c6ef0e96fbb6c595f1f522302e18da7101db4e5265275,True
+govdocs1_004_004050.pdf,4,0,4,0,0,6567,0,0,"1,2,3",No eligible sample candidate,0,False,,97bd402bc8c14e97bbbbb93850d2f1d6faa6322784f6a32a094634660d48151e,True
+govdocs1_004_004116.pdf,9,9,5,381,0,10,0,0,1,Verified pair,2,False,,578fe22a79a124dec1b3143028ec0ba5bf370f0fb03137e9b7974086edc5b0c6,True
+govdocs1_004_004117.pdf,15,15,1,338,0,1,0,0,1,Verified pair,2,False,,fcc474ef89bd90f507b0666a6f676c67c0b01be574f3288ee0a4940105c25684,True
+govdocs1_004_004119.pdf,26,26,13,2774,0,66,0,0,1,Sampled edits refused,0,False,operator_shared_by_multiple_runs,ac2410fb76a06b332efc298ef2f191275c47c6ce73bec0c5f3c119eb9b71fb81,True
+govdocs1_004_004121.pdf,10,10,4,0,5839,502,0,0,1,Verified pair,2,False,,0357d543644b45bfeda08b77e272ec12d0c510dfd52d7ea4984a4c29904416a5,True
+govdocs1_004_004122.pdf,15,15,5,877,648,29,0,0,1,Verified pair,2,False,,7071208d79ff54df8345c6b62ac000e5ceafb6a8374b34e7ed84d0e597e81730,True
+govdocs1_004_004124.pdf,4,4,1,0,655,3620,0,0,1,Sampled edits refused,0,False,part_boundary_truncated,a603ce9135850454c3f37e13989ffc8d2a91877d7d841842930ce9506ffe8226,True
+govdocs1_004_004125.pdf,3,3,0,0,556,0,0,0,1,Verified pair,2,False,,02e5312c221baaa92a28a89c5758b6d2c30f3d33d0f3d3dcd53352ea1497814e,True
+govdocs1_004_004126.pdf,7,7,0,699,0,0,0,0,1,Verified pair,2,False,,74021f7216b193be13208b66400e0935d8064771d6f9c0d3473f60d1326cf782,True
+govdocs1_004_004130.pdf,2,2,2,479,0,129,0,0,1,Sampled edits refused,0,False,resolution_failed,d72dbc72311920f558097aec50f74fe3dda1c4c5665a323047a505cda22086a5,True
+govdocs1_004_004132.pdf,38,38,0,767,0,0,0,0,1,Verified pair,2,False,,eaa366cdf2aeec8be8050b303ba059ddaacfa1a830f739c59cf0423028ad34ac,True
+govdocs1_004_004133.pdf,10,10,1,49,440,33,0,0,1,Verified pair,2,False,,b13be26364be6e5184d308a32ec7a66fb10dbfd69e6296bff818074fe68544b9,True
+govdocs1_005_005000.pdf,11,11,0,832,0,0,0,0,1,Sampled edits refused,0,False,stale_run_index,51da5d93a748ac571719eeed6d616f14777afdb557a88d4a26be8a621aeddce0,True
+govdocs1_005_005004.pdf,19,19,16,0,4279,601,0,0,1,Sampled edits refused,0,False,part_boundary_truncated,c60dd235f7841babab9f0da7a210a9a6f4e755f8a52eb1df0a4dced89e0baf68,True
+govdocs1_005_005005.pdf,9,9,5,43,1698,11,0,0,1,Verified pair,2,False,,d7e3c73ee60c997c2d18c5bb2cad8ef1ea49a210c7764594054053cba07811dd,True
+govdocs1_005_005009.pdf,3,3,1,0,345,201,0,0,1,Verified pair,2,False,,64a15553a63996358c76f1404964c22599505b01398cb4aaee694f0674fd6887,True
+govdocs1_005_005010.pdf,8,8,1,451,0,1,0,0,1,Verified pair,2,False,,029b983634617e0f9273d90e2a9fdca8fcded8a2530af7b2b009c0a1d3ab6288,True
+govdocs1_005_005012.pdf,1,1,1,76,0,6,0,0,1,Verified pair,2,False,operator_shared_by_multiple_runs,a2f304e5d0ad4c8fde6919f12bffd554dfa4d6f9358121330110a6c7ce12a248,True
+govdocs1_005_005013.pdf,3,3,1,228,0,1939,0,0,1,Some edits verified,1,True,part_boundary_truncated; unmapped original font; width/fit limit,28f57098b571b00ad26e3ec7ddd068f1ac6801faa59de980ff7959a429bbff4b,True
+govdocs1_005_005015.pdf,2,2,1,75,2,1828,0,0,1,Sampled edits refused,0,False,part_boundary_truncated,f10d62ec75c84eb6cd2e40c93869e9117502ca0d13bcf37eed3ddd954a1521e8,True
+govdocs1_005_005020.pdf,60,60,14,2182,0,37,0,0,1,Verified pair,2,False,,ee5f7e4db2f9a488718651fe33ffca245f90a33648e38016ea15b6e5e7fbb51b,True
+govdocs1_005_005021.pdf,3,3,3,0,714,2429,0,0,1,Verified pair,2,False,,a5187e86d26c3f54de602f86a338e3e1dc30800ae0f3d1ac63482f2d226872f5,True
+govdocs1_005_005084.pdf,20,19,2,1822,0,776,0,0,"1,2",Verified pair,2,False,,a647a3c0e9a1d8c690725ba143f1adfc27afb87353db666bc6e3179d7a73c829,True
+govdocs1_005_005086.pdf,48,48,2,3360,0,10,0,0,1,Verified pair,2,False,,726c0ff9da61189edfa080bc8fb69c511610e595179b7bca2868884d35d8caec,True
+govdocs1_006_006027.pdf,46,46,4,2746,0,197,0,0,1,Verified pair,2,False,,861e22537e510b9220c8f9fd073de73f498d9714b9cdbd2a09871be83dc47e1b,True
+govdocs1_006_006029.pdf,12,12,1,1557,0,5,0,0,1,Verified pair,2,False,,6149c5f45e2cd344a01ab50f77d907957529e2c06fd9e7b77919a5b99dc1eb5b,True
+govdocs1_006_006031.pdf,1,1,0,262,0,0,0,0,1,Verified pair,2,False,,5eb652ff2885324d01ed1d8f5d18f17f3a4a377264752a756ec2c4ed47baf374,True
+govdocs1_006_006032.pdf,1,1,0,268,0,0,0,0,1,Verified pair,2,False,,bb3d1af80a7d25f3316ac11a572cce87cb2bd21b77f0d81c3b7201df3afb6dd5,True
+govdocs1_006_006034.pdf,7,7,0,206,0,0,0,0,1,Verified pair,2,False,,e9f8686a97a1d2c97f1564db9c6d8bcda0c132054d39a2f812da7e65a393d6bd,True
+govdocs1_006_006037.pdf,13,13,1,0,576,3,0,0,1,Text verification inconclusive,0,False,,ae5a3fdb50e6e33a389d12f575238b0510c157790312074d64839bcde38a1dc4,True
+govdocs1_006_006040.pdf,7,7,0,1010,64,0,0,0,1,Verified pair,2,True,unmapped original font,328d60db9ebf578f970141b9c76c0948454045cede79df069cd3eb0ed160629c,True
+govdocs1_006_006046.pdf,4,4,1,676,0,2116,0,0,1,Verified pair,2,False,,ca235bdf9311dd4b33ce3399b7942aa15cbf5f7293a99365cbd3d8b44f5deb7d,True
+govdocs1_006_006047.pdf,52,51,0,1315,0,0,0,0,1,Verified pair,2,True,unmapped original font,8f16f7bbbb0faa594ff127789c2c42a44a7ca630683a4098f3b75810bebeb8bb,True
+govdocs1_006_006048.pdf,20,20,0,0,841,0,0,0,1,Verified pair,2,False,,8702c20ee1f18600c1c67496a2524b31b2e592d7998fe5facf9a8b841153fab8,True
+govdocs1_006_006050.pdf,52,52,0,1324,0,0,0,0,1,Verified pair,2,True,unmapped original font,6453a2dcb5f236b311dc9070757201cb0c5fd8c1852d558c68ccd653bf795ecd,True
+govdocs1_006_006053.pdf,100,100,5,9033,0,2318,0,0,1,Verified pair,2,False,,8056fd452a6496f060af7cfd1e925455eb88a51b67bb101fdd76d7a435c5960d,True
+govdocs1_007_007020.pdf,10,8,0,664,0,0,0,0,1,Verified pair,2,False,,e8d4aecf3fce8468dcf49daf5aa3e5a54e2bf43de24653504f2bcfc1a08c2762,True
+govdocs1_007_007024.pdf,27,27,0,0,4185,0,0,0,1,Verified pair,2,False,stateful_text_showing_unsupported,142183da13ddc311dd1f742bfa14b0fb42bec76ff54f0f6fadb0c971829c9948,True
+govdocs1_007_007030.pdf,7,0,0,0,0,0,0,0,"1,2,3",No eligible sample candidate,0,False,,840d31e6dce53f670737a973648cf126578c587910bb853a4edcea0a12b25f10,True
+govdocs1_007_007042.pdf,118,118,0,13370,0,0,0,0,1,Text verification inconclusive,0,False,,0120b92e7cb12cbee0a8e0c833712dcc11426afa14bcf1392771acbb54bc2f68,True
+govdocs1_007_007071.pdf,42,41,40,368,141,37076,0,0,"1,2",Some edits verified,3,True,unmapped original font; width/fit limit,dfa7446c0e6c78fb8a684f659e36e9fc2d28b439a5e27459377f79e09ec53091,True
+govdocs1_007_007074.pdf,259,259,78,23399,0,559,0,0,1,Verified pair,2,False,,15a0bc16384aaf019a26fd24457733a310dda4a7b17b5e0acd46f44701b545ae,True
+govdocs1_007_007075.pdf,20,20,0,897,0,0,0,0,1,Verified pair,2,False,,69af662edf0c501be75e3bb1d3e51d254a59128d9b2cd5c9b70d1552fa2eb594,True
+govdocs1_007_007081.pdf,26,25,2,3258,0,708,0,0,1,Verified pair,2,True,unmapped original font,df1794f7aea5b996dd72efb9625afcd5d23bc7dd1c7142f513b17fc4d3ee5a01,True
+govdocs1_007_007083.pdf,60,60,0,3168,0,0,0,0,1,Verified pair,2,False,,2f9ef389ea11b792cdb1b34d767a2c0729666f6141393e03b8931742c0f550f0,True
+govdocs1_007_007084.pdf,42,42,11,4083,0,11,0,0,1,Verified pair,2,False,,cc30840b96ea60c6cf4278a3da3f41f54d19e7eba6596904736fc03be514ca17,True
+govdocs1_007_007087.pdf,58,57,0,4128,0,0,0,0,1,Verified pair,2,True,unmapped original font,1a5487ac8fe59365a7498bc15aaf555b348ebcbcad8d61c28215605b4d46d2c0,True
+govdocs1_007_007089.pdf,29,29,0,1401,0,0,0,0,1,Verified pair,2,False,,79045fe65890ba726d92c421af843d49918a054869250afdcb6db1c0f25a5141,True
+govdocs1_007_007091.pdf,128,119,1,7053,0,1,0,0,1,Verified pair,2,True,unmapped original font,235ed3a424a55b59aca9b2bdcad57cd3e5fdc20e027b288e4a83b3c8f1253a79,True
+govdocs1_007_007092.pdf,52,52,1,5583,0,3,0,0,1,Verified pair,2,True,unmapped original font,7e8874112a28ee4760210e08d95bcac01c4595dea284b351e329adee386fa66f,True
+govdocs1_008_008006.pdf,11,11,1,0,1476,1216,0,0,1,Sampled edits refused,0,False,part_boundary_truncated; stale_run_index,3c3bc8032e7271f2e89ce9bd94453b0c9eeac92f61b0b08661349f3ce11b5387,True
+govdocs1_008_008008.pdf,7,7,3,5922,49,30,0,0,1,Verified pair,2,True,unmapped original font,bc2ba7f0e1e2951ad72e394efbb4400ff11c4d498e9e4e97e7bfb671fe77d543,True
+govdocs1_008_008009.pdf,12,12,0,951,0,0,0,0,1,Verified pair,2,False,,c56cfc47bd84e30a8509fb2d9c5d7f61029d5117dfde08c1ba641fcfab895ff0,True
+govdocs1_008_008010.pdf,10,10,8,5392,0,2782,0,0,1,Sampled edits refused,0,False,part_boundary_truncated,b9c1f142223892cb14749f237b4060a98f88102b41dcf8dadc68f39e94b7258a,True
+govdocs1_008_008012.pdf,28,24,1,1489,68,1792,0,0,1,Verified pair,2,False,,f1b339928e98d7664b6e59f2b692e99037d0fa66d67497f99f6a5d47e9b2ffd2,True
+govdocs1_008_008015.pdf,16,16,1,6107,0,3,0,0,1,Verified pair,2,True,unmapped original font,3aeeb2dc780f68c39b3143a911ae20e2912a407bdf9fbad71c957bf3a62cc562,True
+govdocs1_008_008016.pdf,13,13,12,4933,0,2118,0,0,1,Sampled edits refused,0,False,part_boundary_truncated,3b045dfeabc6ce3ccdf423ad51afcffa0d442213d8b87f7cba41cf2dd08ceca0,True
+govdocs1_008_008022.pdf,28,28,0,340,0,0,0,0,1,Sampled edits refused,0,False,text_matrix_shifted_after_edit,9b12a4a8005a6e448e9dea8e2ed7a6df7b325fc108ea64db4496e0ef69c4685f,True
+govdocs1_008_008024.pdf,15,15,0,803,10,0,0,0,1,Verified pair,2,False,,2cf72aa8b29501f7b482c295eb443fd0432f8e889991dd2d654369d4a64aa637,True
+govdocs1_008_008025.pdf,3,3,1,986,0,21,0,0,1,Verified pair,2,False,,34859b3b18c92734ba42d5502d36d7fccb323dbcf0d540d592a93ebe4a79e03f,True
+govdocs1_008_008028.pdf,1,1,1,209,0,43,0,0,1,Verified pair,2,False,,0bbefbebaff4295149100314568a8235a197efa48d92db4e4e6eadd0d30ab4e0,True
+govdocs1_008_008029.pdf,15,15,0,150,0,0,0,0,1,Verified pair,2,False,,49bce9d944a686997a83fe14f6ba2e1cb31804b019da45ce687f8f8526b44a8d,True
+govdocs1_008_008032.pdf,10,10,9,4492,0,1799,0,0,1,Sampled edits refused,0,False,part_boundary_truncated; stale_run_index,029bf3c7591ac3574d8068646f5287dd1b514926241b417d7ba8d0d6d582c0e6,True
+govdocs1_008_008034.pdf,4,4,1,181,0,2050,0,0,1,Sampled edits refused,0,False,part_boundary_truncated,59249dc61c9132c8a5a2d3b6538fd53975b8ef2336e1b1e993d4f62d0cf5b252,True
+govdocs1_009_009001.pdf,12,12,0,1349,0,0,0,0,1,Verified pair,2,False,,37897a5154eb2891aa229ca08d8d3c40eefe8e2a58859c972d34623329cb9528,True
+govdocs1_009_009002.pdf,43,43,35,2088,0,300,0,0,1,Verified pair,2,False,,5d46fa29918889cd883667af39d8da2f33a1d9c83d83d3c3ad393a7c33c382f0,True
+govdocs1_009_009011.pdf,18,18,0,904,0,0,0,0,1,Verified pair,2,False,,e7b38faf867378a2226302238cf4b1b7ad426e1fca4edbd0e6209deacbb84e51,True
+govdocs1_009_009013.pdf,22,22,17,0,7093,277,0,0,1,Verified pair,2,False,,554ae21d93abd35b854984f165dcf05aaf2dab88139ee4cc28e01fdc75fbf179,True
+govdocs1_009_009015.pdf,3,3,2,185,0,2154,0,0,1,Verified pair,2,False,,cc268e1b0a8b0758c709bfbd3c6cd2206768e98019b23952052216150f1166c0,True
+govdocs1_009_009052.pdf,267,266,0,7227,0,0,0,0,1,Verified pair,2,False,,e8596431d6dd45e378270499b1c47077d80384205c6fd361f3b441d75e4046b4,True
+govdocs1_009_009055.pdf,150,150,130,7991,726,1106,0,0,1,Verified pair,2,False,,5536c94d7c78c7134b146bde87cddfecb140f1941824ea52bab60ccf18e0028f,True
+govdocs1_009_009057.pdf,11,10,1,682,0,111,0,0,1,Verified pair,2,True,unmapped original font,bf91f592a18bbac93b23ed4e4008466befb50270ef2a2a295d66f478a2be8a56,True
+govdocs1_009_009059.pdf,8,8,0,255,0,0,0,0,1,Verified pair,2,True,unmapped original font,fae2fdd1269b5831d6ceeea064170246bf3042e25298dfd64f618182c299dbdf,True
+govdocs1_009_009060.pdf,10,10,0,558,0,0,0,0,1,Verified pair,2,False,,15ab3c76327e932a042ec42842485085fbf0320cb0d254a2cecdf5be26d7d8f7,True
+govdocs1_009_009067.pdf,17,17,0,2596,3211,0,0,0,1,Verified pair,2,False,,b31be47bf4fee28357587a9f8c83b715baad23e90b7858f8d847ca6631bef127,True
+govdocs1_009_009069.pdf,41,41,2,0,2093,6,0,0,1,Verified pair,2,False,,661cc8725b1e33956298ccb8b28d2d5b49a6c06d499ca7366f94dd3f9c6a822b,True
+govdocs1_009_009077.pdf,165,163,0,20352,0,0,0,0,1,Verified pair,2,True,unmapped original font,c2503fa282ad00e5a460ea2d39d0951c56dc256534356e6f0edffa954cc75084,True
+govdocs1_009_009097.pdf,28,14,28,520,654,46670,0,0,"1,2,3,6",Verified pair,2,True,unmapped original font,c83c991e074e2fcc227c3d16a27fbae62fb3fc973d679ebbb769315547d4fb3c,True
+govdocs1_010_010105.pdf,173,173,0,22356,0,0,0,0,1,Verified pair,2,False,,835aa42233ba364f16f570091cbe9be3ac661a31f24d390eb0eb93be51c1d9e8,True
+govdocs1_010_010106.pdf,149,149,0,18501,0,0,0,0,1,Verified pair,2,False,,b0eb4d78aac745d84856a413f1ff7bba51c2ab4f2a0dd8feaf1234a81a1f7e88,True
+govdocs1_010_010107.pdf,23,23,1,2045,0,1939,0,0,1,Text verification inconclusive,0,False,,7d0564ed410fdff065078187812f9811b764d42f1a205909eb4de046235e3921,True
+govdocs1_010_010109.pdf,2,2,0,0,105,0,0,0,1,Verified pair,2,False,,11a1f0ae68802433f771f68064962f5df5b63ee6274e4041e6fe66a0009ece19,True
+govdocs1_010_010110.pdf,17,17,0,789,0,0,0,0,1,Text verification inconclusive,0,False,,50f34273ed1d6331b92c8a005e6b17d78cd3e8cf464bcb66346c57299ceef88c,True
+govdocs1_010_010116.pdf,138,137,112,12396,0,965,0,0,1,Verified pair,2,False,,ae385406c205a7a66053a28b88820f51da8bb43494c5970b013fe4aa6967e601,True
+govdocs1_010_010118.pdf,1,1,1,40,0,1047,0,0,1,Verified pair,2,False,,0c31662d984dc40515aa97955323c1099ca93c12189d39a6fc5efb3c39059b0d,True
+govdocs1_010_010120.pdf,20,20,0,305,1471,0,0,0,1,Verified pair,2,False,,d0e5c4e3871691b9509ef334353de24c521ea4ae6eec6f8c9f845d57c1818ed5,True
+govdocs1_010_010123.pdf,6,0,6,0,0,15183,0,0,"1,2,3",No eligible sample candidate,0,False,,da24630981bd7427961f1b2c56e39c907472e2ec379b569c589749338b7b208c,True
+govdocs1_010_010124.pdf,4,4,0,381,0,0,0,0,1,Sampled edits refused,0,False,resolution_failed,749d2e8d405ac123f14f67029b833649fc439d84c595ec223661e230bf389865,True
+govdocs1_010_010129.pdf,1,1,0,20,0,0,0,0,1,Verified pair,2,False,,02b7696f85ae11e66c2ef18a1c8552c285ac1d411702beb3927fc3ca29347110,True
+govdocs1_010_010141.pdf,4,4,4,1827,1,669,0,0,1,Sampled edits refused,0,False,part_boundary_truncated; stale_run_index,8505cf94b8239a5ee6e093a9b7f8cb41041b6a2334e5b22bf763463b98a19438,True
+govdocs1_010_010197.pdf,62,62,46,10665,0,1998,0,0,1,Verified pair,2,True,unmapped original font,276cfafe02794be8cad12453bca2fbe6157e001b5e783cd241d072fb41ffd5a1,True
+govdocs1_010_010204.pdf,45,45,3,2912,0,16,0,0,1,Verified pair,2,True,unmapped original font,98ac95d46aa3a9d5e90d869263b610e5e184c091318cb47fd4e3b95c42f25c0b,True
+govdocs1_011_011001.pdf,1,1,0,68,0,0,0,0,1,Verified pair,2,False,,b306a72aa2a7c1955e2e61f1c5fb48851a9830b703071ebb2372ac0385688b63,True
+govdocs1_011_011078.pdf,8,8,8,4159,0,7062,0,0,1,Sampled edits refused,0,False,operator_shared_by_multiple_runs,2a295f5f377dd73a17d08c2b3d0d86861daf461e8aa1f69279f1524d209be6d7,True
+govdocs1_011_011080.pdf,5,5,5,3329,0,6835,0,0,1,Sampled edits refused,0,False,operator_shared_by_multiple_runs,4021c750bd6b9d30f1f60ad25861e1b5ea444fe91e9f5fb4ac1e75c87f659281,True
+govdocs1_011_011082.pdf,3,3,0,81,0,0,0,0,1,Verified pair,2,False,,70f008918a7d3914efb7550efe8581a66d2d3876c5521287c53227e3e9d556db,True
+govdocs1_011_011083.pdf,3,3,1,154,0,1377,0,0,1,Verified pair,2,False,,65c107259eec05f6e0bf38ef5757893b89b2191305c84f795ba7bd372802f480,True
+govdocs1_011_011087.pdf,1,1,0,31,0,0,0,0,1,Verified pair,2,False,,77094799e26edb716f915ec857ae3549b20e9731b230f502d36683d7ce177f9c,True
+govdocs1_011_011089.pdf,1,0,0,0,0,0,1,0,1,Server page error,0,False,PDF_INVALID,735ffb3ee2d8d0a0222663d58f543615f4fdcebf6447bf7cb46af6714acdd127,True
+govdocs1_011_011093.pdf,3,3,1,587,0,1229,0,0,1,Sampled edits refused,0,False,operator_shared_by_multiple_runs,e1129d4cf16c5b725149bf29b9b94979a807134d1c2fc4d174cb7c256278361c,True
+govdocs1_011_011095.pdf,50,50,1,4282,0,20,0,0,1,Some edits verified,3,True,unmapped original font; width/fit limit,bcc93dd44bd2f9adc36433863f5bd9445d638481253c80971650bdac115620fb,True
+govdocs1_011_011097.pdf,1,1,1,70,0,1801,0,0,1,Verified pair,2,False,,5275774dd52c154ce9db05ac18025cbfe1bd844a77121ab470dc445cef792fe1,True
+govdocs1_011_011098.pdf,65,65,3,5303,66,536,0,0,1,Verified pair,2,False,,807a1f1213f7fd33c20635eeb6b0b1e42c6cc26f49dd151f9e31f5470b91fd40,True
+govdocs1_011_011099.pdf,1,1,1,70,0,1812,0,0,1,Verified pair,2,False,,c47f37a189b3d890e15cca4ea24a751f7fdd0c06ab4ca2da2ad77fc0962ca007,True
+govdocs1_011_011105.pdf,10,10,0,0,1162,0,0,0,1,Verified pair,2,True,operator_shared_by_multiple_runs; unmapped original font,25ec0990ed7178935d8c89b7e60b774d3c316a1532463ccbfa6405bd7cf572ac,True
+govdocs1_011_011133.pdf,52,52,0,3914,0,0,0,0,1,Verified pair,2,False,,3c07f8181beffa2347265733dd4af38b41e2ab84ee3194eef42cd5ad43e9f8b8,True
+govdocs1_012_012014.pdf,31,31,15,1128,0,61,0,0,1,Verified pair,2,True,unmapped original font,4efa9a429abc3fbd4fa14dbfcdb8b50dff83e5345db80ec1fc2e49134aa7ec1e,True
+govdocs1_012_012053.pdf,4,4,0,0,1256,0,0,0,1,Verified pair,2,True,unmapped original font,f1b27f4501d88170b8de1c003e5d3eb2bdc340977175ef04de2e9daf34f88901,True
+govdocs1_012_012082.pdf,214,211,84,0,19656,2392,0,0,1,Verified pair,2,False,,f8788e0f7977d045eb1950d3ca0321d06de4cfe96cb7411103dad1034d0a9807,True
+govdocs1_012_012084.pdf,1,1,0,108,0,0,0,0,1,Verified pair,2,False,,853b3ad760cb7e8e6e0f18869d449a41bff0f3e8b38b56cd28e0e717f41a99a8,True
+govdocs1_012_012087.pdf,11,11,10,488,6035,63,0,0,1,Verified pair,2,True,unmapped original font,75bf4843d449a948a564b1979be8a3208b8bc17c7a158a1ca64ac42b41d5dde1,True
+govdocs1_012_012098.pdf,16,16,6,273,7350,755,0,0,1,Sampled edits refused,0,False,part_boundary_truncated,bfbd553d4f3efa8121a5f8a0defc06d9835a46c7d08e1eb9893f5547a1f58184,True
+govdocs1_012_012102.pdf,8,8,0,269,16,0,0,0,1,Verified pair,2,True,unmapped original font,e8379cafbea89a0199d8bc80fba7c3ee62f8137a8aac84865bd9c3972d17b17e,True
+govdocs1_012_012103.pdf,8,8,8,43,1359,186,0,0,1,Verified pair,2,False,,24eeb9c616cd5d0e902f48dec29642015946bf8779492452abfe997456bf11b6,True
+govdocs1_012_012156.pdf,4,4,0,188,0,0,0,0,1,Verified pair,2,False,,81d3f21c8be27016a1def87eac4c55c3f17682a97c449115947ceb3d40381cf0,True
+govdocs1_012_012158.pdf,8,8,0,64,1197,0,0,0,1,Verified pair,2,True,unmapped original font,20b5ed4dcae4f6b7ac1140264557d78d232927795235e5ea1fcbf6afe743b2fb,True
+govdocs1_012_012159.pdf,15,15,1,738,0,726,0,0,1,Verified pair,2,True,unmapped original font,b92be69d9e69e41451d6740da83b9bbaef50bbbc514a8d411f576c271d207473,True
+govdocs1_012_012166.pdf,16,16,0,0,937,0,0,0,1,Verified pair,2,False,,4ce8241a6e03f94bf68a1c7e387e97dfefd1b41f4a8ba94544060cc142b35ec1,True
+govdocs1_012_012170.pdf,198,188,1,13926,10,1568,0,0,1,Sampled edits refused,0,False,operator_shared_by_multiple_runs; part_boundary_truncated,cd9d00e2637fde57a8b890f6c65d0292be00d04171f16d5d976031d08323dc22,True
+govdocs1_012_012172.pdf,22,22,4,0,636,25,0,0,1,Verified pair,2,False,,b2335038762a661caf4a190d0eb2d9d6f83e780d9572f59fa81be3becf772775,True
+govdocs1_013_013043.pdf,13,13,0,870,0,0,0,0,1,Verified pair,2,True,unmapped original font,80fcc2e560240980baa3004fd9f25b01307d4e9e2b078f20ce5cd50eec66d08e,True
+govdocs1_013_013047.pdf,11,11,0,852,0,0,0,0,1,Verified pair,2,True,unmapped original font,6bac645c72013d6f47fda47e296a0904fd01b41490a1f4ecaedbe05b6e8fe6e0,True
+govdocs1_013_013048.pdf,9,9,0,1145,0,0,0,0,1,Verified pair,2,True,unmapped original font,d179497d3c54918a1e50c3d4f8e9b8846a08841eb88874b69cf36f9255bc9bb2,True
+govdocs1_013_013050.pdf,40,40,0,3000,0,0,0,0,1,Verified pair,3,True,unmapped original font; width/fit limit,d0a3b06606378733a2ec96cfa01e3b12c111d13059d070e3e039b751347a4529,True
+govdocs1_013_013064.pdf,6,6,0,10,276,0,0,0,1,Sampled edits refused,0,False,operator_shared_by_multiple_runs,6b813ba54e80821c8519b3ba61c487419076038707c34efe9663acf16d95cc12,True
+govdocs1_013_013079.pdf,43,43,0,2348,219,0,0,0,1,Verified pair,3,True,unmapped original font; width/fit limit,9921de10eb4204d779c60af50d184f867ab508f6c9fa26aeff37b489bb48168b,True
+govdocs1_013_013083.pdf,1,1,1,0,342,574,0,0,1,Verified pair,2,False,,da381e9a15f8f6e4eae88ae3943414d4541a5fda9ad1ef6cc6d9cd82e8dab565,True
+govdocs1_013_013085.pdf,39,39,0,452,2407,0,0,0,1,Verified pair,3,True,unmapped original font; width/fit limit,4f20786c9a0c814a43618e6d11e154399aeab4dfbf606d3fb28598c83f757505,True
+govdocs1_013_013093.pdf,4,4,0,362,0,0,0,0,1,Verified pair,2,False,,71c525c31d423481de595f0e08f549cbccf37e69869352036d996b6a549b3f57,True
+govdocs1_013_013097.pdf,15,15,0,41,1053,0,0,0,1,Verified pair,2,True,unmapped original font,7148327d16897ba5a03beec0e87e864d2dc7b6182ab862ba57f2c1951e645521,True
+govdocs1_013_013100.pdf,4,4,2,469,0,495,0,0,1,Sampled edits refused,0,False,part_boundary_truncated,5cd6eb9712c59e87f5580a3d131228027b93f3437aeb9b3616e98513d5d4a3df,True
+govdocs1_013_013104.pdf,166,158,1,10225,0,1,0,0,1,Verified pair,2,True,unmapped original font,58090b2141c7936058e7901f40d0899375fd6ed7329e89e046b481019b43c9e0,True
+govdocs1_013_013107.pdf,13,13,0,39,925,0,0,0,1,Verified pair,2,True,unmapped original font,79d9370351119dba0e68e7f2ba92f2aa761b590d0529e252652d5240a5c14654,True
+govdocs1_013_013110.pdf,2,2,0,90,0,0,0,0,1,Verified pair,2,False,,799369b183fee2cc89aeb2f6d91fc255d174f93a535a029a297b27ec6594102a,True
+govdocs1_014_014009.pdf,129,129,0,9221,35,0,0,0,1,Verified pair,2,False,,5677b5038c488c0f259195491babc077904bdc4f04c1f61cc51ab9a8c21a97b7,True
+govdocs1_014_014010.pdf,1,1,0,661,0,0,0,0,1,Verified pair,2,True,unmapped original font,90ad5cd02ba356a72f6f0a1ba23987877b777f961ed7742e4dea336fce3ac58d,True
+govdocs1_014_014027.pdf,12,12,11,1084,0,3101,0,0,1,Verified pair,2,False,,f92ed0e7e6ca5ac1854d61546c08a32f5f09ffc108999b4f2fe8e3d441083314,True
+govdocs1_014_014091.pdf,6,6,0,982,0,0,0,0,1,Verified pair,2,True,unmapped original font,c61421e8beb457444c7bde9eb10b6abfffb6f5ad185f245c5101b777399d150d,True
+govdocs1_014_014103.pdf,31,31,1,1984,0,112,0,0,1,Sampled edits refused,0,False,resolution_failed,643adb75c0fdd2b90218258bbd57e18144d23ae90fd04eac179a16b9831da88e,True
+govdocs1_014_014114.pdf,51,51,0,2623,0,0,0,0,1,Verified pair,2,False,,fbd73def3487c35d027982dcd3c55e359f38e67faadfa3c8b6fdbb65a36410c2,True
+govdocs1_014_014115.pdf,12,12,1,1285,0,84,0,0,1,Sampled edits refused,0,False,stale_run_index,1a56884a87ea3e49505a6f9e58b713c2f200a3e3f10f6a441140638a04a9c8e4,True
+govdocs1_014_014118.pdf,12,12,2,0,1476,4676,0,0,1,Verified pair,2,False,stale_run_index,fe5a98aa1ad0b34a6c8cf3567faa0d25e7ef753f740ef068eb1d4d89cbd0acf7,True
+govdocs1_014_014222.pdf,9,9,6,2181,0,103,0,0,1,Verified pair,2,False,,7a538faadebbd8f256ab544df3e2884123c824bb9477313f7c21db5703ead62c,True
+govdocs1_014_014226.pdf,4,4,1,91,1507,1975,0,0,1,Sampled edits refused,0,False,part_boundary_truncated,3d9af2a4d71318ee990ebf9cc16e7a72ec4caa4149bdf9fcd08b7539842153a8,True
+govdocs1_014_014228.pdf,6,6,1,295,2999,501,0,0,1,Sampled edits refused,0,False,part_boundary_truncated,d85b5dfe266f40302258e137fa8a1260c2803474ab2eab5d7d48167a89c5cfb5,True
+govdocs1_014_014229.pdf,10,10,2,1811,6718,2505,0,0,1,Sampled edits refused,0,False,part_boundary_truncated; stale_run_index,0f2147c71605063d7bca3c096215fcc0641a474608fe64fe38185fa727d8d94d,True
+govdocs1_014_014230.pdf,2,2,1,0,189,764,0,0,1,Verified pair,2,False,part_boundary_truncated; stale_run_index,c98e4828925a033c99937f30e4a8c8a841f9f309e932520b5da4262d7b73c23a,True
+govdocs1_014_014233.pdf,7,7,4,2521,0,21,0,0,1,Verified pair,2,True,unmapped original font,83836a81c2301124ec8a13409038b7b25ab7f40d90850838613a481c4bf10e38,True
+invoice_1905_james_green.pdf,3,0,3,0,0,3,0,0,"1,2,3",No eligible sample candidate,0,False,,729de70b655ec244fbc51d8228d49cc1a8b82c84c0093d7ac30bd135f4e37277,True
+invoice_book_1842.pdf,52,45,0,6236,0,0,0,0,"1,2,3",Verified pair,2,True,unmapped original font,5490ffd78898bada781c1c62e97d6dc3ac12326465540a687b9ef5055be5b421,True
+irs_1040_instructions.pdf,126,126,65,47952,0,254,0,0,1,Verified pair,2,True,text_matrix_shifted_after_edit; unmapped original font,482e9c487c608f1bbeaceef35bc3c0933e8b35443cfff447e4279d590468364a,True
+irs_1040_tax_tables.pdf,28,28,2,28330,0,4,0,0,1,Verified pair,2,True,unmapped original font,8ae019bd3b28b07b37e46e18597d8e899222a2224ce7482c015b130033403532,True
+irs_form_1040.pdf,2,2,1,1157,0,712,0,0,1,Verified pair,2,True,unmapped original font,3d31c226df0d189ced80e039d01cf0f8820c1019681a0f0ca6264de277b7e982,True
+irs_form_1040_spanish.pdf,2,2,1,1248,0,98,0,0,1,Verified pair,2,True,unmapped original font,9101c329a977fb5eb65e7f8d471eb1253e6d9f082ecf20de771b601886ef347e,True
+irs_form_w4.pdf,5,5,1,1685,0,341,0,0,1,Verified pair,2,True,unmapped original font,92444d8856ce55d9e25dca8b6d1420634fc68b11e1ab1f760916ea29ddd312b2,True
+irs_form_w9.pdf,6,6,1,1011,0,414,0,0,1,Verified pair,2,True,unmapped original font,2d420cbb4123dcf1fb82595b2359cfbb5d81f00b9df9d359fcc7af361d093f53,True
+irs_form_w9_encrypted.pdf,6,6,1,1011,0,414,0,0,1,Verified pair,2,True,unmapped original font,89bacabe9da17b9b19b7cb15eac06844bcbcee38ac533cdec01e68beb53c42ad,True
+irs_publication_17.pdf,142,142,68,53613,0,185,0,0,1,Verified pair,2,True,unmapped original font,2d2381d62c7c77ed4b64b83ac23c28ed85b7c8304eb580c09bd9fd660be0840b,True
+mutopia_vocalise_abt.pdf,1,1,1,41,0,401,0,0,1,Verified pair,2,True,unmapped original font,d2ae7acc4fb75e96422898c0684e13c08f9df3dd2b4ce7cc6bd65311e2fd0bb9,True
+nasa_graphics_standards_manual.pdf,60,60,0,210,11640,0,0,0,1,Verified pair,2,False,,2aebec98b6c21ae8868f56f9c3a19c6605bcdc302a050923234cced3d8a46b24,True
+vector_outlined_text_sample.pdf,1,0,0,0,0,0,0,0,1,No eligible sample candidate,0,False,,3af7b52a6d5f10bda66aa77180ab95aff1a9c9d8f878592e9bbc07d874d31980,True
+verapdf_inline_image_fixture.pdf,1,0,0,0,0,0,0,0,1,No eligible sample candidate,0,False,,a0e71dea9ab1983424cf369f8e2e316467069b7ca738482c1874a79df0b12477,True
+verapdf_isartor_malformed_trailer.pdf,1,0,0,0,0,0,0,0,1,No eligible sample candidate,0,False,,cc4447e0a6a7a56317c28efabb91a4913fecdc77a2dc08bbdba3ad0dd1096e5d,True
+verapdf_type3_font_fixture.pdf,1,0,1,0,0,1,0,0,1,No eligible sample candidate,0,False,,c77ba0dd71e43823e1fb6a087889a1774ae8c3ea127a8e6861b7b0180eaf2c94,True
+wikipedia_zh_monthly_magazine.pdf,14,14,0,592,0,0,0,0,1,Verified pair,2,True,character_has_no_glyph_in_bundled_font; unmapped original font,a6a4b43e49d44dd5629bf437bd19b2c267cc6aa0b190630dcb82b007f545be3b,True
