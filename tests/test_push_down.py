@@ -247,3 +247,72 @@ def test_corpus_page_moves_below_and_keeps_above(name: str, y_cut: float, tmp_pa
     assert ImageChops.difference(a.crop((0, cut, width, height - shift)),  # type: ignore[attr-defined]
                                  b.crop((0, cut + shift, width, height))).getbbox() is None  # type: ignore[attr-defined]
     qpdf_check(after, tmp_path)
+
+
+def boxed(source: bytes, top: float = 400) -> tuple[bytes, str]:
+    with pikepdf.open(io.BytesIO(source)) as pdf:
+        result = prepare_text_box(pdf, source, {
+            'operation': 'upsert', 'page_index': 0, 'text': 'Boxed text',
+            'rect': {'left': 40, 'top': top, 'width': 200, 'height': 40}})
+    [box] = result['boxes']  # type: ignore[misc]
+    return base64.b64decode(str(result['pdf'])), str(box['id'])
+
+
+def test_native_text_box_across_the_cut_straddles_without_asking() -> None:
+    data, _ = boxed(one_page(b''))  # its text draws y 186.6..200
+    seen: list[str] = []
+    assert refused(data, 193, 20, keep=lambda box: seen.append(box) is None) == 'PUSH_DOWN_STRADDLE'
+    assert seen == []
+
+
+def test_keep_is_not_asked_when_the_push_is_refused() -> None:
+    data, _ = boxed(one_page(MULTILINE))
+    seen: list[str] = []
+    assert refused(data, 479, 460, keep=lambda box: seen.append(box) is None) == 'PUSH_DOWN_PAGE_FULL'
+    assert seen == []
+
+
+def test_annotation_shared_with_another_page_is_unsupported() -> None:
+    with pikepdf.open(io.BytesIO(one_page(MULTILINE))) as pdf:
+        link = pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.Annot, Subtype=pikepdf.Name.Link,
+                                                    Rect=[70, 465, 160, 477]))
+        pdf.pages[0].Annots = pikepdf.Array([link])
+        other = pdf.add_blank_page(page_size=(400, 600))
+        other.Annots = pikepdf.Array([link])
+        data = saved(pdf)
+    assert refused(data, 479, 30) == 'PUSH_DOWN_UNSUPPORTED'
+
+
+@pytest.mark.parametrize('content', [b'BT /F1 /X Tf 72 400 Td (Bad) Tj ET', b'/A 0 m 10 10 l S'])
+def test_malformed_operands_refuse_cleanly(content: bytes) -> None:
+    with pikepdf.open(io.BytesIO(one_page(content))) as pdf:
+        with pytest.raises(PushDownRefused) as caught:
+            push_down(pdf, 0, 479, 30)
+        assert (caught.value.code, caught.value.detail) == ('PUSH_DOWN_UNSUPPORTED', 'bad_operand')
+    assert refused(one_page(content), 479, 30) == 'PUSH_DOWN_UNSUPPORTED'
+
+
+@pytest.mark.parametrize('vertical', ['name', 'wmode'])
+def test_vertical_writing_mode_is_unsupported(vertical: str) -> None:
+    with pikepdf.open(io.BytesIO(one_page(b'BT /V1 12 Tf 72 400 Td <0001> Tj ET'))) as pdf:
+        cid = pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.Font, Subtype=pikepdf.Name.CIDFontType2,
+                                                   BaseFont=pikepdf.Name('/Vert')))
+        encoding: object = pikepdf.Name('/Identity-V')
+        if vertical == 'wmode':
+            encoding = pdf.make_stream(b'', Type=pikepdf.Name.CMap, WMode=1)
+        font = pikepdf.Dictionary(Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type0, BaseFont=pikepdf.Name('/Vert'),
+                                  Encoding=encoding, DescendantFonts=[cid])
+        pdf.pages[0].Resources.Font.V1 = pdf.make_indirect(font)
+        data = saved(pdf)
+    assert refused(data, 479, 30) == 'PUSH_DOWN_UNSUPPORTED'
+
+
+def test_group_ending_before_a_staying_line_restores_the_line_matrix() -> None:
+    """Stream order low-then-high: the moving group ends with ET cm BT Tm before a staying line."""
+    data = one_page(b'BT /F1 12 Tf 72 300 Td (Low line) Tj 0 -16 Td (Lower line) Tj '
+                    b'0 216 Td (High line) Tj ET')
+    moved, after = push(data, 400, 30)
+    assert moved == 2
+    before_lines, after_lines = text_lines(data), text_lines(after)
+    assert after_lines == {text: (left, round(bottom - (0 if text == 'High line' else 30), 3))
+                           for text, (left, bottom) in before_lines.items()}

@@ -107,6 +107,7 @@ class _State:
     smask: bool = False            # a soft mask is active (mask space ignores later CTM)
     font_size: float = 0.0
     descent: float = -0.25         # of the current font, in em
+    vertical: bool = False         # the current font writes top to bottom
     ascent: float = 1.0
     char_spacing: float = 0.0
     word_spacing: float = 0.0
@@ -214,12 +215,24 @@ class _Walker:
             space = space[0]
         return bool(space == pikepdf.Name.Pattern)
 
+    def _vertical(self, name: object) -> bool:
+        """A Type0 font in vertical writing mode (`-V` CMap or /WMode 1)."""
+        font = self._resource('/Font', name)
+        if not isinstance(font, pikepdf.Dictionary) or font.get('/Subtype') != pikepdf.Name.Type0:
+            return False
+        encoding = font.get('/Encoding')
+        if isinstance(encoding, pikepdf.Name):
+            return str(encoding).endswith('-V')
+        return isinstance(encoding, pikepdf.Stream) and encoding.get('/WMode') == 1
+
     def _font_extent(self, name: object) -> tuple[float, float]:
         """Descent/ascent in em: the font's own claim, never beyond -0.25..1.0 em.
 
         At 1.2 leading a fixed -0.25..1.0 em box overlaps the next line, so nearly
-        every cut between lines would straddle. Tightening is safe: an item either
-        moves or stays whole, and moving down only separates it from what stays.
+        every cut between lines would straddle. Tightening cannot create overlap: an
+        item moves or stays whole, and moving down only separates it from what stays.
+        It does not cover ink beyond the font's claim (accents above the ascender, a
+        deep descender): such ink may cross the cut without the line being refused.
         """
         font = self._resource('/Font', name)
         if not isinstance(font, pikepdf.Dictionary) or font.get('/Subtype') == pikepdf.Name.Type3:
@@ -320,6 +333,7 @@ class _Walker:
         elif op == 'Tf' and len(args) == 2:
             state.font_size = float(args[1])
             state.descent, state.ascent = self._font_extent(args[0])
+            state.vertical = self._vertical(args[0])
         elif op == 'Tc' and args:
             state.char_spacing = float(args[0])
         elif op == 'Tw' and args:
@@ -425,6 +439,8 @@ class _Walker:
                 if new_line:
                     lines.append(_Line(index, _mul(tlm, state.ctm)))
                     new_line = False
+                if state.vertical:
+                    raise _refuse(detail='vertical_text')  # lines run down the page, not across
                 line = lines[-1]
                 line.last = index
                 line.advance += self._advance(op, args, state)
@@ -495,8 +511,14 @@ class _Walker:
 
 
 def _box(page: pikepdf.Page) -> tuple[float, float]:
-    values = [float(v) for v in page.cropbox]
-    return min(values[1], values[3]), max(values[1], values[3])
+    """The visible y-range: the cropbox clipped to the mediabox."""
+    crop = [float(v) for v in page.cropbox]
+    media = [float(v) for v in page.mediabox]
+    lo = max(min(crop[1], crop[3]), min(media[1], media[3]))
+    hi = min(max(crop[1], crop[3]), max(media[1], media[3]))
+    if not lo < hi:
+        raise _refuse(detail='empty_page_box')
+    return lo, hi
 
 
 def _parse(data: bytes) -> tuple[list[Instruction], bool]:
@@ -548,7 +570,7 @@ def _owned_ids(pdf: pikepdf.Pdf, page_index: int, contents: list[pikepdf.Object]
         raise _refuse(detail='native_box_unverified') from None
 
 
-def _annotation_moves(page: pikepdf.Page, y_cut: float, dy: float, crop_lo: float,
+def _annotation_moves(pdf: pikepdf.Pdf, page: pikepdf.Page, y_cut: float, dy: float, crop_lo: float,
                       plan: _Plan) -> list[tuple[pikepdf.Dictionary, dict[str, pikepdf.Array]]]:
     """New geometry for every annotation wholly below the cut."""
     annots = page.obj.get('/Annots')
@@ -580,6 +602,15 @@ def _annotation_moves(page: pikepdf.Page, y_cut: float, dy: float, crop_lo: floa
                 pikepdf.Array([_number(float(v)-dy) if i % 2 else v for i, v in enumerate(stroke)])
                 for stroke in ink if isinstance(stroke, pikepdf.Array)])
         result.append((annot, changes))
+    if any(annot.is_indirect for annot, _ in result):
+        here = page.obj.objgen
+        elsewhere: set[tuple[int, int]] = set()
+        for other in pdf.pages:
+            others = other.obj.get('/Annots')
+            if other.obj.objgen != here and isinstance(others, pikepdf.Array):
+                elsewhere |= {annot.objgen for annot in others if annot.is_indirect}
+        if any(annot.is_indirect and annot.objgen in elsewhere for annot, _ in result):
+            raise _refuse(detail='shared_annotation')  # moving it would move another page's link
     return result
 
 
@@ -591,12 +622,24 @@ def push_down(pdf: pikepdf.Pdf, page_index: int, y_cut: float, dy: float, *,
 
     Native text boxes are never moved here: each one not wholly above the cut is passed
     to `keep(id)`, and the caller must return True to take responsibility for it (Task 2
-    re-upserts it lower). A box the caller does not keep refuses the push. `keep` is
-    called while planning, so it may see ids from a push that is then refused.
+    re-upserts it lower). A box that crosses the cut refuses with PUSH_DOWN_STRADDLE,
+    and one the caller does not keep refuses with PUSH_DOWN_UNSUPPORTED. `keep` is
+    called only after every other check has passed, and only for boxes wholly below.
     """
     if not (math.isfinite(y_cut) and math.isfinite(dy) and dy > 0):
         raise ValueError('y_cut must be finite and dy positive')
     page = pdf.pages[page_index]
+    try:
+        return _push_down(pdf, page_index, page, y_cut, dy, keep)
+    except PushDownRefused:
+        raise
+    except (TypeError, ValueError, IndexError):
+        # Malformed operands or dictionaries; raised before the first write.
+        raise _refuse(detail='bad_operand') from None
+
+
+def _push_down(pdf: pikepdf.Pdf, page_index: int, page: pikepdf.Page, y_cut: float, dy: float,
+               keep: Callable[[str], bool]) -> int:
     if int(page.obj.get('/Rotate', 0)) % 360:
         raise _refuse(detail='rotated_page')  # "down" would not be -y on screen
     raw = page.obj.get('/Contents')
@@ -616,16 +659,18 @@ def push_down(pdf: pikepdf.Pdf, page_index: int, y_cut: float, dy: float, *,
     parts, truncated = _parse_parts(contents, tags)
     crop = _box(page)
     plan = _Walker(page, y_cut, dy, parts, tags, crop).walk()
-    annotations = _annotation_moves(page, y_cut, dy, crop[0], plan)
-    for tag, (lo, hi) in plan.boxes.items():
-        if lo < y_cut and not keep(tag[4:]):
-            raise _refuse('PUSH_DOWN_STRADDLE' if hi > y_cut else 'PUSH_DOWN_UNSUPPORTED')
+    annotations = _annotation_moves(pdf, page, y_cut, dy, crop[0], plan)
+    below = [tag[4:] for tag, (lo, hi) in plan.boxes.items() if lo < y_cut]
+    if any(hi > y_cut for lo, hi in plan.boxes.values() if lo < y_cut):
+        plan.straddle = plan.straddle or 'native_text_box'
     if plan.managed_image:
         raise _refuse('PUSH_DOWN_MANAGED_IMAGE')
     if plan.straddle:
         raise _refuse('PUSH_DOWN_STRADDLE', plan.straddle)
     if plan.lowest < max(crop[0], plan.background_floor):
         raise _refuse('PUSH_DOWN_PAGE_FULL', 'page' if plan.lowest < crop[0] else 'background')
+    if not all([keep(box) for box in below]):  # every id is reported, even after a False
+        raise _refuse(detail='native_box_not_kept')
 
     # Apply: nothing below can refuse.
     replaced: dict[int, bytes] = {}
