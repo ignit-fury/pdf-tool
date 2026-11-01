@@ -118,32 +118,39 @@ def prepare_source_text_box(path: Path, source: bytes, payload: dict[str, Any],
     materialized=intermediate.read_bytes()
     insertion={k:v for k,v in payload.items() if k not in ('source_run_id','source_run_ids','paragraph_id','recipe')}
     insertion['operation']='upsert'
-    try:
+    required=0.0
+    if push:
+        with pikepdf.open(intermediate) as pdf:  # layout only: no collision render
+            probe=prepare_text_box(pdf,materialized,{**insertion,'auto_expand':False,'allow_overlap':True})
+        layout: Any=probe['layout'] if probe['ok'] else probe
+        required=float(layout['required_height'])
+    if push and required>float(insertion['rect']['height'])+1e-6:
+        # Push rather than grow into the free space below: the gap under the paragraph stays exact.
+        if _columns(path,password,payload['page_index']):
+            raise TextBoxError('PUSH_DOWN_UNSUPPORTED')  # push_down moves the full width: other columns would tear
+        result,dy=_pushed_insert(intermediate,materialized,insertion,required)
+    else:
         with pikepdf.open(intermediate) as pdf:
             result=prepare_text_box(pdf,materialized,insertion)
         dy=0.0
-        if push and not result['ok']:
-            result,dy=_pushed_insert(intermediate,materialized,insertion)
-    except TextBoxError as error:
-        if not push or error.code!='TEXT_BOX_OVERLAP':
-            raise
-        result,dy=_pushed_insert(intermediate,materialized,insertion)
     # Public source binding remains the original immutable source/recipe pair.
     return {**result,'source_hash':hashlib.sha256(source).hexdigest(),'pushed':round(dy,6)}
 
 
-def _pushed_insert(intermediate: Path, materialized: bytes,
-                   insertion: dict[str, Any]) -> tuple[dict[str, object], float]:
+def _columns(path: Path, password: str, page: int) -> bool:
+    from engine.blocks import _page
+    from engine.index import RunIndex
+    with RunIndex(path, password=password) as index:
+        return 'columns-inferred-unruled-tables-unsupported' in _page(page, index.page(page)).warnings
+
+
+def _pushed_insert(intermediate: Path, materialized: bytes, insertion: dict[str, Any],
+                   required: float) -> tuple[dict[str, object], float]:
     """Grow the box by exactly the height its text needs and move the content below
     down by the same amount; one more line if it still collides. Each attempt works on
     a fresh copy of the intermediate, so a refusal leaves nothing half-applied."""
     rect=insertion['rect']
-    with pikepdf.open(intermediate) as pdf:  # layout only: no collision render
-        probe=prepare_text_box(pdf,materialized,{**insertion,'auto_expand':False,'allow_overlap':True})
-    layout: Any=probe['layout'] if probe['ok'] else probe
-    dy=math.ceil(float(layout['required_height'])*100)/100-float(rect['height'])
-    if dy<=1e-6:
-        raise TextBoxError('TEXT_BOX_OVERLAP')  # content inside the paragraph's own rect: pushing cannot help
+    dy=math.ceil(required*100)/100-float(rect['height'])  # the height auto_expand grows to
     style=insertion['style']
     size=float(style.get('font_size',12))
     for extra in (0.0,size*float(style.get('line_spacing',1.2))):

@@ -140,14 +140,15 @@ def test_overflow_rebuilds_without_consent(tmp_path):
     assert path.read_bytes() == source
 
 
-def neighbor_pdf(path: Path, footer: bool = False, box_below: bool = False):
+def neighbor_pdf(path: Path, footer: bool = False, box_below: bool = False, neighbor_y: int = 305):
     with pikepdf.Pdf.new() as pdf:
         page = pdf.add_blank_page(page_size=(400, 400))
         page.obj.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=pdf.make_indirect(
             pikepdf.Dictionary(Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name.Helvetica))))
-        page.obj.Contents = pdf.make_stream(b'BT /F1 12 Tf 30 340 Td (First line here) Tj ET\n'
+        page.obj.Contents = pdf.make_stream(b'BT /F1 12 Tf 30 375 Td (Header above) Tj ET\n'
+                                            b'BT /F1 12 Tf 30 340 Td (First line here) Tj ET\n'
                                             b'BT /F1 12 Tf 30 326 Td (Second line here) Tj ET\n'
-                                            b'BT /F1 12 Tf 30 305 Td (Keep neighbor) Tj ET'
+                                            b'BT /F1 12 Tf 30 %d Td (Keep neighbor) Tj ET' % neighbor_y
                                             + (b'\nBT /F1 12 Tf 30 8 Td (Footer) Tj ET' if footer else b''))
         pdf.save(path)
     if box_below:
@@ -180,6 +181,29 @@ def test_long_edit_pushes_the_neighbor_down(tmp_path):
     pdf = base64.b64decode(result['pdf'])
     assert 'great deal' in text_of(result['pdf']) and 'Keep neighbor' in text_of(result['pdf'])
     assert top_of(source, 'Keep') - top_of(pdf, 'Keep') == pytest.approx(result['pushed'], abs=.01)
+    assert path.read_bytes() == source
+
+
+@pytest.mark.parametrize('neighbor_y', [290, 280])
+def test_free_space_below_is_kept_and_the_neighbor_still_moves(tmp_path, neighbor_y):
+    path = tmp_path / 's.pdf'; source, p = neighbor_pdf(path, neighbor_y=neighbor_y)
+    result = prepare_paragraph_edit(path, source, payload(p, LONG), tmp_path)
+    box = next(b for b in result['boxes'] if 'great deal' in b['text'])
+    assert result['pushed'] > 0 and box['rect']['height'] - 28 == pytest.approx(result['pushed'])
+    pdf = base64.b64decode(result['pdf'])
+    assert top_of(source, 'Keep') - top_of(pdf, 'Keep') == pytest.approx(result['pushed'], abs=.01)
+    assert top_of(pdf, 'Header') == top_of(source, 'Header')  # content above stays exactly in place
+
+
+def test_two_column_page_refuses_push(tmp_path):
+    from tools.build_export_fixtures import build_export_fixture
+    path = tmp_path / 'cols.pdf'; build_export_fixture(path); source = path.read_bytes()
+    with RunIndex(path) as index:
+        p = next(p for p in page_paragraphs(0, index.page(0)) if p.lines[0][0].display_text.startswith('Left'))
+    lines = [' '.join(r.display_text for r in line) for line in p.lines]
+    lines[0] += ' with many more words that make this paragraph wrap onto extra lines'
+    with pytest.raises(TextBoxError, match='PUSH_DOWN_UNSUPPORTED'):
+        prepare_paragraph_edit(path, source, payload(p, lines, rect={'left': 40, 'top': 88, 'width': 200, 'height': 30}), tmp_path)
     assert path.read_bytes() == source
 
 
