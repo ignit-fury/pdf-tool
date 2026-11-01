@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {newTextBox,textBoxPayload,draftError,expandTextBox,wordRect,fitTextRect,growTextBox,explainInsertError,DEFAULT_STYLE} from './model.mjs';
+import {newTextBox,textBoxPayload,draftError,expandTextBox,wordRect,fitTextRect,growTextBox,explainInsertError,draftSignature,relocateRefused,DEFAULT_STYLE} from './model.mjs';
 
 test('source expansion keeps the draft/recipe, uses physical formatting and normalizes tabs',async()=>{
   const {sourceTextBox}=await import('./model.mjs');
@@ -35,6 +35,26 @@ test('typed text grows the box: width to the longest line, wrapping only at the 
   const wide=fitTextRect(rect,[900],style,geometry);assert.equal(wide.width,500,'never past the right edge');assert.ok(Math.abs(wide.height-28.8)<1e-9,'soft wrap grows height');
   assert.equal(fitTextRect({...rect,top:790},[100,100,100],style,geometry).height,10,'height stays on the page');
   assert.deepEqual(fitTextRect(rect,[10],style,geometry,{width:80,height:40}),{...rect,width:80,height:40},'an existing box never shrinks');
+});
+test('opening an existing box keeps its saved width; only height grows',()=>{
+  const geometry={visibleWidth:600,visibleHeight:800},box={page_index:0,text:'A long paragraph wrapped inside a narrow saved box',style:{...DEFAULT_STYLE},rect:{left:100,top:200,width:80,height:43.2}};
+  const opened=growTextBox({...box,fixed:{width:80,height:43.2}},geometry,[230]);
+  assert.equal(opened.rect.width,80,'no reflow to the page edge on open');assert.equal(opened.rect.height,43.2);
+  const longer=growTextBox({...box,fixed:{width:80,height:43.2}},geometry,[400]);
+  assert.equal(longer.rect.width,80);assert.ok(longer.rect.height>43.2,'more text grows the height');
+  assert.ok(Math.abs(growTextBox({...box},geometry,[230]).rect.width-238.9)<1e-9,'a new draft still grows in width');
+});
+test('a moved box counts as a change; a refused draft moves to the next click',()=>{
+  const geometry={visibleWidth:600,visibleHeight:800},draft={page_index:0,text:'Hi',style:{...DEFAULT_STYLE},rect:{left:10,top:10,width:30,height:14}};
+  const original=draftSignature(draft);
+  assert.equal(draftSignature({...draft}),original);
+  assert.notEqual(draftSignature({...draft,rect:{...draft.rect,left:50}}),original);
+  const refused={...draft,status:{refused:'covers'}};
+  assert.deepEqual(relocateRefused(refused,0,{left:200,top:300},geometry).rect,{left:200,top:300,width:30,height:14});
+  assert.deepEqual(relocateRefused(refused,0,{left:590,top:799},geometry).rect,{left:570,top:786,width:30,height:14},'clamped inside the page');
+  assert.equal(relocateRefused(draft,0,{left:200,top:300},geometry),null,'not refused: start new text');
+  assert.equal(relocateRefused({...refused,text:'  '},0,{left:200,top:300},geometry),null,'no text to keep');
+  assert.equal(relocateRefused(refused,1,{left:200,top:300},geometry),null,'other page');
 });
 test('the save payload carries the measured text extent',()=>{
   const geometry={visibleWidth:600,visibleHeight:800};

@@ -13,23 +13,34 @@ export function newTextBox(page_index,geometry,point={left:40,top:40}){
 }
 const slack=width=>width*1.03+2;
 /** Grow a box to its text: width follows the longest measured line (pt) until the visible page's right
- * edge, then lines soft-wrap and height grows by lines. floor keeps an existing box from shrinking. */
-export function fitTextRect(rect,widths,style,geometry,floor={width:0,height:0}){
+ * edge, then lines soft-wrap and height grows by lines. An existing box passes fixed: its saved width is
+ * kept (its wrapping must not reflow on open) and only its height grows, never below the saved height. */
+export function fitTextRect(rect,widths,style,geometry,fixed=null){
   const maxWidth=Math.max(1,geometry.visibleWidth-rect.left),line=style.font_size*style.line_spacing;
-  const width=Math.min(maxWidth,Math.max(floor.width,2*style.font_size,...widths.map(slack)));
+  const width=Math.min(maxWidth,fixed?fixed.width:Math.max(2*style.font_size,...widths.map(slack)));
   const rows=widths.reduce((sum,w)=>sum+Math.max(1,Math.ceil(slack(w)/width-1e-9)),0);
-  const height=Math.min(geometry.visibleHeight-rect.top,Math.max(floor.height,rows*line+style.paragraph_spacing*(widths.length-1)));
+  // paragraph_spacing is not drawn by the typing textarea; it is counted here and server auto_expand covers any shortfall.
+  const height=Math.min(geometry.visibleHeight-rect.top,Math.max(fixed?.height||0,rows*line+style.paragraph_spacing*(widths.length-1)));
   return {left:rect.left,top:rect.top,width,height};
 }
 let canvas;
 // Browser only: unwrapped width in points of each typed line (a px font size at scale 1 is points).
 export function measureLineWidths(text,style){
   canvas??=document.createElement('canvas');const context=canvas.getContext('2d');
+  context.fontKerning='none'; // the server lays text out with unkerned advances
   context.font=`${style.italic?'italic ':''}${style.bold?'700 ':''}${style.font_size}px ${FONT_STACKS[style.font_family]||FONT_STACKS.Sans}`;
   return text.split('\n').map(line=>context.measureText(line).width+(style.character_spacing||0)*Array.from(line).length);
 }
 export function growTextBox(draft,geometry,widths=measureLineWidths(draft.text,draft.style)){
-  return {...draft,rect:fitTextRect(draft.rect,widths,draft.style,geometry,draft.floor)};
+  return {...draft,rect:fitTextRect(draft.rect,widths,draft.style,geometry,draft.fixed)};
+}
+// What a click-away save compares against: moving a box (rect) is a change, like its text or style.
+export const draftSignature=draft=>JSON.stringify([draft.text,draft.style,draft.rect]);
+/** A click on free space while a refused draft with text is open on that page moves the draft there
+ * (keeping the typed text, so the next click-away retries) instead of starting new text. */
+export function relocateRefused(draft,page_index,point,geometry){
+  if(!draft?.status?.refused||!draft.text.trim()||draft.page_index!==page_index||draft.readOnly)return null;
+  return {...draft,rect:{...draft.rect,left:clamp(point.left,0,geometry.visibleWidth-draft.rect.width),top:clamp(point.top,0,geometry.visibleHeight-draft.rect.height)}};
 }
 export function textBoxPayload(draft){return {operation:draft.source_run_id||draft.source_run_ids?'replace-source':'upsert',...(draft.source_run_ids?{source_run_ids:[...draft.source_run_ids],recipe:structuredClone(draft.recipe)}:draft.source_run_id?{source_run_id:draft.source_run_id,recipe:structuredClone(draft.recipe)}:{}),auto_expand:draft.auto_expand!==false,page_index:draft.page_index,...(draft.id?{id:draft.id}:{}),text:draft.text,rect:{left:draft.rect.left,top:draft.rect.top,width:draft.rect.width,height:draft.rect.height},style:{...DEFAULT_STYLE,...draft.style},allow_overlap:!!draft.allow_overlap};}
 export function draftError(draft,geometry){

@@ -38,13 +38,13 @@ function TextDraftEditor({draft,geometry,sx,sy,box,disabled,onDraft,onCommit,onC
   };
   const s=draft.style;
   return <div ref={root} className="text-draft" data-status={draft.status==='saving'?'saving':draft.status?.refused?'refused':'editing'} style={{position:'absolute',left:box.left,top:box.top,width:box.width,height:box.height}}>
-    <textarea ref={input} className="text-box-input" aria-label="Text on page" placeholder="Type…" spellCheck={false} wrap="soft" disabled={disabled} value={draft.text}
+    <textarea ref={input} className="text-box-input" aria-label="Text on page" placeholder="Type…" spellCheck={false} wrap="soft" disabled={disabled} readOnly={!!draft.readOnly} value={draft.text}
       style={{left:0,top:0,width:'100%',fontFamily:FONT_STACKS[s.font_family],fontSize:s.font_size*sy,lineHeight:s.line_spacing,fontWeight:s.bold?700:400,fontStyle:s.italic?'italic':'normal',color:colorHex(s.color),letterSpacing:s.character_spacing*sx,textAlign:s.alignment}}
       onChange={event=>onDraft({...draft,text:event.target.value})}
       onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();onCancel();}else if(event.key==='Tab'){event.preventDefault();onCommit();}}}
       onBlur={event=>{if(pointer.current)return;if(event.relatedTarget?.closest?.('.floating-text-tools')||root.current?.contains(event.relatedTarget))return;onCommit();}}/>
-    <span className="text-draft-handle" title="Drag to move" aria-hidden="true" onMouseDown={event=>event.preventDefault()}
+    {!draft.readOnly&&<span className="text-draft-handle" title="Drag to move" aria-hidden="true" onMouseDown={event=>event.preventDefault()}
       onPointerDown={event=>{if(disabled)return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);drag.current={x:event.clientX,y:event.clientY,left:draft.rect.left,top:draft.rect.top};}}
-      onPointerMove={move} onPointerUp={()=>{drag.current=null;input.current?.focus({preventScroll:true});}} onPointerCancel={()=>{drag.current=null;}}/>
+      onPointerMove={move} onPointerUp={()=>{drag.current=null;input.current?.focus({preventScroll:true});}} onPointerCancel={()=>{drag.current=null;}}/>}
   </div>;
 }

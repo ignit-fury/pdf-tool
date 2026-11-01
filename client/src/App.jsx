@@ -12,7 +12,7 @@ import FloatingTextTools from './viewer/FloatingTextTools.jsx';
 import ImageToolbar,{ImageHandles} from './viewer/ImageEditor.jsx';
 import {TextBoxOverlay} from './textBoxes/TextBoxEditor.jsx';
 import {createTextBoxController} from './textBoxes/controller.mjs';
-import {newTextBox,growTextBox,textBoxPayload,draftError,explainTextBoxError,explainParagraphError,explainInsertError} from './textBoxes/model.mjs';
+import {newTextBox,growTextBox,draftSignature,relocateRefused,textBoxPayload,draftError,explainTextBoxError,explainParagraphError,explainInsertError} from './textBoxes/model.mjs';
 import './textBoxes/textBoxes.css';
 import {historyJump} from './viewer/history.mjs';
 import OutlinePanel from './viewer/OutlinePanel.jsx';
@@ -305,7 +305,7 @@ export default function App(){
     try{
       textBoxPayloadRef.current=rebuild;await applyTextBox();
       if(sessionRef.current!==target){setParagraph(null);setMode('edit');await analyze();setMessage(pushed>0?'Paragraph saved; content below moved down.':'Paragraph saved as wrapped text.');}
-      else refuse('The rebuilt text could not be applied. Your PDF is unchanged.');
+      else{textBoxController.invalidate();refuse('The rebuilt text could not be applied. Your PDF is unchanged.');}
     }finally{committingRef.current=false;settle();}
   };
   const navigateMatch=match=>{cancelInline();setActiveMatch(match);gotoPage(match.page);fetchRuns(match.page,0);setNavigationStatus(`Match ${matches.findIndex(item=>item.id===match.id)+1} of ${matches.length}, page ${match.page}`);};
@@ -364,16 +364,22 @@ export default function App(){
   };
   const startTextBox=()=>{if(busyOwnerRef.current)return;cancelInline();releaseDraft();setManagedSelection(null);setSideOpen(false);setMode('edit');if(meta)resumeAnalysis();setMessage('Click anywhere on the page to add text.');};
   // Every draft change refits the box to its text (canvas-measured), so it grows as the user types.
-  const changeTextBox=value=>{textBoxController.invalidate();textBoxPayloadRef.current=null;const geometry=localMetadata?.pages[value.page_index];setTextDraft(geometry?growTextBox({...value,status:null},geometry):value);};
+  const changeTextBox=value=>{if(value.readOnly)return; // a rotated box can only be deleted
+    textBoxController.invalidate();textBoxPayloadRef.current=null;const geometry=localMetadata?.pages[value.page_index];setTextDraft(geometry?growTextBox({...value,status:null},geometry):value);};
   const placeTextBox=(index,point)=>{
     const geometry=localMetadata?.pages[index];if(busyOwnerRef.current||committingRef.current||!geometry)return;
+    const moved=relocateRefused(textDraftRef.current,index,point,geometry);
+    if(moved){changeTextBox(moved);requestAnimationFrame(()=>document.querySelector('.text-draft .text-box-input')?.focus({preventScroll:true}));return;}
     textBoxController.invalidate();setParagraph(null);setTextDraft({...newTextBox(index,geometry,point),serial:++textSerial.current,status:null});setPage(index+1);
   };
   const openTextBox=box=>{
     const geometry=localMetadata?.pages[box.page_index];if(busyOwnerRef.current||committingRef.current||!geometry)return;
-    if(box.rotation){setMessage('This text rotated with its page. Rotate the page back to edit it.');return;}
     textBoxController.invalidate();setParagraph(null);
-    setTextDraft(growTextBox({...structuredClone(box),allow_overlap:false,auto_expand:true,floor:{width:box.rect.width,height:box.rect.height},original:JSON.stringify([box.text,box.style]),serial:++textSerial.current,status:null},geometry));setPage(box.page_index+1);
+    const base={...structuredClone(box),allow_overlap:false,auto_expand:true,fixed:{width:box.rect.width,height:box.rect.height},serial:++textSerial.current,status:null};
+    // A box rotated with its page opens read-only (its layout is not editable); Delete still works.
+    const opened=box.rotation?{...base,readOnly:true}:growTextBox(base,geometry);
+    setTextDraft({...opened,original:draftSignature(opened)});setPage(box.page_index+1);
+    if(box.rotation)setMessage('This text rotated with its page. Rotate the page back to edit it; you can still delete it.');
   };
   const loadTextBoxes=async(selectId=null)=>{
     const owner=beginWork('text-box-list','Loading inserted text boxes on the server…');if(!owner)return;
@@ -381,6 +387,14 @@ export default function App(){
     try{const boxes=await textBoxController.list();if(current(target)&&sessionRef.current===target&&target.bytes===bytes&&editVersion.current===version){textBoxListRef.current={session:target,bytes};setTextBoxes(boxes);const box=selectId&&boxes.find(item=>item.id===selectId);if(box){finishWork(owner);openTextBox(box);}else setMessage(`${boxes.length} verified text boxes loaded. Select one on its page to edit.`);}}
     catch(error){if(!ignored(error)&&current(target))setMessage(explainTextBoxError(error));}finally{finishWork(owner);}
   };
+  // In Edit text, list inserted boxes quietly once analysis is ready, so a click inside one opens it
+  // instead of starting overlapping new text. No busy UI or message; a save's preview simply supersedes it.
+  useEffect(()=>{
+    const target=sessionRef.current,binding=textBoxListRef.current;
+    if(mode!=='edit'||!meta||!target||busyOwnerRef.current||committingRef.current||(binding?.session===target&&binding.bytes===target.bytes))return;
+    const bytes=target.bytes;
+    textBoxController.list().then(boxes=>{if(current(target)&&sessionRef.current===target&&target.bytes===bytes){textBoxListRef.current={session:target,bytes};setTextBoxes(boxes);}}).catch(()=>{});
+  },[mode,meta,textBoxController]);
   const applyTextBox=async()=>{
     const candidate=textBoxController.previewResult,payload=textBoxPayloadRef.current,target=sessionRef.current;
     if(!candidate||!payload||typeof localMetadata?.signed!=='boolean'||localMetadata.signed&&!acknowledged)return;
@@ -401,15 +415,16 @@ export default function App(){
       sessionRef.current=replacement;setSession(replacement);restoreUi(next);setOutput(next.bytes);setManagedSelection(null);setTextDraft(null);textBoxPayloadRef.current=null;editVersion.current++;
       textBoxListRef.current={session:replacement,bytes:next.bytes};setTextBoxes(accepted.boxes);setMode('edit');
       setMessage(paragraphEdit?'Paragraph rebuilt as a text box. Undo restores the previous PDF.':'Prepared text box applied. Undo restores the exact previous PDF. Analyze source text again before editing its current runs.');
-    }catch(error){if(current(target)&&!ignored(error))setMessage(error.code?localFailure(error):'The preview could not be applied. Your current PDF is unchanged. Cancel or preview again.');}finally{finishWork(owner);}
+    }catch(error){if(current(target)&&!ignored(error))setMessage(error.code?localFailure(error):'The text could not be saved. Your PDF is unchanged.');}finally{finishWork(owner);}
   };
   // Click-away save for inline text: preview and apply chained (one server call, one Undo entry), like a paragraph rebuild.
-  const saveTextBox=async(remove=false)=>{
+  const saveTextBox=async(removeRequested=false)=>{
     const d=textDraftRef.current,target=sessionRef.current;
     if(!d||!target||committingRef.current||busyOwnerRef.current)return;
-    const key=remove?'remove':JSON.stringify([d.text,d.style,d.rect]);
+    const remove=removeRequested||(!!d.id&&!d.text.trim()&&!d.readOnly); // clearing an inserted box deletes it, like Delete
+    const key=remove?'remove':draftSignature(d);
     if(d.tried===key)return; // this exact draft was already refused; wait for a change
-    if(remove?!d.id:!d.text.trim()||d.original===JSON.stringify([d.text,d.style])){cancelTextBox();return;}
+    if(remove?!d.id:!d.text.trim()||d.original===key){cancelTextBox();return;}
     const refuse=refused=>setTextDraft(s=>s?.serial===d.serial?{...s,status:{refused},tried:key}:s);
     if(typeof localMetadata?.signed!=='boolean'||(localMetadata.signed&&!acknowledged)){refuse('Acknowledge the signature notice before editing.');return;}
     const problem=!remove&&draftError(d,localMetadata.pages[d.page_index]);if(problem){refuse(problem);return;}
@@ -429,7 +444,7 @@ export default function App(){
     try{
       textBoxPayloadRef.current=payload;await applyTextBox();
       if(sessionRef.current!==target){setMode('edit');await analyze();setMessage(remove?'Text deleted.':d.id?'Text saved.':'Text added.');}
-      else refuse('The text could not be applied. Your PDF is unchanged.');
+      else{textBoxController.invalidate();refuse('The text could not be saved. Your PDF is unchanged.');}
     }finally{committingRef.current=false;settle();}
   };
   const pageCommand=operation=>{
@@ -641,11 +656,11 @@ export default function App(){
       {localMetadata?.signed&&<div className="signature-notice"><strong>Digitally signed document.</strong> Any edit invalidates its signature. Downloading the untouched original preserves its bytes.<label><input type="checkbox" checked={acknowledged} onChange={event=>setAcknowledged(event.target.checked)} disabled={!!busy}/> I understand that editing invalidates the signature.</label></div>}
       {localMetadata?.encrypted&&<div className="notice">Local edits save an unlocked copy. Your untouched original retains its password protection.</div>}
       <main className={`workspace document-workspace ${sideOpen?'with-panel':''}`}><aside className="page-rail" aria-label="Document pages"><h2>Pages <span className="location">Browser</span></h2>{pdf&&Array.from({length:pdf.numPages},(_,i)=><Thumbnail key={`${pdf.fingerprints[0]}-${i}`} pdf={pdf} number={i+1} current={page===i+1} badge={index[i+1]?.bucket} onSelect={gotoPage} onVisible={fetchRuns}/>)}</aside>
-      <section className="viewer"><div className="viewer-toolbar"><label className="compact-mode-picker"><span className="visually-hidden">Editing tool</span><select aria-label="Editing tool" value={mode} disabled={!!busy} onChange={event=>{cancelInline();setMode(event.target.value);if(event.target.value==='edit'&&meta)resumeAnalysis();}}><option value="select">Read</option><option value="edit">Edit text</option><option value="image">Images</option></select></label><div className="mode-switch" role="group" aria-label="Text mode"><button className={mode==='select'?'active':''} onClick={()=>{cancelInline();setMode('select');}}>Select text</button><button className={mode==='edit'?'active':''} onClick={()=>{cancelInline();setMode('edit');if(meta)resumeAnalysis();}}>Edit text</button><button className={mode==='image'?'active':''} onClick={()=>{cancelInline();setMode('image');}}>Images</button></div><div className="page-controls"><button aria-label="Previous page" disabled={page<=1} onClick={()=>gotoPage(page-1)}>‹</button><span>{page} / {pdf?.numPages||'…'}</span><button aria-label="Next page" disabled={!pdf||page>=pdf.numPages} onClick={()=>gotoPage(page+1)}>›</button><label className="zoom"><span className="visually-hidden">Zoom</span><select value={scale} onChange={event=>setScale(Number(event.target.value))}><option value="0.65">65%</option><option value="0.85">85%</option><option value="1">100%</option><option value="1.15">115%</option><option value="1.5">150%</option><option value="2">200%</option></select></label></div></div>{mode==='edit'&&!meta&&<div className="viewer-analysis-gate"><strong>Analyze text to edit on the page</strong><ToolbarDetails label="About this tool"><p>This uploads the current PDF for text analysis. Reading and page tools stay in your browser.</p></ToolbarDetails><button className="primary" disabled={!!busy} onClick={analyze}>Analyze text <span className="action-location">Server</span></button></div>}
+      <section className="viewer"><div className="viewer-toolbar"><label className="compact-mode-picker"><span className="visually-hidden">Editing tool</span><select aria-label="Editing tool" value={mode} disabled={!!busy} onChange={event=>{cancelInline();setMode(event.target.value);if(event.target.value==='edit'&&meta)resumeAnalysis();}}><option value="select">Read</option><option value="edit">Edit text</option><option value="image">Images</option></select></label><div className="mode-switch" role="group" aria-label="Text mode"><button className={mode==='select'?'active':''} disabled={!!busy} onClick={()=>{cancelInline();setMode('select');}}>Select text</button><button className={mode==='edit'?'active':''} disabled={!!busy} onClick={()=>{cancelInline();setMode('edit');if(meta)resumeAnalysis();}}>Edit text</button><button className={mode==='image'?'active':''} disabled={!!busy} onClick={()=>{cancelInline();setMode('image');}}>Images</button></div><div className="page-controls"><button aria-label="Previous page" disabled={page<=1} onClick={()=>gotoPage(page-1)}>‹</button><span>{page} / {pdf?.numPages||'…'}</span><button aria-label="Next page" disabled={!pdf||page>=pdf.numPages} onClick={()=>gotoPage(page+1)}>›</button><label className="zoom"><span className="visually-hidden">Zoom</span><select value={scale} onChange={event=>setScale(Number(event.target.value))}><option value="0.65">65%</option><option value="0.85">85%</option><option value="1">100%</option><option value="1.15">115%</option><option value="1.5">150%</option><option value="2">200%</option></select></label></div></div>{mode==='edit'&&!meta&&<div className="viewer-analysis-gate"><strong>Analyze text to edit on the page</strong><ToolbarDetails label="About this tool"><p>This uploads the current PDF for text analysis. Reading and page tools stay in your browser.</p></ToolbarDetails><button className="primary" disabled={!!busy} onClick={analyze}>Analyze text <span className="action-location">Server</span></button></div>}
       {tourActive&&<section className="replacement-tour" aria-label="Applied replacement walkthrough"><strong aria-live="polite">Applied replacements {tour.position+1}{tourPageMatches.length>1?`–${tour.position+tourPageMatches.length}`:''} of {tour.targets.length} — Page {tourMatch.page} of {pdf?.numPages}</strong><p>All batch changes are already applied. Matches on each page are highlighted together; approximate areas and removals are labeled. Stopping keeps the completed batch. Undo restores it as one operation.</p><div><button onClick={()=>setTour(value=>stepWalkthrough(value,value.status==='playing'?'pause':'resume'))}>{tour.status==='playing'?'Pause walkthrough':'Resume walkthrough'}</button><button onClick={()=>setTour(value=>stepWalkthrough(value,'next'))}>Next page</button><button onClick={()=>setTour(value=>stepWalkthrough(value,'stop'))}>Stop walkthrough</button><label><input type="checkbox" checked={reducedMotion} onChange={event=>{setReducedMotion(event.target.checked);if(event.target.checked)setTour(value=>stepWalkthrough(value,'pause'));}}/> Reduced motion</label></div></section>}
       {mode==='image'&&!activeImage&&<p className="image-mode-hint">Select an image added in this editor, or choose Insert image. Original PDF images are preserved; editing shared or unverified source images is unavailable.</p>}
       {activeImage&&<ImageToolbar key={activeImage.managedId||activeImage.id||'new'} image={activeImage} newImage={!managedSelection} busy={busy} valid={validatePlacement(activeImage.rect,localMetadata.pages[(activeImage.pageNumber||activeImage.page)-1]).valid} error={pageError} onChange={value=>imageDraft?.inline?setImageDraft(value):setManagedSelection(value)} onApply={imageDraft?.inline?commitImage:()=>commitManaged(false)} onCancel={()=>{releaseDraft();setManagedSelection(null);}} onReplace={file=>chooseImage(file,{inline:true,target:managedSelection||{...imageDraft,id:imageDraft.managedId,pageNumber:imageDraft.page}})} onDelete={()=>commitManaged(true)}/>}
-      {busyOwnerRef.current?.kind.startsWith('text-box')&&<button className="text-box-cancel-work" onClick={cancelTextBox}>Cancel text box operation</button>}
+      {busyOwnerRef.current?.kind.startsWith('text-box')&&!committingRef.current&&busyOwnerRef.current.kind!=='text-box-save'&&<button className="text-box-cancel-work" onClick={cancelTextBox}>Cancel text box operation</button>}
       {pdf?<ContinuousViewer pdf={displayPdf} scale={scale} mode={mode} metadata={localMetadata} index={index} editedRunIds={editedRunIds} navigation={navigation} onPageChange={setPage} onVisible={fetchRuns} selection={textBoxDraft?{pageNumber:textBoxDraft.page_index+1}:paragraphSelection?{pageNumber:paragraphSelection.paragraph.page_index+1}:selection} onSelect={choose} disabled={!!busy} findTarget={findTarget} onFindRendered={onFindRendered} imageDraft={imageDraft}
         renderOverlay={(number,viewport)=><>
           {mode==='edit'&&index[number]?.paragraphs&&<ParagraphOutlines paragraphs={index[number].paragraphs} runs={index[number].runs} viewport={viewport} activeId={paragraphSelection?.paragraph.page_index===number-1?paragraphSelection.paragraph.paragraph_id:null} onChoose={(paragraph,event)=>chooseParagraph(paragraph,number,event)}/>}
