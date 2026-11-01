@@ -35,7 +35,8 @@ export default function ContinuousViewer({pdf,scale,metadata,index,navigation,on
     for(const node of shells.current.values())observer.observe(node);
     return()=>observer.disconnect();
   },[pdf]);
-  useEffect(()=>{scrollWithinDocument(root.current,shells.current.get(navigation?.page),{align:'start',behavior:navigation?.behavior||'instant'});},[navigation?.serial,pdf,scale]);
+  // Not keyed on pdf: a publish after an edit swaps pdf and must keep the reader's viewport.
+  useEffect(()=>{scrollWithinDocument(root.current,shells.current.get(navigation?.page),{align:'start',behavior:navigation?.behavior||'instant'});},[navigation?.serial,scale]);
   return <div ref={root} className="canvas-stage continuous-stage" tabIndex="0" aria-label="Continuous PDF document">
     {Array.from({length:pdf.numPages},(_,i)=>{const number=i+1;return <PageShell key={number} number={number} root={root} register={register} pinned={selection?.pageNumber===number} pdf={pdf} scale={scale} geometry={metadata?.pages[number-1]} {...props}
       runs={groupedEditTargets(index[number]?.runs||[],editedRunIds)} selected={selection?.pageNumber===number?selection.run_id:null}
