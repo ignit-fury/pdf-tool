@@ -34,8 +34,9 @@ jobs:
       - name: Complete regression suite
         # The mandatory Harness PDF/A job owns these two complete test files:
         # they need its authenticated veraPDF/JRE mounts as well as native tools.
+        # Docker tmpfs is noexec by default; the veraPDF gate tests execute stub validators from tmp_path.
         run: >-
-          docker run --rm --tmpfs /tmp:rw,nosuid,nodev,size=256m
+          docker run --rm --tmpfs /tmp:rw,exec,nosuid,nodev,size=256m
           --tmpfs /dev/shm:rw,nosuid,nodev,size=1536m
           pdf-tool-tests:ci uv run --frozen pytest -q
           --ignore=tests/test_gate_g7a.py --ignore=tests/test_docx_cuttable.py
