@@ -5,21 +5,23 @@ import 'pdfjs-dist/web/pdf_viewer.css';
 import './style.css';
 import {Thumbnail} from './Viewer.jsx';
 import ContinuousViewer from './viewer/ContinuousViewer.jsx';
-import TextToolbar,{InlineInput} from './viewer/InlineEditor.jsx';
+import TextToolbar from './viewer/InlineEditor.jsx';
+import ParagraphEditor,{ParagraphOutlines} from './viewer/ParagraphEditor.jsx';
+import {effectiveLines,draftChanged,paragraphPayload,clampRect} from './viewer/paragraphs.mjs';
+import FloatingTextTools from './viewer/FloatingTextTools.jsx';
 import ImageToolbar,{ImageHandles} from './viewer/ImageEditor.jsx';
 import TextBoxToolbar,{TextBoxOverlay} from './textBoxes/TextBoxEditor.jsx';
 import {createTextBoxController} from './textBoxes/controller.mjs';
-import {newTextBox,sourceTextBox,textBoxPayload,draftError,explainTextBoxError} from './textBoxes/model.mjs';
+import {newTextBox,textBoxPayload,draftError,explainTextBoxError} from './textBoxes/model.mjs';
 import './textBoxes/textBoxes.css';
-import {draftProblem,sourceTypography,viewportFontScale} from './viewer/model.mjs';
 import {historyJump} from './viewer/history.mjs';
 import OutlinePanel from './viewer/OutlinePanel.jsx';
 import HistoryPanel from './viewer/HistoryPanel.jsx';
 import ToolbarDetails from './viewer/ToolbarDetails.jsx';
-import {groupedEditTargets,splitSourceWord} from './viewer/groupRuns.mjs';
+import {groupedEditTargets} from './viewer/groupRuns.mjs';
 import './viewer/viewer.css';
 import './viewer/compactChrome.css';
-import {upsertOperation,withSourceRetry,decodePdf,explainReason,explainPageAnalysisError,isWidthOverflow,retryWorkerBusy,disposeDocument,explainBucket,passwordHeaders,viewportBox} from './session.mjs';
+import {withSourceRetry,decodePdf,explainReason,explainPageAnalysisError,retryWorkerBusy,disposeDocument,explainBucket,passwordHeaders,viewportBox} from './session.mjs';
 import FindPanel from './find/FindPanel.jsx';
 import {findMatches,sourceRunForMatch} from './find/search.mjs';
 import {buildReplacementRecipe} from './find/buildRecipe.mjs';
@@ -91,9 +93,12 @@ export default function App(){
   const textBoxRef=useRef(null),textBoxSourceRef=useRef(null),textBoxListRef=useRef(null),textBoxPayloadRef=useRef(null);
   const [textBoxState,setTextBoxState]=useState({status:'idle'}),[textBoxDraft,setTextBoxDraft]=useState(null),[textBoxes,setTextBoxes]=useState([]);
   const [sourceMismatch,setSourceMismatch]=useState(false),[indexRevision,setIndexRevision]=useState(0);
+  // The ref is the synchronous truth for the open paragraph draft, so blur/Esc ordering cannot commit a stale or cancelled draft.
+  const paragraphRef=useRef(null),committingRef=useRef(false),[paragraphSelection,setParagraphSelection]=useState(null);
+  const setParagraph=next=>{paragraphRef.current=typeof next==='function'?next(paragraphRef.current):next;setParagraphSelection(paragraphRef.current);};
   const beginWork=(kind,label)=>{if(busyOwnerRef.current)return null;const owner={kind};busyOwnerRef.current=owner;setBusy(label);return owner;};
   const finishWork=owner=>{if(busyOwnerRef.current===owner){busyOwnerRef.current=null;setBusy('');}};
-  const invalidateBatch=()=>{editVersion.current++;setBatchReview(null);setBatchError('');};
+  const invalidateBatch=()=>{if(!committingRef.current)editVersion.current++;setBatchReview(null);setBatchError('');};
   const releaseDraft=()=>{const value=draftRef.current;if(value){value.controller.abort();value.decoded?.dispose();value.preview?.dispose();draftRef.current=null;}setImportReview(null);setImageDraft(null);};
   const clear=useCallback(()=>{
     editVersion.current++;textBoxRef.current?.dispose();textBoxSourceRef.current=null;textBoxListRef.current=null;textBoxPayloadRef.current=null;setTextBoxDraft(null);setTextBoxes([]);
@@ -103,7 +108,7 @@ export default function App(){
     sessionRef.current=null;loadingRef.current?.destroy();loadingRef.current=null;disposeDocument(pdfRef.current);pdfRef.current=null;
     setSession(null);setPdf(null);setHighlightState(null);setMeta(null);setIndex({});setSelection(null);setRecipeState(EMPTY);setPreview(null);setOutput(null);setMessage('');setBusy('');setPage(1);setAcknowledged(false);setPasswordPrompt(null);setPasswordInput('');
     setPanel('pages');setLocalMetadata(null);setQuery('');setReplacement('');setFontFamily('');setMatchCase(false);setWholeWords(false);setExcludedIds(new Set());setIndexProgress(EMPTY_PROGRESS);setBatchReview(null);setBatchError('');setActiveMatch(null);setResultPage(1);setNavigationStatus('');rowRefs.current.clear();
-    setSourceMismatch(false);setIndexRevision(0);setSideOpen(false);setNavigation({page:1,serial:0});setTour(null);setManagedSelection(null);
+    setSourceMismatch(false);setIndexRevision(0);setSideOpen(false);setNavigation({page:1,serial:0});setTour(null);setManagedSelection(null);paragraphRef.current=null;setParagraphSelection(null);
   },[]);
   useEffect(()=>{
     if(!passwordPrompt)return;
@@ -226,22 +231,79 @@ export default function App(){
   const showFind=()=>{cancelInline();setManagedSelection(null);setSideOpen(true);resumeAnalysis();setPanel('find');setPreview(null);requestAnimationFrame(()=>queryRef.current?.focus());};
   const showNavigation=next=>{if(busyOwnerRef.current)return;const target=sessionRef.current;if(target)target.deferAnalysis=true;indexingRef.current?.stop();cancelInline(false);releaseDraft();setManagedSelection(null);setPanel(next);setSideOpen(true);};
   const showInspector=()=>{cancelTextBox();setSideOpen(true);resumeAnalysis();setPanel('inspector');requestAnimationFrame(()=>inspectorButtonRef.current?.focus());};
-  const cancelInline=(focus=true)=>{cancelTextBox();setTour(null);editVersion.current++;setSelection(null);setPreview(null);setBatchReview(null);if(focus)requestAnimationFrame(()=>document.querySelector('.continuous-stage')?.focus({preventScroll:true}));};
+  const cancelInline=(focus=true)=>{cancelTextBox();setTour(null);if(!committingRef.current)editVersion.current++;setSelection(null);setPreview(null);setBatchReview(null);if(focus)requestAnimationFrame(()=>document.querySelector('.continuous-stage')?.focus({preventScroll:true}));};
   const gotoPage=number=>{cancelInline();setPage(number);setNavigation(previous=>({page:number,serial:previous.serial+1}));fetchRuns(number,0);};
-  const changeDraft=(value,caret)=>{editVersion.current++;setPreview(null);setBatchReview(null);setDraft(value);if(/[\r\n\t\v\f\u0085\u2028\u2029]/.test(value))expandSourceText(value,style,caret);};
-  const changeStyle=value=>{editVersion.current++;setPreview(null);setBatchReview(null);setStyle(value);};
   const choose=async run=>{
     setManagedSelection(null);
     if(busyOwnerRef.current)return;
     cancelTextBox();setSideOpen(false);
     if(run.text_box_id){startTextBox();await loadTextBoxes(run.text_box_id);return;}
-    const number=run.pageNumber||page;
-    if(localMetadata?.pages[number-1]?.rotation||run.direction&&(Math.abs(run.direction[1])>.01||run.direction[0]<=0)){
-      setMessage('Inline editing of rotated or directed text is unavailable. Rotate the page with page tools and analyze again, or choose a horizontal text run.');return;
+    const number=run.pageNumber||page,ids=run.source_run_ids||[run.run_id];
+    const paragraph=index[number]?.paragraphs?.find(p=>p.lines.some(line=>line.some(id=>ids.includes(id))));
+    if(!paragraph||paragraph.state==='not_editable'){setMessage(`${explainReason(paragraph?.reason||run.reason)} Select another text run. Page tools and exports remain available.`);return;}
+    setMode('edit');chooseParagraph(paragraph,number);
+  };
+  const runsFor=number=>new Map((index[number]?.runs||[]).map(run=>[run.run_id,run]));
+  const chooseParagraph=(source,number,event)=>{
+    if(busyOwnerRef.current||committingRef.current||source.state==='not_editable')return;
+    if(localMetadata?.pages[number-1]?.rotation){setMessage('Inline editing of rotated pages is unavailable. Rotate the page with page tools and analyze again.');return;}
+    cancelTextBox();setSideOpen(false);setManagedSelection(null);invalidateBatch();setPage(number);
+    const paragraph={...source,page_index:number-1},lines=effectiveLines(paragraph,runsFor(number),recipeState.recipe);
+    let caret={line:lines.length-1,offset:Infinity};
+    if(event?.currentTarget){
+      // shortcut: caret offset assumes even glyph widths; upgrade to per-glyph boxes from the run map if users report misplaced carets.
+      const rect=event.currentTarget.getBoundingClientRect(),line=Math.min(lines.length-1,Math.max(0,Math.floor((event.clientY-rect.top)/(rect.height/lines.length))));
+      caret={line,offset:Math.max(0,Math.round((event.clientX-rect.left)/rect.width*lines[line].length))};
     }
-    invalidateBatch();setMode('edit');setPage(number);
-    const existing=recipeState.recipe.find(op=>op.run_id===run.run_id);
-    setSelection({...run,pageNumber:number});setDraft(run.source_run_ids?run.text:existing?.new_text??run.text);setStyle(run.source_run_ids?{}:existing?.style||{});setPreview(null);
+    setParagraph({paragraph,lines,caret,style:{},status:null,tried:null,reset:0});
+  };
+  const cancelParagraph=()=>{editVersion.current++;setParagraph(null);};
+  const commitParagraph=async(allowRebuild=false)=>{
+    const sel=paragraphRef.current,target=sessionRef.current;
+    if(!sel||!target||committingRef.current||busyOwnerRef.current)return;
+    const number=sel.paragraph.page_index+1,runs=runsFor(number),key=JSON.stringify([sel.lines,sel.style,allowRebuild]);
+    if(sel.tried===key)return; // this exact draft was already refused; wait for a change
+    if(!allowRebuild&&!Object.keys(sel.style).length&&!draftChanged(sel.paragraph,sel.lines,runs,recipeState.recipe)){setParagraph(null);return;}
+    if(typeof localMetadata?.signed!=='boolean'||(localMetadata.signed&&!acknowledged)){setParagraph(s=>({...s,status:{refused:'Acknowledge the signature notice before editing.',canRebuild:false}}));return;}
+    const owner=beginWork('paragraph','Saving paragraph on the server…');if(!owner)return;
+    committingRef.current=true;
+    const stillOpen=()=>paragraphRef.current?.paragraph.paragraph_id===sel.paragraph.paragraph_id&&JSON.stringify([paragraphRef.current.lines,paragraphRef.current.style])===JSON.stringify([sel.lines,sel.style]);
+    const settle=()=>setParagraph(s=>s?.status==='saving'?{...s,status:null}:s);
+    const refuse=(refused,canRebuild=false,tried=key)=>setParagraph(s=>s&&({...s,status:{refused,canRebuild},tried}));
+    setParagraph(s=>({...s,status:'saving'}));
+    let rebuild=null,accepted=null;
+    try{
+      const pdfPage=await pdfRef.current.getPage(number),rect=clampRect(viewportBox(sel.paragraph.box,pdfPage.getViewport({scale:1})),localMetadata.pages[number-1]);
+      const payload=paragraphPayload({paragraph:sel.paragraph,lines:sel.lines,style:sel.style,recipe:recipeState.recipe,rect,allowRebuild,runsById:runs});
+      const result=await textBoxController.preview(payload,{acknowledged});
+      if(!stillOpen()){textBoxController.cancel();return;}
+      if(!result?.prepared){refuse(explainTextBoxError(result));return;}
+      if(result.plan==='rebuild')rebuild=payload; // published below, after this owner is released
+      else if((accepted=textBoxController.take(payload))){
+        // Same publish as the old inline apply(): source kept, recipe replaced, one history entry.
+        const snapshot=takeSnapshot('paragraph edit');requireBudget({current:snapshot,candidateBytes:accepted.prepared.bytes});
+        publishViewer(accepted.prepared,()=>current(target)&&sessionRef.current===target&&stillOpen());accepted=null;
+        retain(snapshot);target.bytes=result.prepared.bytes;setRecipeState({recipe:result.recipe,history:[]});setOutput(result.prepared.bytes);
+        editVersion.current++;setParagraph(null);setActiveMatch(null);setMessage('Paragraph saved. Undo restores the previous PDF.');
+      }
+    }catch(error){
+      if(ignored(error))return; // finally settles 'saving'
+      if(error.code==='PARAGRAPH_UNCHANGED')setParagraph(null);
+      else if(error.code==='PARAGRAPH_NEEDS_REBUILD')refuse('This text does not fit the original lines.',true);
+      else if(error.code==='PARAGRAPH_STALE'){
+        refuse('This text changed since the page was analyzed. Check it and save again.',false,null);
+        target.pages.delete(number);
+        fetchRuns(number,0).then(data=>{const fresh=data?.paragraphs?.find(p=>p.paragraph_id===sel.paragraph.paragraph_id);if(fresh&&paragraphRef.current?.paragraph.paragraph_id===fresh.paragraph_id)setParagraph(s=>({...s,paragraph:{...fresh,page_index:number-1}}));}).catch(()=>{});
+      }
+      else refuse(['RETENTION_LIMIT','TRANSIENT_LIMIT','HISTORY_LIMIT'].includes(error.code)?localFailure(error):explainTextBoxError(error));
+    }finally{accepted?.prepared.dispose?.();finishWork(owner);if(!rebuild){committingRef.current=false;settle();}}
+    if(!rebuild)return;
+    // Rebuild publishes exactly like an applied text box, then re-analyzes so the next click is editable.
+    try{
+      textBoxPayloadRef.current=rebuild;await applyTextBox();
+      if(sessionRef.current!==target){setParagraph(null);setMode('edit');await analyze();}
+      else refuse('The rebuilt text could not be applied. Your PDF is unchanged.');
+    }finally{committingRef.current=false;settle();}
   };
   const navigateMatch=match=>{cancelInline();setActiveMatch(match);gotoPage(match.page);fetchRuns(match.page,0);setNavigationStatus(`Match ${matches.findIndex(item=>item.id===match.id)+1} of ${matches.length}, page ${match.page}`);};
   const refreshIndex=()=>{invalidateBatch();setSourceMismatch(false);setActiveMatch(null);setExcludedIds(new Set());setResultPage(1);setIndexProgress(EMPTY_PROGRESS);setIndexRevision(previous=>previous+1);};
@@ -268,7 +330,7 @@ export default function App(){
   };
   const retain=snapshot=>{historyRef.current=pushSnapshot(historyRef.current,snapshot);setDocumentHistory(historyRef.current);redoRef.current=[];setRedoHistory([]);};
   const restoreUi=snapshot=>{
-    setLocalMetadata(snapshot.localMetadata);setMeta(snapshot.analysis?.enabled?snapshot.analysis.meta:null);setIndex(snapshot.analysis?.index||{});setRecipeState({recipe:snapshot.recipe||[],history:[]});setPage(snapshot.selectedPage+1);setNavigation(previous=>({page:snapshot.selectedPage+1,serial:previous.serial+1}));setStyle(snapshot.style||{});setSelection(null);setAcknowledged(snapshot.acknowledged===true);
+    setLocalMetadata(snapshot.localMetadata);setMeta(snapshot.analysis?.enabled?snapshot.analysis.meta:null);setIndex(snapshot.analysis?.index||{});setRecipeState({recipe:snapshot.recipe||[],history:[]});setPage(snapshot.selectedPage+1);setNavigation(previous=>({page:snapshot.selectedPage+1,serial:previous.serial+1}));setStyle(snapshot.style||{});setSelection(null);setParagraph(null);setAcknowledged(snapshot.acknowledged===true);
     const find=snapshot.findState||{};setQuery(find.query||'');setReplacement(find.replacement||'');setFontFamily(find.fontFamily||'');setMatchCase(!!find.matchCase);setWholeWords(!!find.wholeWords);setExcludedIds(new Set(find.excludedIds||[]));setIndexProgress(normalizeIndexProgress(find.indexProgress));setActiveMatch(find.activeMatch||null);setResultPage(find.resultPage||1);setDraft(find.draft||'');setMode(find.mode||'select');setPanel(find.panel||'pages');
     setPreview(null);setBatchReview(null);setBatchError('');setSourceMismatch(false);setNavigationStatus('');setIndexRevision(value=>value+1);
   };
@@ -293,6 +355,7 @@ export default function App(){
     finally{finishWork(owner);}
   };
   const cancelTextBox=()=>{
+    if(committingRef.current)return; // a started paragraph save (incl. its rebuild apply) must finish or refuse visibly
     textBoxController.cancel();textBoxPayloadRef.current=null;setTextBoxDraft(null);
     const owner=busyOwnerRef.current;if(owner?.kind.startsWith('text-box'))finishWork(owner);
   };
@@ -300,19 +363,6 @@ export default function App(){
   const changeTextBox=value=>{
     textBoxController.invalidate();textBoxPayloadRef.current=null;setTextBoxDraft(value);
     if(value.page_index!==textBoxDraft?.page_index&&Number.isInteger(value.page_index)&&value.page_index>=0&&value.page_index<(pdfRef.current?.numPages||0)){setPage(value.page_index+1);setNavigation(n=>({page:value.page_index+1,serial:n.serial+1}));}
-  };
-  const expandSourceText=async(text=draft,format=style,caret,sourceRun,fromWidthRefusal=false)=>{
-    const target=sessionRef.current,run=sourceRun||selection,document=pdfRef.current,version=editVersion.current;
-    if(!run||run.state==='not_editable'||busyOwnerRef.current)return;
-    const valid=()=>current(target)&&sessionRef.current===target&&pdfRef.current===document&&editVersion.current===version;
-    try{
-      const sourcePage=await document.getPage(run.pageNumber),viewport=sourcePage.getViewport({scale:1});
-      if(!valid())return;
-      const geometry=localMetadata.pages[run.pageNumber-1];
-      const next=sourceTextBox({run,text,style:format,recipe:recipeState.recipe,geometry,box:viewportBox(run.box,viewport),typography:sourceTypography(run,format,viewportFontScale(viewport)),caret});
-      cancelInline(false);releaseDraft();setManagedSelection(null);setSideOpen(false);setMode('text-box');setTextBoxDraft(next);
-      setMessage(fromWidthRefusal?'Preserve layout has no room for this replacement. An expandable draft is ready; its font and size are shown below. Preview the exact PDF before applying.':run.source_run_ids?'This word uses two PDF text runs. Preview replaces both with one searchable word using the selected font and size; Apply commits them as one change.':'Flexible text box: grows into free page space. Preview removes the original text and shows the real wrapped PDF; Apply commits it as one change.');
-    }catch(error){if(valid()&&!ignored(error))setMessage('Could not prepare this text box. Your draft and PDF are unchanged. Try another text run.');}
   };
   const placeTextBox=(number,point)=>{if(busyOwnerRef.current||!localMetadata?.pages[number])return;textBoxController.invalidate();setTextBoxDraft(newTextBox(number,localMetadata.pages[number],point));setPage(number+1);};
   const selectTextBox=box=>{if(busyOwnerRef.current)return;textBoxController.invalidate();setTextBoxDraft({...structuredClone(box),allow_overlap:false,auto_expand:true});setPage(box.page_index+1);};
@@ -339,7 +389,7 @@ export default function App(){
     const owner=beginWork('text-box-apply','Applying prepared text box in this browser…');if(!owner)return;
     const version=editVersion.current,valid=()=>current(target)&&sessionRef.current===target&&busyOwnerRef.current===owner&&editVersion.current===version&&textBoxController.previewResult===candidate;
     try{
-      const action=payload.operation==='replace-source'?'source text expansion':payload.operation==='remove'?'text box removal':payload.id?'text box edit':'text insertion';
+      const paragraphEdit=payload.operation==='replace-paragraph',action=paragraphEdit?'paragraph edit':payload.operation==='replace-source'?'source text expansion':payload.operation==='remove'?'text box removal':payload.id?'text box edit':'text insertion';
       const snapshot=takeSnapshot(action);requireBudget({current:snapshot,candidateBytes:candidate.prepared.bytes,temporaryBytes:candidate.prepared.bytes.buffer.byteLength});
       const metadata=await pdfJob(target,'inspect',{bytes:candidate.prepared.bytes,options:{}});
       if(!valid())return;
@@ -351,8 +401,8 @@ export default function App(){
       publishViewer(accepted.prepared,()=>current(target)&&sessionRef.current===target&&busyOwnerRef.current===owner&&editVersion.current===version);
       retain(snapshot);indexingRef.current?.dispose();indexingRef.current=null;releaseDraft();target.controller.abort();target.password='';target.pages.clear();
       sessionRef.current=replacement;setSession(replacement);restoreUi(next);setOutput(next.bytes);setManagedSelection(null);setTextBoxDraft(null);textBoxPayloadRef.current=null;editVersion.current++;
-      textBoxListRef.current={session:replacement,bytes:next.bytes};setTextBoxes(accepted.boxes);setMode('text-box');
-      setMessage('Prepared text box applied. Undo restores the exact previous PDF. Analyze source text again before editing its current runs.');
+      textBoxListRef.current={session:replacement,bytes:next.bytes};setTextBoxes(accepted.boxes);setMode(paragraphEdit?'edit':'text-box');
+      setMessage(paragraphEdit?'Paragraph rebuilt as a text box. Undo restores the previous PDF.':'Prepared text box applied. Undo restores the exact previous PDF. Analyze source text again before editing its current runs.');
     }catch(error){if(current(target)&&!ignored(error))setMessage(error.code?localFailure(error):'The preview could not be applied. Your current PDF is unchanged. Cancel or preview again.');}finally{finishWork(owner);}
   };
   const pageCommand=operation=>{
@@ -456,40 +506,6 @@ export default function App(){
     finally{finishWork(owner);}
   };
   const cancelBatchPreview=()=>{editVersion.current++;setBatchReview(null);setBatchError('');const owner=busyOwnerRef.current;if(owner?.kind==='batch-preview')finishWork(owner);};
-  const candidate=()=>splitSourceWord(selection,draft).reduce((result,operation)=>{
-    const previous=result.find(item=>item.run_id===operation.run_id);
-    const mergedStyle={...previous?.style,...style};
-    return upsertOperation(result,{...operation,...(Object.keys(mergedStyle).length?{style:mergedStyle}:{})});
-  },recipeState.recipe);
-  const checkFit=async()=>{
-    if(!selection||draftProblem(draft))return;const owner=beginWork('single-preview','Checking text fit…');if(!owner)return;
-    const target=sessionRef.current,version=++editVersion.current,recipe=candidate();setBatchReview(null);setMessage('');
-    let expand=false;
-    try{const result=await documentRequest(target,'/edit?dry_run=true',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(recipe)});if(current(target)&&version===editVersion.current){expand=!result.ok&&result.resolved?.some(row=>!row.ok&&isWidthOverflow(row.reason));if(!expand)setPreview({result,recipe,key:JSON.stringify(recipe)});}}
-    catch(error){if(current(target)&&!ignored(error))setMessage(error.message);}finally{finishWork(owner);}
-    if(expand&&current(target)&&version===editVersion.current)await expandSourceText(draft,style,undefined,selection,true);
-  };
-  const apply=async()=>{
-    const target=sessionRef.current,accepted=preview;
-    if(!selection||!accepted?.result.ok||accepted.key!==JSON.stringify(candidate())||typeof localMetadata?.signed!=='boolean'||(localMetadata.signed&&!acknowledged))return;
-    const owner=beginWork('apply','Applying edit…');if(!owner)return;
-    const version=++editVersion.current;
-    const valid=()=>current(target)&&sessionRef.current===target&&busyOwnerRef.current===owner&&editVersion.current===version;
-    setBatchReview(null);setMessage('');
-    let prepared;
-    try{
-      const snapshot=takeSnapshot('text edit');
-      requireBudget({current:snapshot,temporaryBytes:80*1024*1024});
-      const result=await documentRequest(target,`/edit?dry_run=false&acknowledge_signature=${acknowledged}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(accepted.recipe)});
-      if(!valid())return;
-      if(!result.ok||!result.pdf){setPreview({...accepted,result:{...result,ok:false}});return;}
-      const bytes=decodePdf(result.pdf);requireBudget({current:snapshot,candidateBytes:bytes,temporaryBytes:bytes.buffer.byteLength});prepared=await prepareViewer(target,bytes,valid);
-      if(!valid()){prepared.dispose();return;}
-      requireBudget({current:snapshot,candidateBytes:bytes});publishViewer(prepared,valid);retain(snapshot);target.bytes=bytes;setRecipeState({recipe:accepted.recipe,history:[]});setOutput(bytes);
-      editVersion.current++;setSelection(null);setPreview(null);setBatchReview(null);setActiveMatch(null);setMessage('Edit applied. Download the PDF or undo this change.');
-    }catch(error){if(prepared)prepared.dispose();if(valid()&&!ignored(error))setMessage(error.code?localFailure(error):'The edit could not be applied. Your current document is unchanged. Preview again, then retry.');}
-    finally{finishWork(owner);}
-  };
   const applyBatch=async()=>{
     const accepted=batchReview,target=sessionRef.current;
     if(indexProgress.status!=='complete'||accepted?.baseKey!==batchKey||!accepted?.result.ok||typeof localMetadata?.signed!=='boolean'||(localMetadata.signed&&!acknowledged))return;
@@ -606,10 +622,13 @@ export default function App(){
       {textBoxDraft&&<TextBoxToolbar draft={textBoxDraft} state={textBoxState} geometry={localMetadata?.pages[textBoxDraft.page_index]} pageCount={pdf?.numPages||0} busy={busy} allowed={!localMetadata?.signed||acknowledged} onDraft={changeTextBox} onPreview={()=>previewTextBox()} onApply={applyTextBox} onCancel={cancelTextBox} onEdit={()=>textBoxController.invalidate()} onRemove={()=>previewTextBox({operation:'remove',id:textBoxDraft.id})}/>}
       {textBoxPreview&&<div className="text-box-preview-banner" role="status">Preview only — Apply or Cancel to return to the working document. Downloads and exports use committed bytes.</div>}
       {busyOwnerRef.current?.kind.startsWith('text-box')&&<button className="text-box-cancel-work" onClick={cancelTextBox}>Cancel text box operation</button>}
-      {selection&&<TextToolbar run={selection} style={style} draft={draft} preview={preview} busy={busy} allowed={!localMetadata?.signed||acknowledged} onStyle={changeStyle} onPreview={checkFit} onApply={apply} onCancel={cancelInline} onExpand={()=>expandSourceText()}/>}
-      {pdf?<ContinuousViewer pdf={displayPdf} scale={scale} mode={mode} metadata={localMetadata} index={index} editedRunIds={editedRunIds} navigation={navigation} onPageChange={setPage} onVisible={fetchRuns} selection={textBoxDraft?{pageNumber:textBoxDraft.page_index+1}:selection} onSelect={choose} disabled={!!busy} findTarget={findTarget} onFindRendered={onFindRendered} imageDraft={imageDraft}
+      {pdf?<ContinuousViewer pdf={displayPdf} scale={scale} mode={mode} metadata={localMetadata} index={index} editedRunIds={editedRunIds} navigation={navigation} onPageChange={setPage} onVisible={fetchRuns} selection={textBoxDraft?{pageNumber:textBoxDraft.page_index+1}:paragraphSelection?{pageNumber:paragraphSelection.paragraph.page_index+1}:selection} onSelect={choose} disabled={!!busy} findTarget={findTarget} onFindRendered={onFindRendered} imageDraft={imageDraft}
         renderOverlay={(number,viewport)=><>
-          {selection?.pageNumber===number&&selection.state!=='not_editable'&&<InlineInput run={selection} style={style} draft={draft} viewport={viewport} busy={!!busy} onDraft={changeDraft} onCancel={cancelInline} onPreview={checkFit}/>}
+          {mode==='edit'&&index[number]?.paragraphs&&<ParagraphOutlines paragraphs={index[number].paragraphs} runs={index[number].runs} viewport={viewport} activeId={paragraphSelection?.paragraph.page_index===number-1?paragraphSelection.paragraph.paragraph_id:null} onChoose={(paragraph,event)=>chooseParagraph(paragraph,number,event)}/>}
+          {paragraphSelection?.paragraph.page_index===number-1&&<>
+            <FloatingTextTools box={viewportBox(paragraphSelection.paragraph.box,viewport)}><TextToolbar run={runsFor(number).get(paragraphSelection.paragraph.lines[0][0])||{run_id:paragraphSelection.paragraph.paragraph_id}} style={paragraphSelection.style} busy={busy} status={paragraphSelection.status} onStyle={value=>setParagraph(s=>({...s,style:value,status:null}))} onDelete={()=>{setParagraph(s=>({...s,lines:s.lines.map(()=>''),caret:{line:0,offset:0},status:null,reset:s.reset+1}));commitParagraph();}} onRevert={cancelParagraph} onRebuild={()=>commitParagraph(true)}/></FloatingTextTools>
+            <ParagraphEditor key={paragraphSelection.paragraph.paragraph_id} resetKey={paragraphSelection.reset} paragraph={paragraphSelection.paragraph} lines={paragraphSelection.lines} runsById={runsFor(number)} style={paragraphSelection.style} viewport={viewport} caret={paragraphSelection.caret} busy={!!busy} status={paragraphSelection.status} onLines={lines=>setParagraph(s=>({...s,lines,status:null}))} onCommit={()=>commitParagraph(false)} onCancel={cancelParagraph}/>
+          </>}
           {mode==='text-box'&&localMetadata&&<TextBoxOverlay number={number} viewport={viewport} geometry={localMetadata.pages[number-1]} draft={textBoxDraft} boxes={textBoxes} state={textBoxState} disabled={!!busy} onPlace={placeTextBox} onSelect={selectTextBox} onDraft={changeTextBox}/>}
           {mode==='image'&&localMetadata&&<ImageHandles images={localMetadata.pages[number-1].managedImages||[]} selected={(activeImage?.pageNumber||activeImage?.page)===number?activeImage:null} geometry={localMetadata.pages[number-1]} viewport={viewport} disabled={!!busy} onSelect={image=>chooseManaged(image,number)} onChange={value=>imageDraft?.inline?setImageDraft(value):setManagedSelection(value)}/>}
         </>}/>:<p className="loading-page">Opening the first page…</p>}
