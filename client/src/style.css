@@ -66,3 +66,5 @@
 .export-downloads a {display:block;min-height:44px;padding:10px 8px;border:1px solid #bccce2;border-radius:4px;overflow-wrap:anywhere;font-size:12px;}
 .export-panel progress {display:block;width:100%;margin:8px 0;}
 @media(max-width:760px){.export-previews{grid-template-columns:1fr;}.export-previews canvas{max-width:min(100%,240px);}}
+/* Beat the global button:hover so a hovered paragraph target never hides the page text under it. */
+button.paragraph-outline:hover:enabled,button.paragraph-outline:focus-visible{background:rgba(47,111,237,.06)}
