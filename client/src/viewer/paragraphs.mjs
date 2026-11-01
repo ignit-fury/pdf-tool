@@ -20,10 +20,10 @@ export function draftChanged(paragraph,lines,runsById,recipe){
   const before=effectiveLines(paragraph,runsById,recipe);
   return before.length!==lines.length||before.some((line,i)=>line!==lines[i]);
 }
-export function paragraphPayload({paragraph,lines,style,recipe,rect,allowRebuild,runsById}){
+export function paragraphPayload({paragraph,lines,style,recipe,rect,runsById}){
   return {operation:'replace-paragraph',paragraph_id:paragraph.paragraph_id,source_run_ids:paragraph.lines.flat(),
     page_index:paragraph.page_index,lines:[...lines],style:{...style},
-    recipe:structuredClone(recipe),rect:{...rect},allow_rebuild:!!allowRebuild,
+    recipe:structuredClone(recipe),rect:{...rect},allow_rebuild:true,
     run_styles:Object.fromEntries(paragraph.lines.flat().map(id=>[id,runStyle(runsById.get(id))]))};
 }
 // Each source run's own look, so a rebuild keeps per-word styles (engine.paragraph_edit.styled_runs).

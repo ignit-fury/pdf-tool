@@ -12,7 +12,7 @@ export function InlineInput({run,style,draft,viewport,busy,onDraft,onCancel,onPr
     onChange={event=>onDraft(event.target.value,{start:event.target.selectionStart,end:event.target.selectionEnd})} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();onCancel();}if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();onPreview();}}}/>;
 }
 
-export default function TextToolbar({run,style,busy,status,onStyle,onDelete,onRevert,onRebuild}) {
+export default function TextToolbar({run,style,busy,status,onStyle,onDelete,onRevert}) {
   if(!run)return null;
   const size=style.font_size??run.font_size??12;
   return <section className="context-toolbar compact" aria-label="Text formatting">
@@ -29,6 +29,6 @@ export default function TextToolbar({run,style,busy,status,onStyle,onDelete,onRe
       <span className="action-location">Server</span>
     </fieldset>
     {status==='saving'&&<p role="status">Saving…</p>}
-    {status?.refused&&<p className="context-warning" role="alert">{status.refused} <button onClick={onRevert}>Revert</button>{status.canRebuild&&<button onClick={onRebuild}>Rebuild as text box</button>}</p>}
+    {status?.refused&&<p className="context-warning" role="alert">{status.refused} <button onClick={onRevert}>Revert</button></p>}
   </section>;
 }

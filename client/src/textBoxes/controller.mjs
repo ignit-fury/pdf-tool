@@ -71,8 +71,9 @@ export function createTextBoxController({getCurrent,request,prepare,onState=()=>
       }
       const plan=payload.operation==='replace-paragraph'?response.plan:undefined,lineRewrite=plan==='lines';
       if(plan!==undefined&&!['lines','rebuild'].includes(plan))fail();
+      if(response.pushed!==undefined&&(plan!=='rebuild'||!finite(response.pushed,0,144000)))fail();
       // A paragraph 'lines' plan rewrites source runs in place: it returns the new recipe instead of boxes.
-      if(!keys(response,lineRewrite?['ok','plan','source_hash','pdf','recipe','notices','location']:['ok','source_hash','pdf','page_index','boxes','layout','notices','location',...(plan?['plan']:[])])||!Array.isArray(response.notices)||response.notices.length>2||response.notices.some(n=>!['UNLOCKED_COPY','SIGNATURES_INVALIDATED'].includes(n)))fail();
+      if(!keys(response,lineRewrite?['ok','plan','source_hash','pdf','recipe','notices','location']:['ok','source_hash','pdf','page_index','boxes','layout','notices','location',...(plan?['plan']:[]),...(plan&&response.pushed!==undefined?['pushed']:[])])||!Array.isArray(response.notices)||response.notices.length>2||response.notices.some(n=>!['UNLOCKED_COPY','SIGNATURES_INVALIDATED'].includes(n)))fail();
       let fields;
       if(lineRewrite){
         if(!Array.isArray(response.recipe)||response.recipe.some(op=>!op||typeof op.run_id!=='string'||typeof op.new_text!=='string'))fail();
@@ -82,7 +83,7 @@ export function createTextBoxController({getCurrent,request,prepare,onState=()=>
         const boxes=validateBoxes(response.boxes),layout=response.layout;
         if(payload.operation!=='remove'&&(!keys(layout,['required_height','available_height','line_count'])||!finite(layout.required_height,.01,144000)||!finite(layout.available_height,.01,144000)||layout.required_height>layout.available_height+.000001||!Number.isSafeInteger(layout.line_count)||layout.line_count<1||layout.line_count>10000))fail();
         if(payload.operation==='remove'&&layout!==null)fail();
-        fields={page_index:response.page_index,boxes,layout,...(plan?{plan}:{})};
+        fields={page_index:response.page_index,boxes,layout,...(plan?{plan}:{}),...(response.pushed!==undefined?{pushed:response.pushed}:{})};
       }
       const bytes=decodePdf(response.pdf,(capture.retainedBytes||0)+retiredBytes);check();pendingBytes.set(token,bytes.buffer.byteLength*2);
       prepared=await prepare(bytes,valid);check();

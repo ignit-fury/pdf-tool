@@ -259,40 +259,39 @@ export default function App(){
     setParagraph({paragraph,lines,caret,style:{},status:null,tried:null,reset:0});
   };
   const cancelParagraph=()=>{editVersion.current++;setParagraph(null);};
-  const commitParagraph=async(allowRebuild=false)=>{
+  const commitParagraph=async()=>{
     const sel=paragraphRef.current,target=sessionRef.current;
     if(!sel||!target||committingRef.current||busyOwnerRef.current)return;
-    const number=sel.paragraph.page_index+1,runs=runsFor(number),key=JSON.stringify([sel.lines,sel.style,allowRebuild]);
+    const number=sel.paragraph.page_index+1,runs=runsFor(number),key=JSON.stringify([sel.lines,sel.style]);
     if(sel.tried===key)return; // this exact draft was already refused; wait for a change
-    if(!allowRebuild&&!Object.keys(sel.style).length&&!draftChanged(sel.paragraph,sel.lines,runs,recipeState.recipe)){setParagraph(null);return;}
-    if(typeof localMetadata?.signed!=='boolean'||(localMetadata.signed&&!acknowledged)){setParagraph(s=>({...s,status:{refused:'Acknowledge the signature notice before editing.',canRebuild:false}}));return;}
+    if(!Object.keys(sel.style).length&&!draftChanged(sel.paragraph,sel.lines,runs,recipeState.recipe)){setParagraph(null);return;}
+    if(typeof localMetadata?.signed!=='boolean'||(localMetadata.signed&&!acknowledged)){setParagraph(s=>({...s,status:{refused:'Acknowledge the signature notice before editing.'}}));return;}
     const owner=beginWork('paragraph','Saving paragraph on the server…');if(!owner)return;
     committingRef.current=true;
     const stillOpen=()=>paragraphRef.current?.paragraph.paragraph_id===sel.paragraph.paragraph_id&&JSON.stringify([paragraphRef.current.lines,paragraphRef.current.style])===JSON.stringify([sel.lines,sel.style]);
     const settle=()=>setParagraph(s=>s?.status==='saving'?{...s,status:null}:s);
-    const refuse=(refused,canRebuild=false,tried=key)=>setParagraph(s=>s&&({...s,status:{refused,canRebuild},tried}));
+    const refuse=(refused,tried=key)=>setParagraph(s=>s&&({...s,status:{refused},tried}));
     setParagraph(s=>({...s,status:'saving'}));
-    let rebuild=null,accepted=null;
+    let rebuild=null,accepted=null,pushed=0;
     try{
       const pdfPage=await pdfRef.current.getPage(number),rect=clampRect(viewportBox(sel.paragraph.box,pdfPage.getViewport({scale:1})),localMetadata.pages[number-1]);
-      const payload=paragraphPayload({paragraph:sel.paragraph,lines:sel.lines,style:sel.style,recipe:recipeState.recipe,rect,allowRebuild,runsById:runs});
+      const payload=paragraphPayload({paragraph:sel.paragraph,lines:sel.lines,style:sel.style,recipe:recipeState.recipe,rect,runsById:runs});
       const result=await textBoxController.preview(payload,{acknowledged});
       if(!stillOpen()){textBoxController.cancel();return;}
       if(!result?.prepared){refuse(explainTextBoxError(result));return;}
-      if(result.plan==='rebuild')rebuild=payload; // published below, after this owner is released
+      if(result.plan==='rebuild'){rebuild=payload;pushed=result.pushed||0;} // published below, after this owner is released
       else if((accepted=textBoxController.take(payload))){
         // Same publish as the old inline apply(): source kept, recipe replaced, one history entry.
         const snapshot=takeSnapshot('paragraph edit');requireBudget({current:snapshot,candidateBytes:accepted.prepared.bytes});
         publishViewer(accepted.prepared,()=>current(target)&&sessionRef.current===target&&stillOpen());accepted=null;
         retain(snapshot);target.bytes=result.prepared.bytes;setRecipeState({recipe:result.recipe,history:[]});setOutput(result.prepared.bytes);
-        editVersion.current++;setParagraph(null);setActiveMatch(null);setMessage('Paragraph saved. Undo restores the previous PDF.');
+        editVersion.current++;setParagraph(null);setActiveMatch(null);setMessage('Paragraph saved.');
       }
     }catch(error){
       if(ignored(error))return; // finally settles 'saving'
       if(error.code==='PARAGRAPH_UNCHANGED')setParagraph(null);
-      else if(error.code==='PARAGRAPH_NEEDS_REBUILD')refuse('This text does not fit the original lines.',true);
       else if(error.code==='PARAGRAPH_STALE'){
-        refuse('This text changed since the page was analyzed. Check it and save again.',false,null);
+        refuse('This text changed since the page was analyzed. Check it and save again.',null);
         target.pages.delete(number);
         fetchRuns(number,0).then(data=>{const fresh=data?.paragraphs?.find(p=>p.paragraph_id===sel.paragraph.paragraph_id);if(fresh&&paragraphRef.current?.paragraph.paragraph_id===fresh.paragraph_id)setParagraph(s=>({...s,paragraph:{...fresh,page_index:number-1}}));}).catch(()=>{});
       }
@@ -302,7 +301,7 @@ export default function App(){
     // Rebuild publishes exactly like an applied text box, then re-analyzes so the next click is editable.
     try{
       textBoxPayloadRef.current=rebuild;await applyTextBox();
-      if(sessionRef.current!==target){setParagraph(null);setMode('edit');await analyze();}
+      if(sessionRef.current!==target){setParagraph(null);setMode('edit');await analyze();setMessage(pushed>0?'Paragraph saved; content below moved down.':'Paragraph saved as wrapped text.');}
       else refuse('The rebuilt text could not be applied. Your PDF is unchanged.');
     }finally{committingRef.current=false;settle();}
   };
@@ -627,7 +626,7 @@ export default function App(){
         renderOverlay={(number,viewport)=><>
           {mode==='edit'&&index[number]?.paragraphs&&<ParagraphOutlines paragraphs={index[number].paragraphs} runs={index[number].runs} viewport={viewport} activeId={paragraphSelection?.paragraph.page_index===number-1?paragraphSelection.paragraph.paragraph_id:null} onChoose={(paragraph,event)=>chooseParagraph(paragraph,number,event)}/>}
           {paragraphSelection?.paragraph.page_index===number-1&&<>
-            <FloatingTextTools box={viewportBox(paragraphSelection.paragraph.box,viewport)}><TextToolbar run={runsFor(number).get(paragraphSelection.paragraph.lines[0][0])||{run_id:paragraphSelection.paragraph.paragraph_id}} style={paragraphSelection.style} busy={busy} status={paragraphSelection.status} onStyle={value=>setParagraph(s=>({...s,style:value,status:null}))} onDelete={()=>{setParagraph(s=>({...s,lines:s.lines.map(()=>''),caret:{line:0,offset:0},status:null,reset:s.reset+1}));commitParagraph();}} onRevert={cancelParagraph} onRebuild={()=>commitParagraph(true)}/></FloatingTextTools>
+            <FloatingTextTools box={viewportBox(paragraphSelection.paragraph.box,viewport)}><TextToolbar run={runsFor(number).get(paragraphSelection.paragraph.lines[0][0])||{run_id:paragraphSelection.paragraph.paragraph_id}} style={paragraphSelection.style} busy={busy} status={paragraphSelection.status} onStyle={value=>setParagraph(s=>({...s,style:value,status:null}))} onDelete={()=>{setParagraph(s=>({...s,lines:s.lines.map(()=>''),caret:{line:0,offset:0},status:null,reset:s.reset+1}));commitParagraph();}} onRevert={cancelParagraph}/></FloatingTextTools>
             <ParagraphEditor key={paragraphSelection.paragraph.paragraph_id} resetKey={paragraphSelection.reset} paragraph={paragraphSelection.paragraph} lines={paragraphSelection.lines} runsById={runsFor(number)} style={paragraphSelection.style} viewport={viewport} caret={paragraphSelection.caret} busy={!!busy} status={paragraphSelection.status} onLines={lines=>setParagraph(s=>({...s,lines,status:null}))} onCommit={()=>commitParagraph(false)} onCancel={cancelParagraph}/>
           </>}
           {mode==='text-box'&&localMetadata&&<TextBoxOverlay number={number} viewport={viewport} geometry={localMetadata.pages[number-1]} draft={textBoxDraft} boxes={textBoxes} state={textBoxState} disabled={!!busy} onPlace={placeTextBox} onSelect={selectTextBox} onDraft={changeTextBox}/>}

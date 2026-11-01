@@ -26,18 +26,18 @@ test('paragraphAt hit-tests the box',()=>{
 });
 
 test('payload carries ids, lines and consent flag',()=>{
-  const body=paragraphPayload({paragraph,lines:['Hi bold','Next line'],style:{},recipe:[],rect:{left:1,top:2,width:3,height:4},allowRebuild:false,runsById:runs});
+  const body=paragraphPayload({paragraph,lines:['Hi bold','Next line'],style:{},recipe:[],rect:{left:1,top:2,width:3,height:4},runsById:runs});
   assert.equal(body.operation,'replace-paragraph');
   assert.equal(body.page_index,0);
   assert.deepEqual(body.source_run_ids,['a','b','c']);
-  assert.equal(body.allow_rebuild,false);
+  assert.equal(body.allow_rebuild,true);
   assert.deepEqual(body.lines,['Hi bold','Next line']);
   assert.deepEqual(Object.keys(body.run_styles),['a','b','c']);
   assert.equal(body.run_styles.a.font_family,'Sans');
 });
 
 test('rebuild payload leaves family to each run, not the paragraph style',()=>{
-  const body=paragraphPayload({paragraph,lines:['Hi bold','Next line'],style:{},recipe:[],rect:{left:1,top:2,width:3,height:4},allowRebuild:true,runsById:runs});
+  const body=paragraphPayload({paragraph,lines:['Hi bold','Next line'],style:{},recipe:[],rect:{left:1,top:2,width:3,height:4},runsById:runs});
   assert.deepEqual(body.style,{});
 });
 
