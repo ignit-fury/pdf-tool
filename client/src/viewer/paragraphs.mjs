@@ -21,10 +21,8 @@ export function draftChanged(paragraph,lines,runsById,recipe){
   return before.length!==lines.length||before.some((line,i)=>line!==lines[i]);
 }
 export function paragraphPayload({paragraph,lines,style,recipe,rect,allowRebuild,runsById}){
-  const first=runsById.get(paragraph.lines[0][0]);
-  const family=style.font_family||first?.suggested_font_family;
   return {operation:'replace-paragraph',paragraph_id:paragraph.paragraph_id,source_run_ids:paragraph.lines.flat(),
-    page_index:paragraph.page_index,lines:[...lines],style:{...style,...(allowRebuild&&family?{font_family:family}:{})},
+    page_index:paragraph.page_index,lines:[...lines],style:{...style},
     recipe:structuredClone(recipe),rect:{...rect},allow_rebuild:!!allowRebuild,
     run_styles:Object.fromEntries(paragraph.lines.flat().map(id=>[id,runStyle(runsById.get(id))]))};
 }

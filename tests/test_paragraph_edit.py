@@ -112,6 +112,16 @@ def test_gap_deletion_rebuild_keeps_both_styles(tmp_path):
     assert [r['style'].get('bold', False) for r in result['boxes'][0]['runs']] == [False, True]
 
 
+def test_rebuild_keeps_each_runs_own_family(tmp_path):
+    path = tmp_path / 's.pdf'; source, p = two_line_pdf(path)
+    a, b = p.lines[0][0].run_id, p.lines[1][0].run_id
+    styles = {a: {'font_family': 'Sans', 'font_size': 12}, b: {'font_family': 'Serif', 'font_size': 12}}
+    result = prepare_paragraph_edit(path, source, payload(p, ['First line here Second line here'],
+                                                          allow_rebuild=True, run_styles=styles), tmp_path)
+    assert result['plan'] == 'rebuild'
+    assert [r['style']['font_family'] for r in result['boxes'][0]['runs']] == ['Sans', 'Serif']
+
+
 def test_small_edit_uses_line_plan(tmp_path):
     path = tmp_path / 's.pdf'; source, p = two_line_pdf(path)
     result = prepare_paragraph_edit(path, source, payload(p, ['First line here', 'Second line hers']), tmp_path)

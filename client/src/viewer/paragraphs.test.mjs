@@ -36,6 +36,11 @@ test('payload carries ids, lines and consent flag',()=>{
   assert.equal(body.run_styles.a.font_family,'Sans');
 });
 
+test('rebuild payload leaves family to each run, not the paragraph style',()=>{
+  const body=paragraphPayload({paragraph,lines:['Hi bold','Next line'],style:{},recipe:[],rect:{left:1,top:2,width:3,height:4},allowRebuild:true,runsById:runs});
+  assert.deepEqual(body.style,{});
+});
+
 test('draftChanged ignores unchanged drafts',()=>{
   assert.equal(draftChanged(paragraph,['Hello bold','Next line'],runs,[]),false);
   assert.equal(draftChanged(paragraph,['Hello bold!','Next line'],runs,[]),true);
