@@ -32,6 +32,7 @@ markers = [
     "linux_only: requires Linux resource limits or tmpfs",
     "e2e: browser journey verification",
     "cdn: requires a configured live deployment URL",
+    "perf: wall-clock or CPU budget check; hardware-sensitive, run in the separate non-blocking CI perf job",
 ]
 
 [tool.mypy]

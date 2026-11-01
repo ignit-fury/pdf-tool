@@ -524,6 +524,7 @@ def _hundred_styled_boxes(pages=10, count=100):
     return out.getvalue()
 
 
+@pytest.mark.perf
 def test_hundred_styled_boxes_prove_well_inside_worker_cpu_limit():
     import time
     from engine.text_boxes import page_text_boxes

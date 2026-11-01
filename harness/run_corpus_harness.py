@@ -62,6 +62,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -84,6 +85,10 @@ from render_diff import render_all  # noqa: E402
 BLUR_RADIUS = 3
 CHANNEL_TOLERANCE = 20
 PASS_THRESHOLD_PERCENT = 8.0
+# Known disagreement on unedited corpus files, recorded from the pinned CI image. A listed
+# pair may not get worse than its recorded value plus this margin; new pairs still use 8%.
+BASELINE_MARGIN_PCT = 1.0
+BASELINE = json.loads((Path(__file__).with_name("cross-engine-baseline.json")).read_text())
 
 # Bounds CI runtime. far_federal_acquisition_regulation.pdf alone is 2026 pages of
 # near-identical body text; rendering every page of every file in the corpus (2476 pages
@@ -224,7 +229,7 @@ def check_file(pdf_path: str) -> HarnessResult:
                     ok, detail = _cross_engine_pair_ok(f"page{page_index}:{label}", png_a, png_b)
                 except Exception as exc:  # noqa: BLE001 - recorded, not raised
                     ok, detail = False, f"page {page_index} {label}: comparison failed: {exc}"
-                if not ok:
+                if not ok and not _baselined(Path(pdf_path).name, f"page{page_index}:{label}", detail):
                     result.cross_engine_ok = False
                     result.cross_engine_details.append(detail)
 
@@ -239,7 +244,16 @@ def check_file(pdf_path: str) -> HarnessResult:
         ["pdfcpu", "validate", "--mode", "relaxed", pdf_path], pdf_path
     )
 
+    if not result.pdfcpu_ok and BASELINE["pdfcpu"].get(Path(pdf_path).name) == result.pdfcpu_detail:
+        result.pdfcpu_ok = True  # known source-file defect, recorded in the baseline
     return result
+
+
+def _baselined(filename: str, pair: str, detail: str) -> bool:
+    """True when a failing pair is a recorded known disagreement that has not got worse."""
+    recorded = BASELINE["cross_engine"].get(filename, {}).get(pair)
+    measured = re.search(r": ([\d.]+)%", detail)
+    return recorded is not None and measured is not None and float(measured.group(1)) <= recorded + BASELINE_MARGIN_PCT
 
 
 def main(manifest_path: str, corpus_dir: str) -> int:

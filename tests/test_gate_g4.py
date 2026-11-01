@@ -245,6 +245,7 @@ def _worker(source, operations, dry_run):
     return result
 
 
+@pytest.mark.perf
 @pytest.mark.corpus
 def test_g4_full_40page_batch_text_and_all_renderer_pages(tmp_path):
     if not SOURCE.exists():

@@ -1,0 +1,639 @@
+{
+  "_about": "Known renderer disagreement on unedited corpus files, measured by the pinned CI image (Dockerfile.ci) on 2026-11-01. A listed pair passes while it stays within its recorded percentage plus BASELINE_MARGIN_PCT; anything new or worse fails.",
+  "cross_engine": {
+    "govdocs1_000_000018.pdf": {
+      "page0:pdfium-vs-poppler": 11.343,
+      "page0:poppler-vs-mupdf": 12.411,
+      "page1:pdfium-vs-poppler": 12.329,
+      "page1:poppler-vs-mupdf": 14.162,
+      "page2:pdfium-vs-poppler": 13.636,
+      "page2:poppler-vs-mupdf": 15.444,
+      "page3:pdfium-vs-poppler": 12.704,
+      "page3:poppler-vs-mupdf": 14.73
+    },
+    "govdocs1_000_000026.pdf": {
+      "page0:pdfium-vs-mupdf": 16.353,
+      "page0:pdfium-vs-poppler": 21.238,
+      "page1:pdfium-vs-mupdf": 17.142,
+      "page1:pdfium-vs-poppler": 23.116,
+      "page2:pdfium-vs-mupdf": 17.363,
+      "page2:pdfium-vs-poppler": 23.537,
+      "page3:pdfium-vs-mupdf": 17.185,
+      "page3:pdfium-vs-poppler": 22.782,
+      "page4:pdfium-vs-mupdf": 9.149,
+      "page4:pdfium-vs-poppler": 12.075
+    },
+    "govdocs1_001_001031.pdf": {
+      "page0:pdfium-vs-poppler": 8.461
+    },
+    "govdocs1_001_001032.pdf": {
+      "page12:pdfium-vs-poppler": 8.193,
+      "page14:pdfium-vs-poppler": 9.048,
+      "page15:pdfium-vs-poppler": 8.135,
+      "page18:pdfium-vs-poppler": 8.358,
+      "page19:pdfium-vs-poppler": 8.391,
+      "page3:pdfium-vs-poppler": 8.253,
+      "page4:pdfium-vs-poppler": 8.454
+    },
+    "govdocs1_002_002021.pdf": {
+      "page14:pdfium-vs-poppler": 8.625
+    },
+    "govdocs1_002_002154.pdf": {
+      "page1:poppler-vs-mupdf": 8.058,
+      "page2:poppler-vs-mupdf": 10.752,
+      "page3:poppler-vs-mupdf": 12.029,
+      "page4:poppler-vs-mupdf": 9.358,
+      "page5:pdfium-vs-mupdf": 8.721,
+      "page5:poppler-vs-mupdf": 10.432
+    },
+    "govdocs1_002_002166.pdf": {
+      "page4:pdfium-vs-poppler": 10.856,
+      "page4:poppler-vs-mupdf": 8.1
+    },
+    "govdocs1_002_002168.pdf": {
+      "page0:pdfium-vs-poppler": 11.824,
+      "page0:poppler-vs-mupdf": 13.163,
+      "page10:pdfium-vs-poppler": 8.621,
+      "page10:poppler-vs-mupdf": 9.621,
+      "page11:pdfium-vs-poppler": 9.329,
+      "page11:poppler-vs-mupdf": 11.092,
+      "page1:pdfium-vs-poppler": 9.686,
+      "page1:poppler-vs-mupdf": 11.252,
+      "page2:pdfium-vs-poppler": 10.719,
+      "page2:poppler-vs-mupdf": 12.864,
+      "page3:pdfium-vs-poppler": 11.376,
+      "page3:poppler-vs-mupdf": 13.394,
+      "page4:pdfium-vs-poppler": 10.457,
+      "page4:poppler-vs-mupdf": 12.348,
+      "page5:pdfium-vs-poppler": 9.501,
+      "page5:poppler-vs-mupdf": 11.855,
+      "page6:pdfium-vs-poppler": 10.817,
+      "page6:poppler-vs-mupdf": 12.624,
+      "page7:pdfium-vs-poppler": 10.669,
+      "page7:poppler-vs-mupdf": 12.754,
+      "page8:pdfium-vs-poppler": 10.714,
+      "page8:poppler-vs-mupdf": 12.361,
+      "page9:pdfium-vs-poppler": 10.561,
+      "page9:poppler-vs-mupdf": 11.906
+    },
+    "govdocs1_002_002176.pdf": {
+      "page0:pdfium-vs-mupdf": 71.851,
+      "page0:poppler-vs-mupdf": 72.606,
+      "page10:pdfium-vs-mupdf": 72.692,
+      "page10:poppler-vs-mupdf": 72.745,
+      "page11:pdfium-vs-mupdf": 72.819,
+      "page11:poppler-vs-mupdf": 73.016,
+      "page12:pdfium-vs-mupdf": 72.239,
+      "page12:poppler-vs-mupdf": 72.831,
+      "page13:pdfium-vs-mupdf": 71.753,
+      "page13:poppler-vs-mupdf": 72.147,
+      "page14:pdfium-vs-mupdf": 74.926,
+      "page14:poppler-vs-mupdf": 74.961,
+      "page15:pdfium-vs-mupdf": 71.905,
+      "page15:poppler-vs-mupdf": 72.233,
+      "page16:pdfium-vs-mupdf": 69.028,
+      "page16:poppler-vs-mupdf": 70.502,
+      "page17:pdfium-vs-mupdf": 68.88,
+      "page17:poppler-vs-mupdf": 70.374,
+      "page18:pdfium-vs-mupdf": 67.624,
+      "page18:poppler-vs-mupdf": 69.019,
+      "page19:pdfium-vs-mupdf": 68.276,
+      "page19:poppler-vs-mupdf": 69.474,
+      "page1:pdfium-vs-mupdf": 72.318,
+      "page1:poppler-vs-mupdf": 72.428,
+      "page2:pdfium-vs-mupdf": 73.015,
+      "page2:poppler-vs-mupdf": 73.199,
+      "page3:pdfium-vs-mupdf": 72.886,
+      "page3:poppler-vs-mupdf": 73.594,
+      "page4:pdfium-vs-mupdf": 73.915,
+      "page4:poppler-vs-mupdf": 74.348,
+      "page5:pdfium-vs-mupdf": 73.957,
+      "page5:poppler-vs-mupdf": 74.345,
+      "page6:pdfium-vs-mupdf": 72.61,
+      "page6:poppler-vs-mupdf": 73.282,
+      "page7:pdfium-vs-mupdf": 74.475,
+      "page7:poppler-vs-mupdf": 74.689,
+      "page8:pdfium-vs-mupdf": 72.358,
+      "page8:poppler-vs-mupdf": 72.971,
+      "page9:pdfium-vs-mupdf": 72.459,
+      "page9:poppler-vs-mupdf": 73.063
+    },
+    "govdocs1_003_003066.pdf": {
+      "page15:pdfium-vs-mupdf": 18.989
+    },
+    "govdocs1_003_003074.pdf": {
+      "page0:pdfium-vs-mupdf": 16.211,
+      "page0:poppler-vs-mupdf": 16.295,
+      "page3:pdfium-vs-mupdf": 28.476,
+      "page3:poppler-vs-mupdf": 28.615,
+      "page7:pdfium-vs-mupdf": 59.411,
+      "page7:poppler-vs-mupdf": 58.843
+    },
+    "govdocs1_004_004125.pdf": {
+      "page0:pdfium-vs-poppler": 8.327,
+      "page2:pdfium-vs-poppler": 8.754
+    },
+    "govdocs1_005_005005.pdf": {
+      "page0:pdfium-vs-poppler": 8.77
+    },
+    "govdocs1_005_005009.pdf": {
+      "page0:pdfium-vs-poppler": 10.306
+    },
+    "govdocs1_005_005021.pdf": {
+      "page0:pdfium-vs-poppler": 8.991
+    },
+    "govdocs1_005_005084.pdf": {
+      "page16:pdfium-vs-mupdf": 8.336,
+      "page3:pdfium-vs-poppler": 15.88,
+      "page3:poppler-vs-mupdf": 16.31,
+      "page4:pdfium-vs-poppler": 13.172,
+      "page4:poppler-vs-mupdf": 13.475,
+      "page5:pdfium-vs-poppler": 15.566,
+      "page5:poppler-vs-mupdf": 16.006,
+      "page6:pdfium-vs-poppler": 14.15,
+      "page6:poppler-vs-mupdf": 14.262,
+      "page7:pdfium-vs-poppler": 15.648,
+      "page7:poppler-vs-mupdf": 15.903,
+      "page8:pdfium-vs-poppler": 15.214,
+      "page8:poppler-vs-mupdf": 15.473,
+      "page9:pdfium-vs-poppler": 10.53,
+      "page9:poppler-vs-mupdf": 10.737
+    },
+    "govdocs1_005_005086.pdf": {
+      "page10:pdfium-vs-poppler": 14.257,
+      "page10:poppler-vs-mupdf": 14.646,
+      "page11:pdfium-vs-poppler": 14.366,
+      "page11:poppler-vs-mupdf": 14.826,
+      "page12:pdfium-vs-poppler": 11.766,
+      "page12:poppler-vs-mupdf": 12.028,
+      "page13:pdfium-vs-poppler": 13.851,
+      "page13:poppler-vs-mupdf": 14.05,
+      "page14:pdfium-vs-poppler": 12.445,
+      "page14:poppler-vs-mupdf": 12.835,
+      "page15:pdfium-vs-poppler": 12.748,
+      "page15:poppler-vs-mupdf": 12.913,
+      "page16:pdfium-vs-poppler": 14.059,
+      "page16:poppler-vs-mupdf": 14.422,
+      "page17:pdfium-vs-poppler": 15.642,
+      "page17:poppler-vs-mupdf": 16.096,
+      "page18:pdfium-vs-poppler": 15.016,
+      "page18:poppler-vs-mupdf": 15.369,
+      "page19:pdfium-vs-poppler": 15.985,
+      "page19:poppler-vs-mupdf": 16.429,
+      "page4:pdfium-vs-poppler": 15.818,
+      "page4:poppler-vs-mupdf": 16.292,
+      "page5:pdfium-vs-poppler": 11.915,
+      "page5:poppler-vs-mupdf": 12.202,
+      "page6:pdfium-vs-poppler": 14.989,
+      "page6:poppler-vs-mupdf": 15.459,
+      "page7:pdfium-vs-poppler": 14.588,
+      "page7:poppler-vs-mupdf": 14.98,
+      "page8:pdfium-vs-poppler": 12.834,
+      "page8:poppler-vs-mupdf": 13.149,
+      "page9:pdfium-vs-poppler": 15.115,
+      "page9:poppler-vs-mupdf": 15.692
+    },
+    "govdocs1_006_006027.pdf": {
+      "page11:pdfium-vs-poppler": 9.776
+    },
+    "govdocs1_006_006029.pdf": {
+      "page0:pdfium-vs-poppler": 12.831,
+      "page0:poppler-vs-mupdf": 13.216,
+      "page10:pdfium-vs-poppler": 13.156,
+      "page10:poppler-vs-mupdf": 13.785,
+      "page1:pdfium-vs-poppler": 8.223,
+      "page1:poppler-vs-mupdf": 8.162,
+      "page2:pdfium-vs-poppler": 10.437,
+      "page3:pdfium-vs-poppler": 15.417,
+      "page3:poppler-vs-mupdf": 15.55,
+      "page6:pdfium-vs-poppler": 8.635,
+      "page6:poppler-vs-mupdf": 9.358,
+      "page7:pdfium-vs-poppler": 13.114,
+      "page7:poppler-vs-mupdf": 13.812,
+      "page9:pdfium-vs-poppler": 13.68,
+      "page9:poppler-vs-mupdf": 11.358
+    },
+    "govdocs1_006_006047.pdf": {
+      "page0:pdfium-vs-mupdf": 32.324,
+      "page0:poppler-vs-mupdf": 32.539
+    },
+    "govdocs1_006_006050.pdf": {
+      "page0:pdfium-vs-mupdf": 98.506,
+      "page0:poppler-vs-mupdf": 98.491
+    },
+    "govdocs1_006_006053.pdf": {
+      "page0:pdfium-vs-mupdf": 12.21,
+      "page0:pdfium-vs-poppler": 14.354,
+      "page11:pdfium-vs-mupdf": 11.675,
+      "page11:pdfium-vs-poppler": 13.762,
+      "page9:pdfium-vs-poppler": 8.901
+    },
+    "govdocs1_007_007024.pdf": {
+      "page0:poppler-vs-mupdf": 9.67,
+      "page10:pdfium-vs-poppler": 8.004,
+      "page10:poppler-vs-mupdf": 10.113,
+      "page11:pdfium-vs-poppler": 8.323,
+      "page11:poppler-vs-mupdf": 10.665,
+      "page12:pdfium-vs-poppler": 9.0,
+      "page12:poppler-vs-mupdf": 11.276,
+      "page13:pdfium-vs-poppler": 8.846,
+      "page13:poppler-vs-mupdf": 11.015,
+      "page14:pdfium-vs-poppler": 8.646,
+      "page14:poppler-vs-mupdf": 11.022,
+      "page15:pdfium-vs-poppler": 8.355,
+      "page15:poppler-vs-mupdf": 10.634,
+      "page16:pdfium-vs-poppler": 9.186,
+      "page16:poppler-vs-mupdf": 11.58,
+      "page17:pdfium-vs-poppler": 8.963,
+      "page17:poppler-vs-mupdf": 11.232,
+      "page18:pdfium-vs-poppler": 8.622,
+      "page18:poppler-vs-mupdf": 10.787,
+      "page19:pdfium-vs-poppler": 9.713,
+      "page19:poppler-vs-mupdf": 11.948,
+      "page1:pdfium-vs-poppler": 10.207,
+      "page1:poppler-vs-mupdf": 12.94,
+      "page2:pdfium-vs-poppler": 8.387,
+      "page2:poppler-vs-mupdf": 10.682,
+      "page3:poppler-vs-mupdf": 10.009,
+      "page4:pdfium-vs-poppler": 8.678,
+      "page4:poppler-vs-mupdf": 10.656,
+      "page5:pdfium-vs-poppler": 8.516,
+      "page5:poppler-vs-mupdf": 10.71,
+      "page6:pdfium-vs-poppler": 8.976,
+      "page6:poppler-vs-mupdf": 11.254,
+      "page7:pdfium-vs-poppler": 8.706,
+      "page7:poppler-vs-mupdf": 11.032,
+      "page8:pdfium-vs-poppler": 8.537,
+      "page8:poppler-vs-mupdf": 10.837,
+      "page9:pdfium-vs-poppler": 9.434,
+      "page9:poppler-vs-mupdf": 11.932
+    },
+    "govdocs1_007_007074.pdf": {
+      "page10:pdfium-vs-poppler": 9.904,
+      "page10:poppler-vs-mupdf": 8.182,
+      "page11:pdfium-vs-poppler": 9.185,
+      "page12:pdfium-vs-poppler": 9.513,
+      "page13:pdfium-vs-poppler": 8.589,
+      "page14:pdfium-vs-poppler": 9.639,
+      "page14:poppler-vs-mupdf": 8.089,
+      "page4:pdfium-vs-poppler": 8.626,
+      "page5:pdfium-vs-poppler": 8.195,
+      "page8:pdfium-vs-poppler": 9.557
+    },
+    "govdocs1_007_007081.pdf": {
+      "page0:pdfium-vs-mupdf": 83.416,
+      "page0:pdfium-vs-poppler": 11.248,
+      "page0:poppler-vs-mupdf": 82.68,
+      "page10:pdfium-vs-poppler": 8.972,
+      "page13:pdfium-vs-poppler": 8.618,
+      "page14:pdfium-vs-poppler": 8.394,
+      "page17:pdfium-vs-poppler": 8.356,
+      "page6:pdfium-vs-poppler": 9.176,
+      "page9:pdfium-vs-poppler": 8.089
+    },
+    "govdocs1_007_007092.pdf": {
+      "page0:pdfium-vs-mupdf": 83.887,
+      "page0:poppler-vs-mupdf": 80.41,
+      "page12:pdfium-vs-mupdf": 48.289,
+      "page12:poppler-vs-mupdf": 43.492,
+      "page14:pdfium-vs-mupdf": 31.88,
+      "page14:poppler-vs-mupdf": 30.806,
+      "page15:pdfium-vs-mupdf": 9.153,
+      "page15:poppler-vs-mupdf": 8.584,
+      "page18:pdfium-vs-mupdf": 40.088,
+      "page18:poppler-vs-mupdf": 36.098,
+      "page1:pdfium-vs-mupdf": 99.089,
+      "page1:poppler-vs-mupdf": 98.932,
+      "page4:pdfium-vs-mupdf": 57.791,
+      "page4:poppler-vs-mupdf": 54.531
+    },
+    "govdocs1_008_008006.pdf": {
+      "page10:pdfium-vs-poppler": 8.216,
+      "page2:pdfium-vs-mupdf": 11.405,
+      "page2:pdfium-vs-poppler": 8.93,
+      "page2:poppler-vs-mupdf": 17.247,
+      "page3:pdfium-vs-mupdf": 15.572,
+      "page3:pdfium-vs-poppler": 13.365,
+      "page3:poppler-vs-mupdf": 21.429,
+      "page5:pdfium-vs-mupdf": 30.955,
+      "page5:poppler-vs-mupdf": 33.827,
+      "page6:pdfium-vs-mupdf": 32.967,
+      "page6:poppler-vs-mupdf": 35.941,
+      "page7:pdfium-vs-mupdf": 31.282,
+      "page7:poppler-vs-mupdf": 34.611,
+      "page8:pdfium-vs-poppler": 8.478,
+      "page9:pdfium-vs-mupdf": 29.181,
+      "page9:poppler-vs-mupdf": 33.276
+    },
+    "govdocs1_008_008029.pdf": {
+      "page11:poppler-vs-mupdf": 12.352
+    },
+    "govdocs1_008_008032.pdf": {
+      "page2:pdfium-vs-mupdf": 13.917,
+      "page2:poppler-vs-mupdf": 13.176,
+      "page4:pdfium-vs-mupdf": 18.064,
+      "page4:poppler-vs-mupdf": 16.529,
+      "page7:pdfium-vs-mupdf": 19.278,
+      "page7:poppler-vs-mupdf": 17.27
+    },
+    "govdocs1_009_009002.pdf": {
+      "page1:pdfium-vs-poppler": 8.604,
+      "page2:pdfium-vs-poppler": 10.299,
+      "page3:pdfium-vs-poppler": 8.442
+    },
+    "govdocs1_009_009013.pdf": {
+      "page16:pdfium-vs-poppler": 8.798,
+      "page4:pdfium-vs-poppler": 8.185
+    },
+    "govdocs1_009_009060.pdf": {
+      "page5:pdfium-vs-poppler": 8.08,
+      "page6:pdfium-vs-poppler": 8.414,
+      "page8:pdfium-vs-poppler": 8.495
+    },
+    "govdocs1_009_009067.pdf": {
+      "page0:pdfium-vs-poppler": 9.379,
+      "page0:poppler-vs-mupdf": 8.069,
+      "page10:pdfium-vs-poppler": 8.709,
+      "page13:pdfium-vs-poppler": 11.596,
+      "page13:poppler-vs-mupdf": 10.053,
+      "page14:pdfium-vs-poppler": 8.554,
+      "page1:pdfium-vs-poppler": 11.957,
+      "page1:poppler-vs-mupdf": 10.17,
+      "page2:pdfium-vs-poppler": 10.8,
+      "page2:poppler-vs-mupdf": 8.995,
+      "page3:pdfium-vs-poppler": 9.029,
+      "page4:pdfium-vs-poppler": 9.892,
+      "page4:poppler-vs-mupdf": 8.185,
+      "page5:pdfium-vs-poppler": 10.347,
+      "page5:poppler-vs-mupdf": 8.843,
+      "page6:pdfium-vs-poppler": 9.222,
+      "page7:pdfium-vs-poppler": 9.075,
+      "page9:pdfium-vs-poppler": 10.987,
+      "page9:poppler-vs-mupdf": 9.131
+    },
+    "govdocs1_009_009077.pdf": {
+      "page0:pdfium-vs-mupdf": 12.038,
+      "page0:poppler-vs-mupdf": 11.37,
+      "page2:pdfium-vs-mupdf": 11.264,
+      "page2:poppler-vs-mupdf": 11.062
+    },
+    "govdocs1_009_009097.pdf": {
+      "page18:pdfium-vs-mupdf": 8.854,
+      "page18:poppler-vs-mupdf": 8.467
+    },
+    "govdocs1_010_010120.pdf": {
+      "page12:pdfium-vs-poppler": 10.169
+    },
+    "govdocs1_010_010204.pdf": {
+      "page16:pdfium-vs-poppler": 9.266,
+      "page6:pdfium-vs-poppler": 8.329
+    },
+    "govdocs1_011_011097.pdf": {
+      "page0:pdfium-vs-mupdf": 8.654,
+      "page0:poppler-vs-mupdf": 10.338
+    },
+    "govdocs1_011_011099.pdf": {
+      "page0:pdfium-vs-mupdf": 8.631,
+      "page0:poppler-vs-mupdf": 10.338
+    },
+    "govdocs1_011_011105.pdf": {
+      "page0:pdfium-vs-poppler": 8.367,
+      "page5:pdfium-vs-poppler": 8.337,
+      "page7:pdfium-vs-poppler": 8.233,
+      "page8:pdfium-vs-poppler": 8.119
+    },
+    "govdocs1_011_011133.pdf": {
+      "page0:pdfium-vs-mupdf": 98.656,
+      "page0:poppler-vs-mupdf": 98.518,
+      "page10:pdfium-vs-mupdf": 20.105,
+      "page10:pdfium-vs-poppler": 8.114,
+      "page10:poppler-vs-mupdf": 18.197,
+      "page12:pdfium-vs-mupdf": 11.732,
+      "page12:poppler-vs-mupdf": 10.146,
+      "page14:pdfium-vs-mupdf": 22.174,
+      "page14:poppler-vs-mupdf": 20.827,
+      "page15:pdfium-vs-mupdf": 15.749,
+      "page15:poppler-vs-mupdf": 14.044,
+      "page16:pdfium-vs-mupdf": 12.136,
+      "page16:poppler-vs-mupdf": 11.026,
+      "page17:pdfium-vs-mupdf": 14.616,
+      "page17:poppler-vs-mupdf": 12.292,
+      "page18:pdfium-vs-mupdf": 22.166,
+      "page18:poppler-vs-mupdf": 19.183,
+      "page19:pdfium-vs-mupdf": 16.872,
+      "page19:poppler-vs-mupdf": 11.583,
+      "page1:pdfium-vs-mupdf": 99.544,
+      "page1:poppler-vs-mupdf": 99.606
+    },
+    "govdocs1_012_012014.pdf": {
+      "page10:pdfium-vs-poppler": 13.06,
+      "page10:poppler-vs-mupdf": 13.484,
+      "page12:pdfium-vs-poppler": 11.982,
+      "page12:poppler-vs-mupdf": 12.27,
+      "page13:pdfium-vs-poppler": 9.513,
+      "page13:poppler-vs-mupdf": 9.541,
+      "page14:pdfium-vs-poppler": 16.914,
+      "page14:poppler-vs-mupdf": 17.462,
+      "page18:pdfium-vs-poppler": 15.739,
+      "page18:poppler-vs-mupdf": 16.073,
+      "page19:pdfium-vs-poppler": 10.127,
+      "page19:poppler-vs-mupdf": 10.171,
+      "page6:pdfium-vs-poppler": 15.302,
+      "page6:poppler-vs-mupdf": 15.598,
+      "page7:pdfium-vs-poppler": 15.062,
+      "page7:poppler-vs-mupdf": 15.216,
+      "page8:pdfium-vs-poppler": 11.43,
+      "page8:poppler-vs-mupdf": 11.6,
+      "page9:pdfium-vs-poppler": 15.468,
+      "page9:poppler-vs-mupdf": 15.675
+    },
+    "govdocs1_012_012053.pdf": {
+      "page0:pdfium-vs-poppler": 9.001,
+      "page0:poppler-vs-mupdf": 12.533,
+      "page1:pdfium-vs-mupdf": 8.686,
+      "page1:pdfium-vs-poppler": 9.562,
+      "page1:poppler-vs-mupdf": 15.725,
+      "page2:pdfium-vs-poppler": 8.393,
+      "page2:poppler-vs-mupdf": 13.537
+    },
+    "govdocs1_012_012082.pdf": {
+      "page0:pdfium-vs-poppler": 21.363,
+      "page0:poppler-vs-mupdf": 19.909,
+      "page11:poppler-vs-mupdf": 11.039,
+      "page13:poppler-vs-mupdf": 11.963,
+      "page14:poppler-vs-mupdf": 11.071,
+      "page15:poppler-vs-mupdf": 10.899,
+      "page16:poppler-vs-mupdf": 10.151,
+      "page17:poppler-vs-mupdf": 11.931,
+      "page18:poppler-vs-mupdf": 11.71,
+      "page19:poppler-vs-mupdf": 11.747,
+      "page8:poppler-vs-mupdf": 9.362,
+      "page9:poppler-vs-mupdf": 11.565
+    },
+    "govdocs1_012_012087.pdf": {
+      "page0:pdfium-vs-poppler": 8.742,
+      "page0:poppler-vs-mupdf": 11.257
+    },
+    "govdocs1_012_012103.pdf": {
+      "page1:pdfium-vs-poppler": 10.152,
+      "page1:poppler-vs-mupdf": 8.029,
+      "page6:pdfium-vs-poppler": 9.822,
+      "page6:poppler-vs-mupdf": 8.087
+    },
+    "govdocs1_012_012156.pdf": {
+      "page0:pdfium-vs-poppler": 9.891,
+      "page1:pdfium-vs-poppler": 9.159,
+      "page2:pdfium-vs-poppler": 10.258
+    },
+    "govdocs1_012_012158.pdf": {
+      "page1:poppler-vs-mupdf": 8.142,
+      "page2:pdfium-vs-poppler": 8.131,
+      "page2:poppler-vs-mupdf": 12.529,
+      "page3:poppler-vs-mupdf": 9.318,
+      "page4:pdfium-vs-poppler": 8.77,
+      "page4:poppler-vs-mupdf": 12.371,
+      "page5:poppler-vs-mupdf": 9.004,
+      "page6:poppler-vs-mupdf": 8.913,
+      "page7:poppler-vs-mupdf": 9.726
+    },
+    "govdocs1_012_012166.pdf": {
+      "page1:pdfium-vs-poppler": 9.543,
+      "page1:poppler-vs-mupdf": 8.355,
+      "page2:pdfium-vs-poppler": 9.053,
+      "page3:pdfium-vs-poppler": 9.071,
+      "page4:pdfium-vs-poppler": 10.545,
+      "page5:pdfium-vs-poppler": 9.062,
+      "page6:pdfium-vs-poppler": 8.142,
+      "page7:pdfium-vs-poppler": 8.29
+    },
+    "govdocs1_012_012170.pdf": {
+      "page14:pdfium-vs-poppler": 8.217
+    },
+    "govdocs1_012_012172.pdf": {
+      "page11:pdfium-vs-poppler": 9.929,
+      "page11:poppler-vs-mupdf": 8.61,
+      "page14:pdfium-vs-poppler": 10.041,
+      "page14:poppler-vs-mupdf": 8.705,
+      "page16:pdfium-vs-poppler": 8.979,
+      "page18:pdfium-vs-poppler": 9.252,
+      "page18:poppler-vs-mupdf": 8.048,
+      "page1:pdfium-vs-poppler": 9.46,
+      "page1:poppler-vs-mupdf": 8.46,
+      "page2:pdfium-vs-poppler": 11.142,
+      "page2:poppler-vs-mupdf": 9.052,
+      "page3:pdfium-vs-poppler": 10.254,
+      "page3:poppler-vs-mupdf": 8.852,
+      "page9:pdfium-vs-poppler": 9.8,
+      "page9:poppler-vs-mupdf": 8.61
+    },
+    "govdocs1_013_013043.pdf": {
+      "page11:pdfium-vs-poppler": 9.164
+    },
+    "govdocs1_013_013079.pdf": {
+      "page0:pdfium-vs-mupdf": 48.856,
+      "page0:pdfium-vs-poppler": 14.754,
+      "page0:poppler-vs-mupdf": 44.146
+    },
+    "govdocs1_013_013085.pdf": {
+      "page0:pdfium-vs-mupdf": 33.484,
+      "page0:poppler-vs-mupdf": 34.053,
+      "page14:poppler-vs-mupdf": 9.082,
+      "page18:poppler-vs-mupdf": 9.451,
+      "page2:pdfium-vs-mupdf": 15.627,
+      "page2:poppler-vs-mupdf": 18.585,
+      "page3:poppler-vs-mupdf": 11.86,
+      "page4:poppler-vs-mupdf": 8.164,
+      "page5:pdfium-vs-mupdf": 8.509,
+      "page5:poppler-vs-mupdf": 13.2,
+      "page6:poppler-vs-mupdf": 11.403,
+      "page7:pdfium-vs-mupdf": 9.268,
+      "page7:poppler-vs-mupdf": 14.622,
+      "page8:pdfium-vs-mupdf": 9.098,
+      "page8:poppler-vs-mupdf": 14.506,
+      "page9:poppler-vs-mupdf": 10.771
+    },
+    "govdocs1_013_013100.pdf": {
+      "page0:pdfium-vs-mupdf": 14.043,
+      "page0:poppler-vs-mupdf": 14.709,
+      "page1:poppler-vs-mupdf": 9.287
+    },
+    "govdocs1_013_013104.pdf": {
+      "page0:pdfium-vs-mupdf": 79.189,
+      "page0:pdfium-vs-poppler": 54.193,
+      "page0:poppler-vs-mupdf": 79.653
+    },
+    "govdocs1_013_013107.pdf": {
+      "page12:pdfium-vs-mupdf": 37.724,
+      "page12:poppler-vs-mupdf": 36.308,
+      "page7:poppler-vs-mupdf": 8.962
+    },
+    "govdocs1_013_013110.pdf": {
+      "page0:pdfium-vs-poppler": 10.581,
+      "page0:poppler-vs-mupdf": 8.358
+    },
+    "govdocs1_014_014027.pdf": {
+      "page1:pdfium-vs-poppler": 14.485,
+      "page1:poppler-vs-mupdf": 14.232,
+      "page2:pdfium-vs-poppler": 12.183,
+      "page2:poppler-vs-mupdf": 11.96
+    },
+    "govdocs1_014_014091.pdf": {
+      "page0:pdfium-vs-mupdf": 25.803,
+      "page0:poppler-vs-mupdf": 21.109,
+      "page2:pdfium-vs-mupdf": 22.337,
+      "page2:poppler-vs-mupdf": 19.425,
+      "page3:pdfium-vs-mupdf": 19.492,
+      "page3:poppler-vs-mupdf": 16.805,
+      "page4:pdfium-vs-mupdf": 23.954,
+      "page4:poppler-vs-mupdf": 22.197,
+      "page5:pdfium-vs-mupdf": 37.842,
+      "page5:poppler-vs-mupdf": 33.451
+    },
+    "govdocs1_014_014114.pdf": {
+      "page10:pdfium-vs-poppler": 8.526,
+      "page11:pdfium-vs-poppler": 10.142,
+      "page11:poppler-vs-mupdf": 8.57,
+      "page12:pdfium-vs-poppler": 8.955,
+      "page13:pdfium-vs-poppler": 8.413,
+      "page14:pdfium-vs-poppler": 9.722,
+      "page15:pdfium-vs-poppler": 8.217,
+      "page16:pdfium-vs-poppler": 8.417,
+      "page18:pdfium-vs-poppler": 8.388,
+      "page5:pdfium-vs-poppler": 9.02,
+      "page6:pdfium-vs-poppler": 8.24,
+      "page7:pdfium-vs-poppler": 9.483,
+      "page8:pdfium-vs-poppler": 8.304
+    },
+    "govdocs1_014_014115.pdf": {
+      "page0:pdfium-vs-mupdf": 99.827,
+      "page0:poppler-vs-mupdf": 99.815,
+      "page1:pdfium-vs-mupdf": 30.166,
+      "page7:pdfium-vs-mupdf": 11.944,
+      "page7:poppler-vs-mupdf": 11.904,
+      "page8:pdfium-vs-mupdf": 12.942,
+      "page8:poppler-vs-mupdf": 12.39,
+      "page9:pdfium-vs-mupdf": 12.817,
+      "page9:poppler-vs-mupdf": 11.694
+    },
+    "govdocs1_014_014118.pdf": {
+      "page0:poppler-vs-mupdf": 9.538,
+      "page4:poppler-vs-mupdf": 8.791,
+      "page5:poppler-vs-mupdf": 8.637
+    },
+    "irs_1040_instructions.pdf": {
+      "page0:pdfium-vs-mupdf": 14.661,
+      "page0:poppler-vs-mupdf": 11.636
+    },
+    "irs_publication_17.pdf": {
+      "page0:pdfium-vs-mupdf": 22.97,
+      "page0:poppler-vs-mupdf": 23.295
+    },
+    "wikipedia_zh_monthly_magazine.pdf": {
+      "page4:pdfium-vs-poppler": 18.101,
+      "page4:poppler-vs-mupdf": 17.619
+    }
+  },
+  "pdfcpu": {
+    "govdocs1_014_014103.pdf": "validate corpus/public/govdocs1_014_014103.pdf: validation error (obj#:190): document catalog: catalog Pages: page tree: kid obj#158: page tree: page obj#168: additional action pageDict.AA.O obj#190: action Named: dict=Named entry=N invalid dict entry: ShowBookmarks"
+  }
+}

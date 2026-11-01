@@ -31,6 +31,7 @@ IRS_1040_INSTRUCTIONS = CORPUS_DIR / "irs_1040_instructions.pdf"
 LATENCY_BUDGET_SECONDS = 0.1
 
 
+@pytest.mark.perf
 def test_first_page_latency_under_100ms() -> None:
     """D-06's pinned latency test: `RunIndex(path).page(0)` -- construction (opens the
     pikepdf and playa handles, walks shared-XObject detection once) plus the first page's

@@ -74,6 +74,7 @@ def batch():
     return source, accepted
 
 
+@pytest.mark.perf
 @pytest.mark.corpus
 def test_40page_batch_worker_preview(batch):
     source, recipe = batch
@@ -84,6 +85,7 @@ def test_40page_batch_worker_preview(batch):
     assert SOURCE.read_bytes() == source
 
 
+@pytest.mark.perf
 @pytest.mark.corpus
 def test_40page_batch_worker_apply(batch):
     source, recipe = batch
