@@ -567,9 +567,10 @@ def cid_width(descendant_font: pikepdf.Object, cid: int) -> float:
             first = int(items[i])
             nxt = items[i + 1]
             if isinstance(nxt, pikepdf.Array):
-                run = list(nxt)
-                if first <= cid < first + len(run):
-                    return float(run[cid - first])
+                # A width lookup needs one entry, not a Python copy of the
+                # complete glyph-width array (often thousands of entries).
+                if first <= cid < first + len(nxt):
+                    return float(nxt[cid - first])
                 i += 2
             else:
                 if i + 2 >= len(items):

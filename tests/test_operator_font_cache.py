@@ -46,3 +46,21 @@ def test_one_decoded_stream_keeps_distinct_operator_font_changes(tmp_path: Path,
     fonts = {run.glyphs[0].font_id for run, _ in document.runs}
     assert len(fonts) == 2
     assert len(reads) == 1
+
+
+def test_operator_style_lookup_does_not_repeat_for_each_character(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / 'many-glyphs.pdf'
+    source.write_bytes(text_pdf(b'Long text with many glyphs'))
+    original = module._find_active_font_name
+    calls = []
+
+    def counted(*args):
+        calls.append(args[1])
+        return original(*args)
+
+    monkeypatch.setattr(module, '_find_active_font_name', counted)
+    document = classify_document(source)
+    assert ''.join(run.display_text for run, _ in document.runs) == 'Long text with many glyphs'
+    assert {run.font_name for run, _ in document.runs} == {'Helvetica'}
+    assert all(run.font_identity is not None for run, _ in document.runs)
+    assert len(calls) <= 2, 'font identity looked up for each glyph instead of its operator'

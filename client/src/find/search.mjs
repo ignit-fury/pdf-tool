@@ -27,9 +27,10 @@ export function projectText(text,{matchCase=false}={}){
 }
 export function projectSearchText(text){return {version:SEARCH_VERSION,sensitive:projectText(text,{matchCase:true}),folded:projectText(text)};}
 
-function boundaries(text,granularity){
+function boundaries(text,granularity,segmenters){
   if(typeof Intl.Segmenter!=='function')return null;
-  return new Set([0,text.length,...Array.from(new Intl.Segmenter('en',{granularity}).segment(text),part=>part.index)]);
+  if(!segmenters.has(granularity))segmenters.set(granularity,new Intl.Segmenter('en',{granularity}));
+  return new Set([0,text.length,...Array.from(segmenters.get(granularity).segment(text),part=>part.index)]);
 }
 function inverseSpans(projection){
   const inverse=new Map();
@@ -57,6 +58,7 @@ export function findMatches(pages,query,{matchCase=false,wholeWords=false,recipe
   if(!needle)return [];
   if(wholeWords&&typeof Intl.Segmenter!=='function')throw new Error('Unicode whole-word search requires Intl.Segmenter. Turn off Whole words only.');
   const overrides=new Map(recipe.map(op=>[op.run_id,op])),results=[];
+  const segmenters=new Map();
   const entries=pages instanceof Map?[...pages.entries()]:Object.entries(pages);
   entries.sort((a,b)=>Number(a[0])-Number(b[0]));
   const addresses=new Map();
@@ -67,8 +69,12 @@ export function findMatches(pages,query,{matchCase=false,wholeWords=false,recipe
       const effective=overrides.get(run.run_id)?.new_text??run.text;
       const cached=effective===run.text&&run.search?.version===SEARCH_VERSION?run.search:null;
       const projection=cached?.[matchCase?'sensitive':'folded']||projectText(effective,{matchCase});
-      const graphemes=boundaries(effective,'grapheme'),words=wholeWords?boundaries(projection.text,'word'):null,inverse=inverseSpans(projection);
-      for(let from=0;;){
+      // Most runs do not match. Build provenance and Unicode boundaries only
+      // when a candidate exists; these checks still guard every returned match.
+      const first=projection.text.indexOf(needle);
+      if(first<0)return;
+      const graphemes=boundaries(effective,'grapheme',segmenters),words=wholeWords?boundaries(projection.text,'word',segmenters):null,inverse=inverseSpans(projection);
+      for(let from=first;;){
         const normalizedStart=projection.text.indexOf(needle,from);
         if(normalizedStart<0)break;
         const normalizedEnd=normalizedStart+needle.length;from=normalizedEnd;

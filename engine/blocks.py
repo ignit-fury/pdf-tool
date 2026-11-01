@@ -10,7 +10,7 @@ import math
 import re
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Literal
+from typing import Callable, Literal
 
 from engine.index import PageIndex, RunIndex
 from engine.records import RunRecord
@@ -92,12 +92,15 @@ def _size(run: RunRecord) -> float:
     return run.effective_em if run.effective_em is not None and math.isfinite(run.effective_em) and run.effective_em > 0 else 12.0
 
 
-def _spans(runs: tuple[RunRecord, ...]) -> tuple[Span, ...]:
+Bounds = Callable[[RunRecord], tuple[float, float, float, float]]
+
+
+def _spans(runs: tuple[RunRecord, ...], bounds: Bounds) -> tuple[Span, ...]:
     out: list[Span] = []
     previous: RunRecord | None = None
     for run in runs:
         if previous is not None and not previous.display_text.endswith((' ', '\n')) and not run.display_text.startswith((' ', '\n')):
-            gap = _bounds(run)[0] - _bounds(previous)[2]
+            gap = bounds(run)[0] - bounds(previous)[2]
             if gap > .15 * min(_size(run), _size(previous)):
                 out.append(Span(' '))
         out.append(Span(run.display_text, run.bold, run.italic, (run,)))
@@ -105,30 +108,30 @@ def _spans(runs: tuple[RunRecord, ...]) -> tuple[Span, ...]:
     return tuple(out)
 
 
-def _lines(runs: list[RunRecord]) -> list[_Line]:
+def _lines(runs: list[RunRecord], bounds: Bounds) -> list[_Line]:
     # Sorted sweep only checks the current baseline, avoiding pairwise run work.
-    ordered = sorted(runs, key=lambda r: (_bounds(r)[1], _bounds(r)[0], r.run_id))
+    ordered = sorted(runs, key=lambda r: (bounds(r)[1], bounds(r)[0], r.run_id))
     bands: list[list[RunRecord]] = []
     for run in ordered:
-        if bands and abs(_bounds(run)[1] - _bounds(bands[-1][0])[1]) <= BASELINE_TOLERANCE_EM * min(_size(run), _size(bands[-1][0])):
+        if bands and abs(bounds(run)[1] - bounds(bands[-1][0])[1]) <= BASELINE_TOLERANCE_EM * min(_size(run), _size(bands[-1][0])):
             bands[-1].append(run)
         else:
             bands.append([run])
     lines: list[_Line] = []
     for band in bands:
         groups: list[list[RunRecord]] = []
-        for run in sorted(band, key=lambda r: (_bounds(r)[0], r.run_id)):
-            if groups and _bounds(run)[0] - _bounds(groups[-1][-1])[2] <= LINE_GAP_EM * min(_size(run), _size(groups[-1][-1])):
+        for run in sorted(band, key=lambda r: (bounds(r)[0], r.run_id)):
+            if groups and bounds(run)[0] - bounds(groups[-1][-1])[2] <= LINE_GAP_EM * min(_size(run), _size(groups[-1][-1])):
                 groups[-1].append(run)
             else:
                 groups.append([run])
         for group in groups:
-            lines.append(_Line(tuple(group), min(_bounds(r)[0] for r in group), max(_bounds(r)[2] for r in group),
-                               min(_bounds(r)[1] for r in group), max(_size(r) for r in group)))
+            lines.append(_Line(tuple(group), min(bounds(r)[0] for r in group), max(bounds(r)[2] for r in group),
+                               min(bounds(r)[1] for r in group), max(_size(r) for r in group)))
     return lines
 
 
-def _table(page: PageIndex, runs: list[RunRecord]) -> tuple[Block | None, set[str], str | None]:
+def _table(page: PageIndex, runs: list[RunRecord], bounds: Bounds) -> tuple[Block | None, set[str], str | None]:
     if not page.rulings:
         return None, set(), None
     horizontals = [(min(x,u), max(x,u), (y+v)/2) for x,y,u,v in page.rulings if abs(y-v) <= RULE_TOLERANCE]
@@ -159,7 +162,7 @@ def _table(page: PageIndex, runs: list[RunRecord]) -> tuple[Block | None, set[st
     cells: list[list[list[RunRecord]]] = [[[] for _ in xs[1:]] for _ in ys[1:]]
     used: set[str] = set()
     for run in runs:
-        x,y,end,bottom = _bounds(run)
+        x,y,end,bottom = bounds(run)
         if not (xs[0] <= x <= xs[-1] and ys[0] <= y <= ys[-1]):
             continue
         matches = [(r,c) for r in range(len(ys)-1) for c in range(len(xs)-1)
@@ -172,17 +175,17 @@ def _table(page: PageIndex, runs: list[RunRecord]) -> tuple[Block | None, set[st
         used.add(run.run_id)
     if not used:
         return None, set(), 'empty-table-grid'
-    rows = tuple(tuple(_line_spans(_lines(cell)) for cell in row) for row in cells)
+    rows = tuple(tuple(_line_spans(_lines(cell, bounds), bounds) for cell in row) for row in cells)
     source = tuple(r for row in cells for cell in row for r in cell)
     return Block('table', source, (), rows=rows), used, None
 
 
-def _line_spans(lines: list[_Line]) -> tuple[Span, ...]:
+def _line_spans(lines: list[_Line], bounds: Bounds) -> tuple[Span, ...]:
     result: list[Span] = []
     for line in sorted(lines, key=lambda line: (line.y,line.x)):
         if result:
             result.append(Span('\n'))
-        result.extend(_spans(line.runs))
+        result.extend(_spans(line.runs, bounds))
     return tuple(result)
 
 
@@ -228,14 +231,19 @@ def _page(index: int, page: PageIndex) -> PageBlocks:
     for run in runs:
         sizes[round(_size(run)*2)/2] += max(1,len(run.display_text))
     body = max(sizes,key=lambda size: (sizes[size],-size))
-    table, used, warning = _table(page,runs)
+    # Page-local geometry: reused within this export, never across mutable edits.
+    geometry = {id(run): _bounds(run) for run in runs}
+    def bounds(run: RunRecord) -> tuple[float, float, float, float]:
+        return geometry[id(run)]
+
+    table, used, warning = _table(page,runs,bounds)
     if warning:
         warnings.append(warning)
-    lines = _ordered(_lines([r for r in runs if r.run_id not in used]),body,warnings)
+    lines = _ordered(_lines([r for r in runs if r.run_id not in used],bounds),body,warnings)
     blocks: list[Block] = []
     previous: _Line | None = None
     for line in lines:
-        spans = _spans(line.runs)
+        spans = _spans(line.runs, bounds)
         text = ''.join(s.text for s in spans)
         kind: Literal['paragraph','heading','list','table'] = 'heading' if line.size >= body*HEADING_RATIO else 'list' if LIST_MARKER.match(text) else 'paragraph'
         level = (1 if line.size >= body*LARGE_HEADING_RATIO else 2) if kind == 'heading' else None
@@ -246,8 +254,8 @@ def _page(index: int, page: PageIndex) -> PageBlocks:
             blocks.append(Block(kind,line.runs,spans,level))
         previous = line
     if table is not None:
-        table_y = min(_bounds(r)[1] for r in table.source_runs)
-        position = next((n for n,b in enumerate(blocks) if min(_bounds(r)[1] for r in b.source_runs) > table_y),len(blocks))
+        table_y = min(bounds(r)[1] for r in table.source_runs)
+        position = next((n for n,b in enumerate(blocks) if min(bounds(r)[1] for r in b.source_runs) > table_y),len(blocks))
         blocks.insert(position,table)
     codes = {'columns-inferred-unruled-tables-unsupported': 'COLUMN_LAYOUT',
              'unsupported-text-direction': 'UNSUPPORTED_DIRECTION'}

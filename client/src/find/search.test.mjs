@@ -64,3 +64,29 @@ test('shared source addresses retain distinct locked fragments and do not block 
   assert.deepEqual(buildReplacementRecipe({pages,matches:hits,replacement:'a'}).recipe,[{run_id:'safe',new_text:'a'}]);
   assert.equal(findMatches({1:{runs:[first,{...second,text:'dog'}]}},'cat')[0].replaceable,false);
 });
+
+test('nonmatching runs do not incur Unicode segmentation work',async()=>{
+  const {findMatches,projectSearchText}=await api();
+  const pages={0:{runs:Array.from({length:1000},(_,i)=>({run_id:`r${i}`,text:'ordinary document text',state:'editable_original',search:projectSearchText('ordinary document text')}))}};
+  pages[0].runs.push({run_id:'hit',text:'target target',state:'editable_original'});
+  const Original=Intl.Segmenter;let calls=0;
+  Intl.Segmenter=class extends Original {segment(text){calls++;return super.segment(text);}};
+  try{
+    const hits=findMatches(pages,'target',{wholeWords:true});
+    assert.deepEqual(hits.map(h=>[h.start,h.end,h.replaceable]),[[0,6,true],[7,13,true]]);
+    assert.ok(calls<=2,`segmented ${calls} times for one matching run`);
+  }finally{Intl.Segmenter=Original;}
+});
+
+test('common-word search reuses segmenters without retaining document data',async()=>{
+  const {findMatches,projectSearchText}=await api();
+  const text='target target',search=projectSearchText(text);
+  const pages={0:{runs:Array.from({length:1000},(_,i)=>({run_id:`r${i}`,text,state:'editable_original',search}))}};
+  const Original=Intl.Segmenter;let created=0;
+  Intl.Segmenter=class extends Original {constructor(...args){super(...args);created++;}};
+  try{
+    const hits=findMatches(pages,'target',{wholeWords:true});
+    assert.equal(hits.length,2000);assert.ok(hits.every(h=>h.replaceable));
+    assert.ok(created<=2,`created ${created} Unicode segmenters`);
+  }finally{Intl.Segmenter=Original;}
+});

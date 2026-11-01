@@ -89,3 +89,26 @@ def test_run_limit_and_grid_work_limit_are_conservative(tmp_path: Path, monkeypa
         monkeypatch.setattr(blocks, 'MAX_BLOCK_RUNS', 1)
         with pytest.raises(ValueError, match='run-limit'):
             build_document(index)
+
+
+def test_layout_measures_each_run_once_per_page(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import engine.blocks as blocks
+    path = tmp_path / 'layout.pdf'
+    build_export_fixture(path)
+    original = blocks._bounds
+    measured: list[int] = []
+
+    def measure(run):
+        measured.append(id(run))
+        return original(run)
+
+    monkeypatch.setattr(blocks, '_bounds', measure)
+    with RunIndex(path) as index:
+        doc = build_document(index)
+        assert texts(doc.pages[0].blocks)[0] == 'Export heading'
+        assert [[''.join(s.text for s in cell) for cell in row] for row in doc.pages[1].blocks[0].rows] == [['A1', 'B1'], ['A2', 'B2']]
+        assert len(measured) == len(set(measured)), 'layout rescanned glyph geometry'
+        measured.clear()
+        # A second export must measure again: source runs are mutable between edits.
+        build_document(index)
+        assert measured

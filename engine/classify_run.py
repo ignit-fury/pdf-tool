@@ -334,6 +334,8 @@ def _classify_one_page(
     operator_fonts: dict[tuple[StreamPath, int, int], FontVerdict] = {}
     styles: dict[tuple[StreamPath, int, bytes], tuple[str | None, bool | None, bool | None]] = {}
     glyph_style: dict[int, tuple[str | None, bool | None, bool | None]] = {}
+    operator_style: dict[tuple[StreamPath, int, int], tuple[str | None, bool | None, bool | None]] = {}
+    operator_identity: dict[tuple[StreamPath, int, int], tuple[int, tuple[int, ...], int, tuple[int, int], tuple[int, int], bytes]] = {}
     glyph_identity: dict[int, tuple[int, tuple[int, ...], int, tuple[int, int], tuple[int, int], bytes]] = {}
     for stream_path, record, _attrs in located:
         stream_key = (stream_path, record.stream_id)
@@ -348,17 +350,22 @@ def _classify_one_page(
             )
         glyph_font[id(record)] = operator_fonts[operator_key]
         glyph_path[id(record)] = stream_path.xobj_path
-        raw, resources = streams[stream_key]
-        name = _find_active_font_name(raw, record.operator_byte_offset)
-        fonts = resources.get('/Font') if resources is not None else None
-        font = fonts.get('/' + name.decode('latin-1')) if fonts is not None and name is not None else None
-        if font is not None and name is not None and resources is not None:
-            style_key = (*stream_key, name)
-            if style_key not in styles:
-                styles[style_key] = _font_style(font)
-            glyph_style[id(record)] = styles[style_key]
-            # Direct dictionaries all have objgen=(0,0); retain page/stream ownership.
-            glyph_identity[id(record)] = (page_index, stream_path.xobj_path, record.stream_id, resources.objgen, font.objgen, name)
+        if operator_key not in operator_style:
+            raw, resources = streams[stream_key]
+            name = _find_active_font_name(raw, record.operator_byte_offset)
+            fonts = resources.get('/Font') if resources is not None else None
+            font = fonts.get('/' + name.decode('latin-1')) if fonts is not None and name is not None else None
+            operator_style[operator_key] = (None, None, None)
+            if font is not None and name is not None and resources is not None:
+                style_key = (*stream_key, name)
+                if style_key not in styles:
+                    styles[style_key] = _font_style(font)
+                operator_style[operator_key] = styles[style_key]
+                # Direct dictionaries all have objgen=(0,0); retain page/stream ownership.
+                operator_identity[operator_key] = (page_index, stream_path.xobj_path, record.stream_id, resources.objgen, font.objgen, name)
+        glyph_style[id(record)] = operator_style[operator_key]
+        if operator_key in operator_identity:
+            glyph_identity[id(record)] = operator_identity[operator_key]
 
     def _verdict_fn(record: GlyphRecord) -> GlyphVerdict:
         return glyph_verdict(glyph_font[id(record)], record)
