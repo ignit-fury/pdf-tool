@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.13, pikepdf, playa-pdf (through `RunIndex`), pytest, FastAPI worker; React 19, pdfjs-dist, `node --test`.
 
-**Spec:** `docs/superpowers/specs/2026-10-31-sejda-style-inline-editing-design.md`
+**Spec:** `docs/superpowers/specs/2026-10-31-inline-paragraph-editing-design.md`
 
 ## Deviations from the spec (deliberate, smaller)
 
@@ -1236,7 +1236,7 @@ git commit -m "feat: commit paragraph edits on blur with one undo entry"
 ### Task 9: Browser verification and regression
 
 **Files:**
-- Create: `docs/verification/sejda-inline-editing-2026-10-31.md`
+- Create: `docs/verification/inline-paragraph-editing-2026-10-31.md`
 
 - [ ] **Step 1: Full suites**
 
@@ -1256,10 +1256,10 @@ Start the app with the project's existing launch config (`.claude/launch.json`, 
 
 - [ ] **Step 3: Write evidence and commit**
 
-Record the commands, results and any refusals in `docs/verification/sejda-inline-editing-2026-10-31.md`. Then:
+Record the commands, results and any refusals in `docs/verification/inline-paragraph-editing-2026-10-31.md`. Then:
 
 ```bash
-git add docs/verification/sejda-inline-editing-2026-10-31.md
+git add docs/verification/inline-paragraph-editing-2026-10-31.md
 git commit -m "docs: verify Sejda-style inline paragraph editing"
 ```
 
