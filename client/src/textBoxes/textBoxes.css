@@ -1,15 +1,12 @@
 .text-box-layer{position:absolute;inset:0;z-index:10;pointer-events:none}
-.text-box-place{position:absolute;inset:0;width:100%;height:100%;min-height:0;border:0;border-radius:0;padding:0;background:transparent;pointer-events:auto;cursor:text}
-.text-box-place:hover{background:transparent}
+.paper button.text-place-layer{position:absolute;inset:0;z-index:1;width:100%;height:100%;min-height:0;border:0;border-radius:0;padding:0;background:transparent;cursor:text}
+.paper button.text-place-layer:disabled{opacity:1;cursor:progress}
 .saved-text-box{position:absolute;padding:0;min-width:0;min-height:0;background:transparent;border:1px solid #2458df80;border-radius:0;pointer-events:auto}
 .saved-text-box:hover{background:#2458df0c;border-color:#2458df}
-.paper .text-box-input{position:absolute;z-index:12;box-sizing:border-box;margin:0;padding:0;border:0;border-radius:0;outline:2px solid #2458df;outline-offset:2px;background:#fff;resize:none;white-space:pre-wrap;overflow-wrap:break-word;overflow:auto;pointer-events:auto;min-height:0}
-.text-box-preview-outline{position:absolute;box-sizing:border-box;outline:1px dashed #2458df;pointer-events:none}
-.context-toolbar input[aria-label="Text box color hex"]{width:80px}
-.context-toolbar .text-box-overlap{display:flex;flex-direction:row;align-items:center;gap:5px;font-size:11px;min-height:34px}
-.context-toolbar .text-box-overlap input{width:16px;height:16px;min-height:0}
-.text-box-preview-banner{background:#edf3ff;border-bottom:1px solid #bccce2;color:#213b5c;padding:8px 14px;font-size:12px;line-height:1.5;flex:none}
+.text-draft{pointer-events:auto}
+.paper .text-box-input{position:absolute;z-index:12;box-sizing:border-box;margin:0;padding:0;border:0;border-radius:0;outline:1px solid var(--accent,#2f6fed);background:rgba(255,255,255,.96);resize:none;white-space:pre-wrap;overflow-wrap:break-word;overflow:hidden;pointer-events:auto;min-height:0}
+.paper .text-box-input:focus-visible{outline:1px solid var(--accent,#2f6fed);outline-offset:0}
+.text-draft[data-status="refused"] .text-box-input{outline-color:#c62828}
+.text-draft[data-status="saving"] .text-box-input{outline-style:dotted}
+.text-draft-handle{position:absolute;z-index:13;left:-13px;top:-13px;width:11px;height:11px;box-sizing:border-box;border:1px solid var(--accent,#2f6fed);border-radius:2px;background:#fff;cursor:move;touch-action:none}
 .text-box-cancel-work{align-self:flex-start;margin:6px 14px;min-height:36px;font-size:12px}
-.text-box-toolbar>p[role=status]{font-size:12px;line-height:1.5;color:#213b5c}
-.text-box-toolbar>fieldset>label{max-width:100%}
-@media(max-width:760px){.context-toolbar .text-box-overlap{min-height:44px}.text-box-preview-banner{font-size:11px}.text-box-toolbar{max-height:30dvh}}

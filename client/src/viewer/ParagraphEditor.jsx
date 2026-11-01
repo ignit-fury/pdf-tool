@@ -4,7 +4,7 @@ import {viewportBox,explainReason} from '../session.mjs';
 import {sourceTypography,viewportFontScale} from './model.mjs';
 
 // zIndex 4 sits above the per-run .edit-layer (z-index 3), so paragraph targets win the click;
-// refused paragraphs let clicks through to their runs (e.g. inserted text boxes open in text-box mode).
+// refused paragraphs let clicks through to their runs (e.g. inserted text boxes open inline).
 export function ParagraphOutlines({paragraphs,runs=[],viewport,activeId,onChoose}){
   const text=new Map(runs.map(r=>[r.run_id,r.text]));
   return paragraphs.filter(p=>p.paragraph_id!==activeId).map(p=>{
@@ -19,8 +19,38 @@ export function ParagraphOutlines({paragraphs,runs=[],viewport,activeId,onChoose
   });
 }
 
+// Commit when a pointer goes down outside the editor and its .floating-text-tools; a toolbar form
+// control keeps focus and commits when it blurs elsewhere. latest.current holds {busy,onCommit}.
+export function useClickAway(root,latest,restore){
+  const pointer=useRef(null);
+  useEffect(()=>{
+    const inside=target=>target.closest?.('.floating-text-tools')?'toolbar':root.current?.contains(target)?'editor':'outside';
+    const control=target=>!!target.closest?.('input,select,textarea');
+    const down=event=>{
+      pointer.current=inside(event.target);
+      if(pointer.current==='outside'&&!latest.current.busy)latest.current.onCommit();
+    };
+    const end=event=>{
+      if(pointer.current==='toolbar'&&!control(event.target))setTimeout(()=>{if(root.current)restore();},0);
+      setTimeout(()=>{pointer.current=null;},0);
+    };
+    const out=event=>{
+      if(!control(event.target)||!event.target.closest('.floating-text-tools'))return;
+      const to=event.relatedTarget;
+      if(pointer.current==='outside'||pointer.current==='editor'||to?.closest?.('.floating-text-tools')||root.current?.contains(to))return;
+      if(pointer.current==='toolbar'&&!to)return;
+      if(!latest.current.busy)latest.current.onCommit();
+    };
+    document.addEventListener('pointerdown',down,true);document.addEventListener('pointerup',end,true);document.addEventListener('pointercancel',end,true);
+    document.addEventListener('focusout',out,true);
+    return()=>{document.removeEventListener('pointerdown',down,true);document.removeEventListener('pointerup',end,true);document.removeEventListener('pointercancel',end,true);
+      document.removeEventListener('focusout',out,true);};
+  },[]);
+  return pointer;
+}
+
 export default function ParagraphEditor({paragraph,resetKey,lines,runsById,style,viewport,caret,busy,status,onLines,onCommit,onCancel}){
-  const root=useRef(null),latest=useRef(),pointer=useRef(null),saved=useRef(null),tops=useRef([]),src=useRef([]),step=useRef(14);
+  const root=useRef(null),latest=useRef(),saved=useRef(null),tops=useRef([]),src=useRef([]),step=useRef(14);
   latest.current={lines,runsById,viewport,caret,paragraph,onLines,onCommit,busy};
   const first=runsById.get(paragraph.lines[0][0]);
   const typography=sourceTypography(first||{},style,viewportFontScale(viewport));
@@ -78,28 +108,11 @@ export default function ParagraphEditor({paragraph,resetKey,lines,runsById,style
     root.current.focus({preventScroll:true});
     place(root.current,{line:c?.line??0,offset:c?.offset??Infinity});
   },[paragraph.paragraph_id,resetKey]); // resetKey repaints from the current draft lines (toolbar Delete)
+  const pointer=useClickAway(root,latest,()=>{
+    root.current.focus({preventScroll:true});
+    const r=saved.current,sel=getSelection();if(r){sel.removeAllRanges();sel.addRange(r);}
+  });
   useEffect(()=>{
-    const inside=target=>target.closest?.('.floating-text-tools')?'toolbar':root.current?.contains(target)?'editor':'outside';
-    const control=target=>!!target.closest?.('input,select,textarea');
-    const down=event=>{
-      pointer.current=inside(event.target);
-      if(pointer.current==='outside'&&!latest.current.busy)latest.current.onCommit();
-    };
-    const end=event=>{
-      if(pointer.current==='toolbar'&&!control(event.target))setTimeout(()=>{
-        if(!root.current)return;root.current.focus({preventScroll:true});
-        const r=saved.current,sel=getSelection();if(r){sel.removeAllRanges();sel.addRange(r);}
-      },0);
-      setTimeout(()=>{pointer.current=null;},0);
-    };
-    // A toolbar form control keeps focus; when it blurs to somewhere outside, commit.
-    const out=event=>{
-      if(!control(event.target)||!event.target.closest('.floating-text-tools'))return;
-      const to=event.relatedTarget;
-      if(pointer.current==='outside'||pointer.current==='editor'||to?.closest?.('.floating-text-tools')||root.current?.contains(to))return;
-      if(pointer.current==='toolbar'&&!to)return;
-      if(!latest.current.busy)latest.current.onCommit();
-    };
     const before=event=>{
       const t=event.inputType;
       if(t==='insertFromDrop'||t==='deleteByDrag'||t==='historyUndo'||t==='historyRedo'){event.preventDefault();return;}
@@ -109,11 +122,8 @@ export default function ParagraphEditor({paragraph,resetKey,lines,runsById,style
       else if(multi&&/^delete/.test(t)){event.preventDefault();apply(cur=>({lines:cur,caret:w.start}));}
       else if(multi&&t==='insertText'&&event.data){event.preventDefault();apply((cur,at)=>insertText(cur,at.line,at.offset,event.data));}
     };
-    document.addEventListener('pointerdown',down,true);document.addEventListener('pointerup',end,true);document.addEventListener('pointercancel',end,true);
-    document.addEventListener('focusout',out,true);root.current.addEventListener('beforeinput',before);
-    const node=root.current;
-    return()=>{document.removeEventListener('pointerdown',down,true);document.removeEventListener('pointerup',end,true);document.removeEventListener('pointercancel',end,true);
-      document.removeEventListener('focusout',out,true);node.removeEventListener('beforeinput',before);};
+    const node=root.current;node.addEventListener('beforeinput',before);
+    return()=>node.removeEventListener('beforeinput',before);
   },[]);
   return <div ref={root} className="paragraph-editor" data-status={status==='saving'?'saving':status?.refused?'refused':'editing'}
     contentEditable={!busy} suppressContentEditableWarning role="textbox" aria-multiline="true" aria-label="Edit paragraph on page" spellCheck={false}

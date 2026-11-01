@@ -1,62 +1,50 @@
-import React,{useEffect,useLayoutEffect,useRef,useState} from 'react';
+import React,{useEffect,useLayoutEffect,useRef} from 'react';
 import {colorHex} from '../viewer/model.mjs';
-import {draftError,expandTextBox,explainTextBoxError} from './model.mjs';
+import {FONT_STACKS} from './model.mjs';
+import {useClickAway} from '../viewer/ParagraphEditor.jsx';
 import {scrollWithinDocument} from '../viewer/scroll.mjs';
-import ToolbarDetails from '../viewer/ToolbarDetails.jsx';
 
-export function TextBoxOverlay({number,viewport,geometry,draft,boxes,state,disabled,onPlace,onSelect,onDraft}){
-  const input=useRef(null),outline=useRef(null),sx=viewport.width/geometry.visibleWidth,sy=viewport.height/geometry.visibleHeight;
-  useEffect(()=>{if(draft){if(state.status!=='ready'){input.current?.focus({preventScroll:true});if(draft.caret)input.current?.setSelectionRange(draft.caret.start,draft.caret.end);}const area=input.current||outline.current;scrollWithinDocument(area?.closest('.continuous-stage'),area);}},[!!draft,draft?.id,draft?.page_index,state.status==='ready']);
-  useLayoutEffect(()=>{
-    const element=input.current;if(!element||!draft||state.status==='ready')return;
-    const minimum=draft.rect.height*sy;element.style.height=`${minimum}px`;
-    if(draft.auto_expand!==false)element.style.height=`${Math.min((geometry.visibleHeight-draft.rect.top)*sy,Math.max(minimum,element.scrollHeight))}px`;
-  },[draft,sy,geometry.visibleHeight,state.status]);
+// Edit text mode: empty page area places new text; inserted boxes open inline. The place layer sits
+// under the run targets (z-index 3) and paragraph outlines (4), so those still win the click.
+export function TextBoxOverlay({number,viewport,geometry,draft,boxes,disabled,onPlace,onSelect,onDraft,onCommit,onCancel}){
+  const sx=viewport.width/geometry.visibleWidth,sy=viewport.height/geometry.visibleHeight;
   const rect=value=>({left:value.left*sx,top:value.top*sy,width:value.width*sx,height:value.height*sy});
-  const active=draft?.page_index===number-1;
-  return <div className="text-box-layer">
-    {!draft&&<button className="text-box-place" aria-label={`Insert text on page ${number}`} disabled={disabled} onClick={event=>{const b=event.currentTarget.getBoundingClientRect();onPlace(number-1,event.detail?{left:(event.clientX-b.left)/sx,top:(event.clientY-b.top)/sy}:{left:40,top:40});}}/>}
-    {state.status!=='ready'&&boxes.filter(box=>box.page_index===number-1&&box.id!==draft?.id).map((box,i)=><button key={box.id} className="saved-text-box" style={rect(box.rect)} aria-label={`Edit inserted text box ${i+1} on page ${number}`} disabled={disabled} onClick={()=>onSelect(box)}/>)}
-    {active&&(state.status==='ready'||draft.rotation?<div ref={outline} className="text-box-preview-outline" style={rect(draft.rect)} aria-label="Prepared text box area"/>:<textarea ref={input} className="text-box-input" aria-label="Text box content on page" aria-describedby="text-box-disclosure" placeholder="Type text here…" spellCheck={false} wrap="soft" disabled={disabled} value={draft.text} style={{...rect(draft.rect),fontFamily:{Sans:'Arial,sans-serif',Serif:'"Times New Roman",serif',Mono:'"Courier New",monospace'}[draft.style.font_family],fontSize:draft.style.font_size*sy,lineHeight:draft.style.line_spacing,fontWeight:draft.style.bold?700:400,fontStyle:draft.style.italic?'italic':'normal',color:colorHex(draft.style.color),letterSpacing:draft.style.character_spacing*sx,textAlign:draft.style.alignment}} onChange={event=>onDraft({...draft,text:event.target.value,caret:{start:event.target.selectionStart,end:event.target.selectionEnd}})}/>)}
-  </div>;
+  return <>
+    <button type="button" className="text-place-layer" aria-label={`Add text on page ${number}`} disabled={disabled} onClick={event=>{const b=event.currentTarget.getBoundingClientRect();onPlace(number-1,event.detail?{left:(event.clientX-b.left)/sx,top:(event.clientY-b.top)/sy}:{left:40,top:40});}}/>
+    <div className="text-box-layer">
+      {boxes.filter(box=>box.page_index===number-1&&box.id!==draft?.id).map((box,i)=><button key={box.id} type="button" className="saved-text-box" style={rect(box.rect)} aria-label={`Edit inserted text ${i+1} on page ${number}`} disabled={disabled} onClick={()=>onSelect(box)}/>)}
+      {draft?.page_index===number-1&&<TextDraftEditor key={draft.serial} draft={draft} geometry={geometry} sx={sx} sy={sy} box={rect(draft.rect)} disabled={disabled} onDraft={onDraft} onCommit={onCommit} onCancel={onCancel}/>}
+    </div>
+  </>;
 }
 
-export default function TextBoxToolbar({draft,state,geometry,pageCount,busy,allowed,onDraft,onPreview,onApply,onCancel,onEdit,onRemove}){
-  const [confirm,setConfirm]=useState(false);
-  if(!draft)return null;
-  const ready=state.status==='ready',overflow=state.status==='overflow',problem=draftError(draft,geometry);
-  const change=(field,value)=>onDraft({...draft,style:{...draft.style,[field]:value}});
-  const expanded=overflow?expandTextBox(draft,state.required_height,geometry):null;
-  return <section className="context-toolbar text-box-toolbar" aria-label="Text box formatting">
-    <div className="context-heading"><strong>{draft.source_run_id||draft.source_run_ids?'Expand original text':draft.id?'Edit inserted text':'Insert text'} · Page {draft.page_index+1}</strong><span>{ready?'Exact PDF preview — not applied':'Native, searchable text container'}</span><button onClick={onCancel} disabled={!!busy} aria-label="Cancel text box">Close</button></div>
-    {(draft.source_run_id||draft.source_run_ids)&&<p className="context-warning" role="status">Flexible layout replaces the original {draft.source_font||'PDF'} font with {`Liberation ${draft.style.font_family==='Sans'?'Sans':draft.style.font_family==='Mono'?'Mono':'Serif'}`}.{draft.style.initial_font_size?` The first letter is ${draft.style.initial_font_size} pt and the remaining text is ${draft.style.font_size} pt.`:` Text size is ${draft.style.font_size} pt.`} The typing draft is approximate; check the exact PDF preview before applying.</p>}
-    <fieldset disabled={!!busy||ready||!!draft.rotation}>
-      <label>Font<select aria-label="Text box font" value={draft.style.font_family} onChange={event=>change('font_family',event.target.value)}><option value="Sans">Liberation Sans</option><option value="Serif">Liberation Serif</option><option value="Mono">Liberation Mono</option></select></label>
-      <label>Size<input type="number" aria-label="Text box font size" min="1" max="512" value={draft.style.font_size} onChange={event=>change('font_size',Number(event.target.value))}/></label>
-      {'initial_font_size' in draft.style&&<label>Initial size<input type="number" aria-label="Text box initial font size" min="1" max="512" value={draft.style.initial_font_size} onChange={event=>change('initial_font_size',Number(event.target.value))}/></label>}
-      <button aria-pressed={draft.style.bold} onClick={()=>change('bold',!draft.style.bold)}><strong>Bold</strong></button><button aria-pressed={draft.style.italic} onClick={()=>change('italic',!draft.style.italic)}><em>Italic</em></button>
-      <label>Color<input type="color" aria-label="Text box color" value={colorHex(draft.style.color)} onChange={event=>change('color',event.target.value.slice(1).match(/../g).map(v=>parseInt(v,16)/255))}/></label>
-      <ToolbarDetails label="Layout & spacing" closeKey={`${draft.id||draft.source_run_id||draft.source_run_ids?.[0]||''}:${ready}`}><fieldset disabled={!!busy||ready||!!draft.rotation}>
-      <label>Page<input type="number" aria-label="Text box page" min="1" max={pageCount} value={draft.page_index+1} onChange={event=>onDraft({...draft,page_index:Number(event.target.value)-1})}/></label>
-      {['left','top','width','height'].map(field=><label key={field}>{field[0].toUpperCase()+field.slice(1)} (pt)<input aria-label={`Text box ${field}`} type="number" min={['width','height'].includes(field)?1:0} step="1" value={draft.rect[field]} onChange={event=>onDraft({...draft,rect:{...draft.rect,[field]:Number(event.target.value)}})}/></label>)}
-      <label>Hex<input key={colorHex(draft.style.color)} aria-label="Text box color hex" defaultValue={colorHex(draft.style.color)} maxLength={7} pattern="#[0-9a-fA-F]{6}" onBlur={event=>{if(/^#[0-9a-fA-F]{6}$/.test(event.target.value))change('color',event.target.value.slice(1).match(/../g).map(v=>parseInt(v,16)/255));else event.target.value=colorHex(draft.style.color);}}/></label>
-      <label>Alignment<select aria-label="Text box alignment" value={draft.style.alignment} onChange={event=>change('alignment',event.target.value)}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
-      {[['character_spacing','Character spacing',0,10,.1],['line_spacing','Line spacing',1,3,.1],['paragraph_spacing','Paragraph spacing',0,144,1]].map(([key,label,min,max,step])=><label key={key}>{label}<input type="number" aria-label={`Text box ${label.toLowerCase()}`} min={min} max={max} step={step} value={draft.style[key]} onChange={event=>change(key,Number(event.target.value))}/></label>)}
-      <label className="text-box-overlap"><input type="checkbox" checked={!!draft.allow_overlap} onChange={event=>onDraft({...draft,allow_overlap:event.target.checked})}/> Allow transparent overlap with existing content</label>
-      <label className="text-box-overlap"><input type="checkbox" aria-label="Grow height to fit text" checked={draft.auto_expand!==false} onChange={event=>onDraft({...draft,auto_expand:event.target.checked})}/> Grow height to fit text</label>
-      </fieldset></ToolbarDetails>
-    </fieldset>
-    <ToolbarDetails label="Edit details" closeKey={ready}>
-    <p id="text-box-disclosure" className="context-guidance">{draft.source_run_id||draft.source_run_ids?'Preview sends the source PDF, committed edit recipe and replacement text to the server. Apply uses the exact prepared PDF locally. Nearby content stays fixed.':'Preview uploads the current PDF and this text to the server. Apply uses the exact prepared PDF in this browser. This creates or edits an inserted text container; it does not reflow surrounding source text.'} The draft font/wrapping is approximate until PDF preview.</p>
-    {(draft.source_run_id||draft.source_run_ids)&&<p className="context-guidance">This replaces the selected original text through the validated content-stream writer. Other content stays fixed; growth requires free space. The original font ({draft.source_font||'unknown'}) is replaced by the selected Liberation font. Tabs use four spaces. Preview includes all prior edits.</p>}
-    {draft.source_run_ids&&<p className="context-guidance">The initial and following letters had separate PDF font sizes. This box keeps their separate point sizes while using one selected replacement font; wrapping and line placement use the exact PDF preview.</p>}
-    </ToolbarDetails>
-    {!!draft.rotation&&<p className="context-warning">This text box rotated with its page. Rotate the page back to edit its layout. You can still preview removal of this inserted text.</p>}
-    {problem&&!ready&&<p className="context-warning">{problem}</p>}
-    {state.status==='error'&&<p className="context-warning" role="alert">{explainTextBoxError(state.error)}</p>}
-    {overflow&&<div className="context-warning" role="status"><p>Text needs {state.required_height.toFixed(2)} pt height; this box has {state.available_height.toFixed(2)} pt. No text was applied or clipped.</p>{expanded?<button onClick={()=>onDraft(expanded)}>Expand text box to fit</button>:<p>There is not enough room below this box. Reduce the font size, move it, or choose another page.</p>}</div>}
-    {ready&&<p role="status">Exact candidate PDF is visible. The working PDF and Undo history are unchanged until Apply.{state.preview.layout?` ${state.preview.layout.line_count} lines.`:''}{state.preview.notices.includes('UNLOCKED_COPY')?' The prepared copy is unlocked.':''}{state.preview.notices.includes('SIGNATURES_INVALIDATED')?' Applying invalidates signatures.':''}</p>}
-    <div className="context-actions">{ready?<><button onClick={onEdit} disabled={!!busy}>Edit text box draft</button><button className="primary" onClick={onApply} disabled={!!busy||!allowed}>Apply text box <span className="action-location">Browser</span></button></>:<button className="primary" onClick={onPreview} disabled={!!busy||!!problem||!allowed||!!draft.rotation}>Preview text box <span className="action-location">Server</span></button>}{draft.id&&!ready&&<button onClick={()=>setConfirm(true)} disabled={!!busy}>Remove text box</button>}<button onClick={onCancel}>Cancel text box changes</button></div>
-    {confirm&&!ready&&<div role="group" aria-label="Confirm text box removal"><p>Preview removal of this inserted text only? Apply will commit it; Undo can restore it.</p><button onClick={()=>{setConfirm(false);onRemove();}} disabled={!!busy||!allowed}>Preview text box removal <span className="action-location">Server</span></button><button onClick={()=>setConfirm(false)}>Keep text box</button></div>}
-  </section>;
+function TextDraftEditor({draft,geometry,sx,sy,box,disabled,onDraft,onCommit,onCancel}){
+  const root=useRef(null),input=useRef(null),drag=useRef(null),latest=useRef();
+  latest.current={draft,busy:disabled,onCommit,onDraft};
+  const pointer=useClickAway(root,latest,()=>input.current?.focus({preventScroll:true}));
+  useEffect(()=>{
+    const node=input.current,stage=node.closest('.continuous-stage');node.focus({preventScroll:true});node.setSelectionRange(node.value.length,node.value.length);
+    // Scroll only when off-screen (e.g. opened from the inspector), so a click never moves the page under the pointer.
+    const view=stage?.getBoundingClientRect(),own=node.getBoundingClientRect();
+    if(view&&(own.top<view.top||own.bottom>view.bottom||own.left<view.left||own.right>view.right))scrollWithinDocument(stage,node);
+  },[]);
+  // Canvas measurement sizes the box; scrollHeight only covers a browser wrap the estimate missed.
+  useLayoutEffect(()=>{const node=input.current;node.style.height=`${box.height}px`;node.style.height=`${Math.max(box.height,node.scrollHeight)}px`;},[draft.text,draft.style,box.height,box.width]);
+  const move=event=>{
+    const start=drag.current,{draft:current,busy}=latest.current;if(!start||busy)return;
+    const left=Math.max(0,Math.min(geometry.visibleWidth-current.rect.width,start.left+(event.clientX-start.x)/sx));
+    const top=Math.max(0,Math.min(geometry.visibleHeight-current.rect.height,start.top+(event.clientY-start.y)/sy));
+    latest.current.onDraft({...current,rect:{...current.rect,left,top}});
+  };
+  const s=draft.style;
+  return <div ref={root} className="text-draft" data-status={draft.status==='saving'?'saving':draft.status?.refused?'refused':'editing'} style={{position:'absolute',left:box.left,top:box.top,width:box.width,height:box.height}}>
+    <textarea ref={input} className="text-box-input" aria-label="Text on page" placeholder="Type…" spellCheck={false} wrap="soft" disabled={disabled} value={draft.text}
+      style={{left:0,top:0,width:'100%',fontFamily:FONT_STACKS[s.font_family],fontSize:s.font_size*sy,lineHeight:s.line_spacing,fontWeight:s.bold?700:400,fontStyle:s.italic?'italic':'normal',color:colorHex(s.color),letterSpacing:s.character_spacing*sx,textAlign:s.alignment}}
+      onChange={event=>onDraft({...draft,text:event.target.value})}
+      onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();onCancel();}else if(event.key==='Tab'){event.preventDefault();onCommit();}}}
+      onBlur={event=>{if(pointer.current)return;if(event.relatedTarget?.closest?.('.floating-text-tools')||root.current?.contains(event.relatedTarget))return;onCommit();}}/>
+    <span className="text-draft-handle" title="Drag to move" aria-hidden="true" onMouseDown={event=>event.preventDefault()}
+      onPointerDown={event=>{if(disabled)return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);drag.current={x:event.clientX,y:event.clientY,left:draft.rect.left,top:draft.rect.top};}}
+      onPointerMove={move} onPointerUp={()=>{drag.current=null;input.current?.focus({preventScroll:true});}} onPointerCancel={()=>{drag.current=null;}}/>
+  </div>;
 }

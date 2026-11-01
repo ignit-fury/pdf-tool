@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {newTextBox,textBoxPayload,draftError,expandTextBox} from './model.mjs';
+import {newTextBox,textBoxPayload,draftError,expandTextBox,wordRect,fitTextRect,growTextBox,explainInsertError,DEFAULT_STYLE} from './model.mjs';
 
 test('source expansion keeps the draft/recipe, uses physical formatting and normalizes tabs',async()=>{
   const {sourceTextBox}=await import('./model.mjs');
@@ -19,10 +19,31 @@ test('split-initial expansion retains both point sizes in the exact PDF payload'
   assert.equal(textBoxPayload(draft).style.initial_font_size,75);
   assert.match(draftError({...draft,style:{...draft.style,initial_font_size:513}},{visibleWidth:612,visibleHeight:792}),/font size/);
 });
-test('page insertion clamps a physical box while retaining a genuine empty draft',()=>{
-  const draft=newTextBox(1,{visibleWidth:600,visibleHeight:800},{left:590,top:790});
-  assert.deepEqual(draft.rect,{left:360,top:680,width:240,height:120});assert.equal(draft.text,'');
-  assert.match(draftError(draft,{visibleWidth:600,visibleHeight:800}),/Enter/);
+test('new text starts word-sized at the click and is clamped inside the visible page',()=>{
+  const geometry={visibleWidth:600,visibleHeight:800};
+  const draft=newTextBox(1,geometry,{left:100,top:200});
+  assert.deepEqual(draft.rect,{left:100,top:200,width:24,height:12*1.2});assert.equal(draft.text,'');assert.deepEqual(draft.style,{...DEFAULT_STYLE,color:[0,0,0]});
+  assert.deepEqual(newTextBox(1,geometry,{left:590,top:795}).rect,{left:576,top:800-12*1.2,width:24,height:12*1.2});
+  assert.deepEqual(wordRect(geometry,{left:-5,top:-1}),{left:0,top:0,width:24,height:12*1.2});
+  assert.match(draftError(draft,geometry),/Enter/);
+});
+test('typed text grows the box: width to the longest line, wrapping only at the page edge',()=>{
+  const geometry={visibleWidth:600,visibleHeight:800},style={...DEFAULT_STYLE},rect={left:100,top:200,width:24,height:12*1.2};
+  assert.deepEqual(fitTextRect(rect,[0],style,geometry),rect,'empty text keeps the word-sized box');
+  const one=fitTextRect(rect,[100],style,geometry);assert.equal(one.width,105);assert.equal(one.height,12*1.2);
+  const two=fitTextRect(rect,[100,200],style,geometry);assert.equal(two.width,208);assert.ok(Math.abs(two.height-28.8)<1e-9,'Enter adds a line');
+  const wide=fitTextRect(rect,[900],style,geometry);assert.equal(wide.width,500,'never past the right edge');assert.ok(Math.abs(wide.height-28.8)<1e-9,'soft wrap grows height');
+  assert.equal(fitTextRect({...rect,top:790},[100,100,100],style,geometry).height,10,'height stays on the page');
+  assert.deepEqual(fitTextRect(rect,[10],style,geometry,{width:80,height:40}),{...rect,width:80,height:40},'an existing box never shrinks');
+});
+test('the save payload carries the measured text extent',()=>{
+  const geometry={visibleWidth:600,visibleHeight:800};
+  const draft=growTextBox({...newTextBox(0,geometry,{left:50,top:60}),text:'Hello\nworld'},geometry,[40,50]);
+  const payload=textBoxPayload(draft);
+  assert.equal(payload.operation,'upsert');assert.equal(payload.auto_expand,true);assert.equal(payload.allow_overlap,false);
+  assert.ok(Math.abs(payload.rect.width-53.5)<1e-9);assert.ok(Math.abs(payload.rect.height-28.8)<1e-9);assert.deepEqual([payload.rect.left,payload.rect.top],[50,60]);
+  assert.equal(draftError(draft,geometry),null);
+  assert.match(explainInsertError({code:'TEXT_BOX_OVERLAP'}),/Click somewhere with free space, or move it/);
 });
 test('multiline draft accepts explicit breaks, growth and spacing within its own geometry',()=>{
   const draft=newTextBox(1,{visibleWidth:600,visibleHeight:800},{left:40,top:40});

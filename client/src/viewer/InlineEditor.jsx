@@ -12,20 +12,23 @@ export function InlineInput({run,style,draft,viewport,busy,onDraft,onCancel,onPr
     onChange={event=>onDraft(event.target.value,{start:event.target.selectionStart,end:event.target.selectionEnd})} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();onCancel();}if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();onPreview();}}}/>;
 }
 
-export default function TextToolbar({run,style,busy,status,onStyle,onDelete,onRevert}) {
+// textBox: inserted text — no source font to fall back to, plus alignment and line spacing.
+export default function TextToolbar({run,style,busy,status,textBox=false,onStyle,onDelete,onRevert}) {
   if(!run)return null;
   const size=style.font_size??run.font_size??12;
   return <section className="context-toolbar compact" aria-label="Text formatting">
     <fieldset disabled={!!busy}>
-      <select aria-label="Font" value={style.font_family||''} onChange={event=>{const next={...style};if(event.target.value)next.font_family=event.target.value;else delete next.font_family;onStyle(next);}}><option value="">{run.source_font||'Source font'}</option><option value="Sans">Liberation Sans</option><option value="Serif">Liberation Serif</option><option value="Mono">Liberation Mono</option></select>
+      <select aria-label="Font" value={style.font_family||''} onChange={event=>{const next={...style};if(event.target.value)next.font_family=event.target.value;else delete next.font_family;onStyle(next);}}>{!textBox&&<option value="">{run.source_font||'Source font'}</option>}<option value="Sans">Liberation Sans</option><option value="Serif">Liberation Serif</option><option value="Mono">Liberation Mono</option></select>
       <button aria-label="Decrease font size" onClick={()=>onStyle({...style,font_size:Math.max(1,Number(size)-1)})}>−</button>
       <input aria-label="Font size" type="number" min="1" max="512" step="0.5" value={size} onChange={event=>onStyle({...style,font_size:Number(event.target.value)})}/>
       <button aria-label="Increase font size" onClick={()=>onStyle({...style,font_size:Math.min(512,Number(size)+1)})}>+</button>
       <button aria-pressed={style.bold??!!run.bold} aria-label="Bold" onClick={()=>onStyle({...style,bold:!(style.bold??run.bold)})}><strong>B</strong></button>
       <button aria-pressed={style.italic??!!run.italic} aria-label="Italic" onClick={()=>onStyle({...style,italic:!(style.italic??run.italic)})}><em>I</em></button>
       <input type="color" aria-label="Text color" value={colorHex(style.color??run.color)} onChange={event=>onStyle({...style,color:event.target.value.slice(1).match(/../g).map(v=>parseInt(v,16)/255)})}/>
-      <button aria-label="Delete paragraph" onClick={onDelete}>Delete</button>
-      <ToolbarDetails label="⋯" closeKey={run.run_id}><label>Character spacing<input type="number" aria-label="Character spacing" min="0" max="10" step="0.1" value={style.character_spacing??run.character_spacing??0} onChange={event=>onStyle({...style,character_spacing:Number(event.target.value)})}/></label></ToolbarDetails>
+      <button aria-label={textBox?'Delete text':'Delete paragraph'} onClick={onDelete}>Delete</button>
+      <ToolbarDetails label="⋯" closeKey={run.run_id}><label>Character spacing<input type="number" aria-label="Character spacing" min="0" max="10" step="0.1" value={style.character_spacing??run.character_spacing??0} onChange={event=>onStyle({...style,character_spacing:Number(event.target.value)})}/></label>
+        {textBox&&<><label>Alignment<select aria-label="Alignment" value={style.alignment} onChange={event=>onStyle({...style,alignment:event.target.value})}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
+        <label>Line spacing<input type="number" aria-label="Line spacing" min="1" max="3" step="0.1" value={style.line_spacing} onChange={event=>onStyle({...style,line_spacing:Number(event.target.value)})}/></label></>}</ToolbarDetails>
       <span className="action-location">Server</span>
     </fieldset>
     {status==='saving'&&<p role="status">Saving…</p>}

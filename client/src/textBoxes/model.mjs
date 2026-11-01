@@ -1,7 +1,35 @@
 export const DEFAULT_STYLE=Object.freeze({font_family:'Sans',font_size:12,bold:false,italic:false,color:Object.freeze([0,0,0]),character_spacing:0,line_spacing:1.2,paragraph_spacing:0,alignment:'left'});
+// The overlay's browser fonts, metric-compatible with the bundled Liberation families.
+export const FONT_STACKS=Object.freeze({Sans:'Arial,sans-serif',Serif:'"Times New Roman",serif',Mono:'"Courier New",monospace'});
+const clamp=(value,lo,hi)=>Math.max(lo,Math.min(hi,value));
+// New text starts the size of a short word, top-left at the click, kept inside the visible page.
+export function wordRect(geometry,point,style=DEFAULT_STYLE){
+  const width=Math.min(2*style.font_size,geometry.visibleWidth),height=Math.min(style.font_size*style.line_spacing,geometry.visibleHeight);
+  return {left:clamp(point.left,0,geometry.visibleWidth-width),top:clamp(point.top,0,geometry.visibleHeight-height),width,height};
+}
 export function newTextBox(page_index,geometry,point={left:40,top:40}){
-  const width=Math.min(240,geometry.visibleWidth),height=Math.min(120,geometry.visibleHeight);
-  return {page_index,text:'',rect:{left:Math.max(0,Math.min(geometry.visibleWidth-width,point.left)),top:Math.max(0,Math.min(geometry.visibleHeight-height,point.top)),width,height},style:structuredClone(DEFAULT_STYLE),allow_overlap:false,auto_expand:true};
+  const style=structuredClone(DEFAULT_STYLE);
+  return {page_index,text:'',rect:wordRect(geometry,point,style),style,allow_overlap:false,auto_expand:true};
+}
+const slack=width=>width*1.03+2;
+/** Grow a box to its text: width follows the longest measured line (pt) until the visible page's right
+ * edge, then lines soft-wrap and height grows by lines. floor keeps an existing box from shrinking. */
+export function fitTextRect(rect,widths,style,geometry,floor={width:0,height:0}){
+  const maxWidth=Math.max(1,geometry.visibleWidth-rect.left),line=style.font_size*style.line_spacing;
+  const width=Math.min(maxWidth,Math.max(floor.width,2*style.font_size,...widths.map(slack)));
+  const rows=widths.reduce((sum,w)=>sum+Math.max(1,Math.ceil(slack(w)/width-1e-9)),0);
+  const height=Math.min(geometry.visibleHeight-rect.top,Math.max(floor.height,rows*line+style.paragraph_spacing*(widths.length-1)));
+  return {left:rect.left,top:rect.top,width,height};
+}
+let canvas;
+// Browser only: unwrapped width in points of each typed line (a px font size at scale 1 is points).
+export function measureLineWidths(text,style){
+  canvas??=document.createElement('canvas');const context=canvas.getContext('2d');
+  context.font=`${style.italic?'italic ':''}${style.bold?'700 ':''}${style.font_size}px ${FONT_STACKS[style.font_family]||FONT_STACKS.Sans}`;
+  return text.split('\n').map(line=>context.measureText(line).width+(style.character_spacing||0)*Array.from(line).length);
+}
+export function growTextBox(draft,geometry,widths=measureLineWidths(draft.text,draft.style)){
+  return {...draft,rect:fitTextRect(draft.rect,widths,draft.style,geometry,draft.floor)};
 }
 export function textBoxPayload(draft){return {operation:draft.source_run_id||draft.source_run_ids?'replace-source':'upsert',...(draft.source_run_ids?{source_run_ids:[...draft.source_run_ids],recipe:structuredClone(draft.recipe)}:draft.source_run_id?{source_run_id:draft.source_run_id,recipe:structuredClone(draft.recipe)}:{}),auto_expand:draft.auto_expand!==false,page_index:draft.page_index,...(draft.id?{id:draft.id}:{}),text:draft.text,rect:{left:draft.rect.left,top:draft.rect.top,width:draft.rect.width,height:draft.rect.height},style:{...DEFAULT_STYLE,...draft.style},allow_overlap:!!draft.allow_overlap};}
 export function draftError(draft,geometry){
@@ -19,6 +47,12 @@ export function expandTextBox(draft,required,geometry){
 export function explainTextBoxError(error){
   const messages={TEXT_BOX_RESPONSE_INVALID:'The text box response could not be verified. No change was applied.',TEXT_BOX_OVERLAP:'This area contains visible content or an annotation. Move or resize the box, or explicitly allow transparent overlap.',TEXT_BOX_UNSUPPORTED_TEXT:'This text needs glyphs or shaping the bundled font cannot safely represent. Try another font or simpler text.',TEXT_BOX_SOURCE_UNSAFE:'The original text cannot be removed safely through the content-stream writer. Your PDF is unchanged; keep this run in Preserve layout or choose another text run.',TEXT_BOX_UNSAFE:'This PDF or saved text box cannot be changed safely. Try another page or create a new box.',TEXT_BOX_NOT_FOUND:'That saved text box no longer matches this PDF. Load the text boxes again.',TEXT_BOX_LIMIT:'This operation exceeds a document or text-box limit. Use a smaller box or document.',TEXT_BOX_OUTPUT_LIMIT:'The prepared PDF exceeds the output limit. Your current document is unchanged.',INVALID_TEXT_BOX:'Check text, size, position, font and spacing before previewing.',SIGNATURE_ACKNOWLEDGEMENT_REQUIRED:'Acknowledge the signature warning before changing this document.',EXPORT_LIMIT:'This preview exceeds the browser memory limit. Use a smaller PDF or reopen the current PDF to release Undo memory.',PUSH_DOWN_PAGE_FULL:'Not enough room on this page for the longer text. Shorten it, or move content to another page.',PUSH_DOWN_STRADDLE:"Content beside this paragraph can't be moved down. Shorten the text to fit.",PUSH_DOWN_MANAGED_IMAGE:'An inserted image below would have to move. Move the image first, or shorten the text.',PUSH_DOWN_UNSUPPORTED:"This page's layout can't be moved safely (for example, it has columns). Shorten the text to fit.",WORKER_TIMEOUT:'The preview took too long. Try a smaller document or text box.'};
   return messages[error?.code]||'The text box could not be prepared. Your current PDF is unchanged.';
+}
+// Inline new text can be moved, so overlap advice says where to put it rather than to shorten.
+export function explainInsertError(error){
+  if(error?.code==='TEXT_BOX_OVERLAP')return 'This text would cover other content on the page. Click somewhere with free space, or move it.';
+  if(error?.code==='TEXT_BOX_OVERFLOW')return 'This text runs past the bottom of the page. Shorten it, or move it higher.';
+  return explainTextBoxError(error);
 }
 // A paragraph's rebuilt box has no move, resize or overlap controls: only shortening helps.
 export function explainParagraphError(error){
