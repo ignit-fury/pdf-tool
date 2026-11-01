@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import functools
 import io
+import pickle
 from dataclasses import dataclass
 from hashlib import md5
 from pathlib import Path
@@ -377,6 +378,22 @@ def subset_tag(description: str) -> str:
 
 
 @functools.lru_cache(maxsize=12)
+def _parsed_bundled_face(family: BundledFamily, variant: BundledVariant) -> bytes:
+    """A bundled face with its layout tables parsed, pickled so each subset gets a
+    private copy (the subsetter mutates the font it is given).
+
+    Parsing GSUB/GPOS dominates subsetting; restoring this snapshot is several times
+    cheaper and yields byte-identical subsets. Other tables stay lazy over the raw
+    bytes. Only our own installed fonts are ever pickled.
+    """
+    font = TTFont(io.BytesIO(liberation_font_path(family, variant).read_bytes()))
+    for tag in ("GSUB", "GPOS", "GDEF", "cmap"):
+        if tag in font:
+            font[tag]
+    return pickle.dumps(font)
+
+
+@functools.lru_cache(maxsize=12)
 def _bundled_shaping_metadata(
     family: BundledFamily, variant: BundledVariant
 ) -> tuple[hb.Face, tuple[str, ...]]:
@@ -485,7 +502,7 @@ def subset_font_for_family(
     diverge on ligature-produced glyphs that have no single originating character.
     """
     try:
-        font = TTFont(str(liberation_font_path(family, variant)))
+        font = pickle.loads(_parsed_bundled_face(family, variant))
         options = subset.Options()
         options.set(notdef_outline=True, recommended_glyphs=False, desubroutinize=False)
         subsetter = subset.Subsetter(options=options)

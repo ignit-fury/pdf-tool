@@ -216,7 +216,7 @@ def _text_box_payload(encoded: object) -> dict[str, object]:
 def _managed_text_box_parts(pdf: object, source: bytes, page: int) -> dict[int, str | None]:
     """Lock marked direct parts; link IDs only after the native ownership proof."""
     import pikepdf
-    from engine.text_boxes import TextBoxError, prepare_text_box
+    from engine.text_boxes import TextBoxError, page_text_boxes
     assert isinstance(pdf, pikepdf.Pdf)
     contents = pdf.pages[page].obj.get('/Contents')
     streams = list(contents) if isinstance(contents, pikepdf.Array) else [contents]
@@ -226,10 +226,7 @@ def _managed_text_box_parts(pdf: object, source: bytes, page: int) -> dict[int, 
     if not marked:
         return result
     try:
-        verified = prepare_text_box(pdf, source, {'operation': 'list'})
-        boxes = verified.get('boxes')
-        if verified.get('ok') is not True or not isinstance(boxes, list):
-            return result
+        boxes = page_text_boxes(pdf, source, page)
         identifiers = {box['id'] for box in boxes if isinstance(box, dict)
                        and isinstance(box.get('id'), str) and box.get('page_index') == page}
         for part, stream in marked.items():

@@ -413,7 +413,8 @@ def _fmt(number: float) -> str:
     return f'{number:.8f}'.rstrip('0').rstrip('.') or '0'
 
 
-def _owned(pdf: pikepdf.Pdf) -> list[tuple[dict[str,Any],pikepdf.Object]]:
+def _owned(pdf: pikepdf.Pdf, only_page: int | None = None) -> list[tuple[dict[str,Any],pikepdf.Object]]:
+    """Prove every owned box, or only `only_page`'s; every marker is still schema-checked."""
     result: list[tuple[dict[str,Any],pikepdf.Object]]=[]
     seen: set[str]=set()
     for index,page in enumerate(pdf.pages):
@@ -437,6 +438,8 @@ def _owned(pdf: pikepdf.Pdf) -> list[tuple[dict[str,Any],pikepdf.Object]]:
                 seen.add(spec['id'])
                 if len(seen)>200:
                     _fail('TEXT_BOX_LIMIT')
+                if only_page is not None and index!=only_page:
+                    continue  # Not returned, so its rebuild is not needed to trust this page.
                 current_geometry=_geometry(page)
                 drawing_bytes=_decoded(stream)
                 geometry=_historical_geometry(drawing_bytes)
@@ -664,6 +667,12 @@ def _isolate(pdf: pikepdf.Pdf, page: pikepdf.Page) -> None:
     start_stream.NativeTextBoxIsolation=pikepdf.String('v1:start')
     end_stream.NativeTextBoxIsolation=pikepdf.String('v1:end')
     page.obj.Contents=pikepdf.Array([start_stream,*contents,end_stream])
+
+
+def page_text_boxes(pdf: pikepdf.Pdf, source: bytes, page: int) -> list[dict[str,Any]]:
+    """The proven owned boxes on one page; cost scales with that page, not the document."""
+    if len(source)>50*1024*1024 or len(pdf.pages)>MAX_TEXT_BOX_PAGES:_fail('TEXT_BOX_LIMIT')
+    return [spec for spec,_ in _owned(pdf,page)]
 
 
 def prepare_text_box(pdf: pikepdf.Pdf, source: bytes, payload: object) -> dict[str,object]:

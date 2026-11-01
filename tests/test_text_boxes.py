@@ -492,3 +492,95 @@ def test_styled_line_gap_clears_the_larger_line_above():
         drawing = next(s for s in pdf.pages[0].Contents if s.get('/NativeTextBox')).read_bytes()
     ys = sorted({-float(y) for y in re.findall(rb' (-?[\d.]+) Tm', drawing)})
     assert len(ys) == 2 and ys[1] - ys[0] >= 48 * 1.2 - 1e-6
+
+
+def _hundred_styled_boxes(pages=10, count=100):
+    """Owned 6-face boxes written the way `upsert` writes them, without 100 re-proofs."""
+    from engine import text_boxes as tb
+    pdf = pikepdf.Pdf.new()
+    for _ in range(pages):
+        pdf.add_blank_page(page_size=(400, 300)).obj.Contents = pikepdf.Stream(pdf, b'')
+    faces = [(family, bold) for family in ('Sans', 'Serif', 'Mono') for bold in (False, True)]
+    for k in range(count):
+        index = k % pages
+        page = pdf.pages[index]
+        runs = [{'text': f'w{k}{j} ', 'style': {'font_family': family, 'bold': bold}}
+                for j, (family, bold) in enumerate(faces)]
+        spec = tb._spec({'page_index': index, 'text': ''.join(r['text'] for r in runs), 'runs': runs,
+                         'rect': {'left': 5, 'top': 5 + (k // pages) * 2, 'width': 390, 'height': 60}}, pages)
+        drawing = tb._drawing(pdf, spec, tb._geometry(page))
+        tb._isolate(pdf, page)
+        resources = pikepdf.Dictionary(page.obj.get('/Resources', {}))
+        fonts = pikepdf.Dictionary(resources.get('/Font', {}))
+        for name, font in drawing.fonts.items():
+            fonts[name] = font
+        resources.Font = fonts
+        page.obj.Resources = resources
+        stream = pikepdf.Stream(pdf, drawing.stream)
+        stream.NativeTextBox = pikepdf.String(tb._json(dict(version=1, spec=spec)))
+        page.obj.Contents = pikepdf.Array([*tb._contents(page), stream])
+    out = io.BytesIO()
+    pdf.save(out)
+    return out.getvalue()
+
+
+def test_hundred_styled_boxes_prove_well_inside_worker_cpu_limit():
+    import time
+    from engine.text_boxes import page_text_boxes
+    source = _hundred_styled_boxes()
+    with pikepdf.Pdf.open(io.BytesIO(source)) as pdf:
+        start = time.process_time()
+        listed = prepare_text_box(pdf, source, {'operation': 'list'})
+        list_cpu = time.process_time() - start
+        start = time.process_time()
+        page = page_text_boxes(pdf, source, 3)
+        page_cpu = time.process_time() - start
+    assert len(listed['boxes']) == 100
+    assert sorted(b['id'] for b in page) == sorted(b['id'] for b in listed['boxes'] if b['page_index'] == 3)
+    assert len(page) == 10
+    # The worker's limit is 20 s of CPU; leave headroom for slower hosts.
+    assert list_cpu < 10, list_cpu
+    assert page_cpu < 2, page_cpu
+
+
+def test_page_proof_still_refuses_a_forged_box_on_that_page():
+    from engine.text_boxes import page_text_boxes
+    data = output(perform(source_pdf(), draft(text='Owned')))
+    with pikepdf.Pdf.open(io.BytesIO(data)) as pdf:
+        pdf.add_blank_page(page_size=(400, 300))
+        stream = next(s for s in pdf.pages[0].Contents if '/NativeTextBox' in s)
+        stream.write(stream.read_bytes().replace(b'Tj', b'Tj 0 0 1 rg', 1))
+        out = io.BytesIO()
+        pdf.save(out)
+    forged = out.getvalue()
+    with pikepdf.Pdf.open(io.BytesIO(forged)) as pdf:
+        assert page_text_boxes(pdf, forged, 1) == []
+        with pytest.raises(TextBoxError, match='TEXT_BOX_UNSAFE'):
+            page_text_boxes(pdf, forged, 0)
+
+
+@pytest.mark.parametrize('family', ['Sans', 'Serif', 'Mono'])
+@pytest.mark.parametrize('variant', ['Regular', 'Bold', 'Italic', 'BoldItalic'])
+def test_cached_face_subsets_are_byte_identical_to_a_fresh_parse(family, variant):
+    from fontTools import subset
+    from fontTools.ttLib import TTFont
+    from engine.fonts import liberation_font_path, shape_glyph_names, subset_font_for_family
+
+    def stable(data):
+        font = TTFont(io.BytesIO(data), recalcTimestamp=False)
+        font['head'].modified = font['head'].created
+        buffer = io.BytesIO()
+        font.save(buffer)
+        return buffer.getvalue()
+
+    for text in ('Hello world 123', 'fi ffl Ålborg — “q” €'):
+        names = frozenset(shape_glyph_names(family, variant, text))
+        font = TTFont(str(liberation_font_path(family, variant)))
+        options = subset.Options()
+        options.set(notdef_outline=True, recommended_glyphs=False, desubroutinize=False)
+        subsetter = subset.Subsetter(options=options)
+        subsetter.populate(glyphs=sorted(names))
+        subsetter.subset(font)
+        fresh = io.BytesIO()
+        font.save(fresh)
+        assert stable(subset_font_for_family(family, variant, names).data) == stable(fresh.getvalue())
