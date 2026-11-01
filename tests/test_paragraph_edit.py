@@ -97,6 +97,8 @@ def test_styled_runs_keep_each_words_style():
     assert styled_runs(two, 'First more Second', S) == [{'text': 'First more ', 'style': {}}, {'text': 'Second', 'style': {'bold': True}}]
     assert styled_runs(two, 'First\nSecond', S) == [{'text': 'First\n', 'style': {}}, {'text': 'Second', 'style': {'bold': True}}]
     assert styled_runs(one, '', S) == []
+    assert styled_runs(one, 'Hello BOLD', S) == [{'text': 'Hello ', 'style': {}}, {'text': 'BOLD', 'style': {'bold': True}}]
+    assert styled_runs(two, 'First Other', S) == [{'text': 'First ', 'style': {}}, {'text': 'Other', 'style': {'bold': True}}]
 
 
 def test_gap_deletion_rebuild_keeps_both_styles(tmp_path):

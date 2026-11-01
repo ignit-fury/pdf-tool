@@ -95,7 +95,10 @@ def styled_runs(old_lines: Sequence[Sequence[Segment]], new_text: str,
     while end_old > start and end_new > start and old[end_old - 1] == probe[end_new - 1]:
         end_old -= 1
         end_new -= 1
-    inserted = filled[start - 1] if start else (filled[0] if filled else None)
+    if end_old > start:  # a replacement takes the style of the first char it replaces
+        inserted = filled[start]
+    else:  # a pure insertion takes the style of its left neighbour
+        inserted = filled[start - 1] if start else (filled[0] if filled else None)
     owners = filled[:start] + [inserted] * (end_new - start) + filled[end_old:]
     out: list[dict[str, Any]] = []
     for ch, owner in zip(new_text, owners):
