@@ -131,13 +131,72 @@ def test_small_edit_uses_line_plan(tmp_path):
     assert path.read_bytes() == source
 
 
-def test_overflow_needs_consent_then_rebuilds(tmp_path):
+def test_overflow_rebuilds_without_consent(tmp_path):
     path = tmp_path / 's.pdf'; source, p = two_line_pdf(path)
     long = ['First line here with a great deal of extra words added', 'Second line here']
-    with pytest.raises(TextBoxError, match='PARAGRAPH_NEEDS_REBUILD'):
-        prepare_paragraph_edit(path, source, payload(p, long), tmp_path)
-    result = prepare_paragraph_edit(path, source, payload(p, long, allow_rebuild=True), tmp_path)
+    result = prepare_paragraph_edit(path, source, payload(p, long), tmp_path)  # allow_rebuild False is ignored
     assert result['plan'] == 'rebuild' and 'great deal' in text_of(result['pdf'])
+    assert result['pushed'] == 0  # nothing below to move
+    assert path.read_bytes() == source
+
+
+def neighbor_pdf(path: Path, footer: bool = False, box_below: bool = False):
+    with pikepdf.Pdf.new() as pdf:
+        page = pdf.add_blank_page(page_size=(400, 400))
+        page.obj.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=pdf.make_indirect(
+            pikepdf.Dictionary(Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name.Helvetica))))
+        page.obj.Contents = pdf.make_stream(b'BT /F1 12 Tf 30 340 Td (First line here) Tj ET\n'
+                                            b'BT /F1 12 Tf 30 326 Td (Second line here) Tj ET\n'
+                                            b'BT /F1 12 Tf 30 305 Td (Keep neighbor) Tj ET'
+                                            + (b'\nBT /F1 12 Tf 30 8 Td (Footer) Tj ET' if footer else b''))
+        pdf.save(path)
+    if box_below:
+        from engine.text_boxes import prepare_text_box
+        with pikepdf.open(path) as pdf:
+            made = prepare_text_box(pdf, path.read_bytes(), {'operation': 'upsert', 'page_index': 0, 'text': 'Boxed note',
+                'rect': {'left': 30, 'top': 200, 'width': 150, 'height': 20}, 'style': {'font_family': 'Sans'}})
+        path.write_bytes(base64.b64decode(made['pdf']))
+    with RunIndex(path) as index:
+        return path.read_bytes(), next(p for p in page_paragraphs(0, index.page(0)) if len(p.lines) == 2)
+
+
+def top_of(data: bytes, word: str) -> float:
+    with pdfium.PdfDocument(data) as pdf:
+        page = pdf[0]; text = page.get_textpage()
+        try:
+            start = text.get_text_range().index(word)
+            return text.get_charbox(start)[3]
+        finally:
+            text.close(); page.close()
+
+
+LONG = ['First line here with a great deal of extra words added to it so that it wraps', 'Second line here']
+
+
+def test_long_edit_pushes_the_neighbor_down(tmp_path):
+    path = tmp_path / 's.pdf'; source, p = neighbor_pdf(path)
+    result = prepare_paragraph_edit(path, source, payload(p, LONG), tmp_path)
+    assert result['ok'] and result['plan'] == 'rebuild' and result['pushed'] > 0
+    pdf = base64.b64decode(result['pdf'])
+    assert 'great deal' in text_of(result['pdf']) and 'Keep neighbor' in text_of(result['pdf'])
+    assert top_of(source, 'Keep') - top_of(pdf, 'Keep') == pytest.approx(result['pushed'], abs=.01)
+    assert path.read_bytes() == source
+
+
+def test_native_box_below_moves_with_the_push(tmp_path):
+    path = tmp_path / 's.pdf'; source, p = neighbor_pdf(path, box_below=True)
+    result = prepare_paragraph_edit(path, source, payload(p, LONG), tmp_path)
+    assert result['pushed'] > 0
+    moved = next(b for b in result['boxes'] if b['text'] == 'Boxed note')
+    assert moved['rect']['top'] == pytest.approx(200 + result['pushed'])
+    assert top_of(source, 'Boxed') - top_of(base64.b64decode(result['pdf']), 'Boxed') == pytest.approx(result['pushed'], abs=.01)
+
+
+def test_push_past_the_page_bottom_is_refused_atomically(tmp_path):
+    path = tmp_path / 's.pdf'; source, p = neighbor_pdf(path, footer=True)
+    with pytest.raises(TextBoxError, match='PUSH_DOWN_PAGE_FULL'):
+        prepare_paragraph_edit(path, source, payload(p, LONG), tmp_path)
+    assert path.read_bytes() == source
 
 
 def test_added_line_rebuilds_with_explicit_break(tmp_path):

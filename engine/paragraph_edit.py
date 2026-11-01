@@ -1,4 +1,7 @@
-"""Map a paragraph draft back onto source runs, or decide to rebuild it."""
+"""Map a paragraph draft back onto source runs, or rebuild it.
+
+`allow_rebuild` is still accepted in the payload but ignored: the rebuild is always allowed.
+"""
 from __future__ import annotations
 
 import base64
@@ -171,14 +174,12 @@ def prepare_paragraph_edit(path: Path, source: bytes, payload: dict[str, Any], s
         try:
             report = apply_recipe(path, recipe, output, password=password)
         except (ValueError, RecipeTooLargeError):
-            report = None  # refused line plan: fall through to the rebuild consent path
+            report = None  # refused line plan: fall through to the rebuild
         if report is not None and report.ok and output.exists():
             return {'ok': True, 'plan': 'lines', 'pdf': base64.b64encode(output.read_bytes()).decode(),
                     'recipe': [{'run_id': op.run_id, 'new_text': op.new_text, **({'style': op.style} if op.style else {})}
                                for op in recipe],
-                    'source_hash': hashlib.sha256(source).hexdigest()}
-    if not payload['allow_rebuild']:
-        raise TextBoxError('PARAGRAPH_NEEDS_REBUILD')
+                    'source_hash': hashlib.sha256(source).hexdigest(), 'pushed': 0}
     text = rebuild_text(len(paragraph.lines), lines)
     if not text.strip():
         raise TextBoxError('TEXT_BOX_UNSUPPORTED_TEXT')  # an emptied paragraph has nothing to draw
@@ -192,5 +193,6 @@ def prepare_paragraph_edit(path: Path, source: bytes, payload: dict[str, Any], s
                'rect': payload['rect'], 'auto_expand': True,
                'style': {'font_family': 'Sans', **first_style,
                          **{k: v for k, v in payload['style'].items() if k == 'character_spacing'}}}
-    result = prepare_source_text_box(path, source, rebuild, scratch / 'paragraph-base.pdf', password=password)
+    result = prepare_source_text_box(path, source, rebuild, scratch / 'paragraph-base.pdf',
+                                     password=password, push=True)
     return {**result, 'plan': 'rebuild'}
