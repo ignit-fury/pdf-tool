@@ -586,6 +586,8 @@ def _resolve_op(
         original_advance_pt, pen, leading, charspace, wordspace, horizontal_scale = source_fit_geometry(
             pdf, run, list(all_page_runs), font_size, part_context, proof[0])
 
+        if op.style is None or 'character_spacing' not in op.style:
+            character_spacing = charspace  # untouched formatting: keep the run's own Tc
         loaded_font = load_font(font_bytes)
         if substitution_key is not None:
             written_advance = shape_advance_pt(op.new_text, loaded_font, replacement_size, serialized_widths=True)
@@ -596,7 +598,7 @@ def _resolve_op(
                 font_obj, [reverse_codes[UV2AGL[ord(ch)]] for ch in op.new_text], replacement_size)
             written_space = (advance_pt_for_codes(font_obj, [reverse_codes['space']], replacement_size)
                              if 'space' in reverse_codes else 0.0)
-        written_advance += len(op.new_text) * character_spacing
+        written_advance += len(op.new_text) * character_spacing + op.new_text.count(' ') * wordspace
         fit_result = fit_run(original_advance_pt, op.new_text, loaded_font, replacement_size,
                              replacement_advance_pt=written_advance,
                              replacement_space_width_pt=written_space)

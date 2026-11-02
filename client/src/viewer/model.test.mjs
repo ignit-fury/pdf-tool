@@ -48,3 +48,13 @@ test('image pointer geometry clamps movement and keeps aspect ratio while resizi
   const resized=moveImageRect(rect,20,10,page,'resize',true);
   assert.equal(resized.width/resized.height,2);assert.equal(resized.width,60);
 });
+
+test('edge and corner handles resize from the opposite anchor',async()=>{
+  const {moveImageRect}=await import('./model.mjs'),page={visibleWidth:500,visibleHeight:400},rect={left:100,top:100,width:200,height:100};
+  assert.deepEqual(moveImageRect(rect,20,0,page,'e',false),{...rect,width:220});
+  assert.deepEqual(moveImageRect(rect,-20,-10,page,'nw',false),{left:80,top:90,width:220,height:110});
+  const locked=moveImageRect(rect,-40,0,page,'w',true);
+  assert.equal(locked.left,60);assert.equal(locked.width/locked.height,2);
+  const clamped=moveImageRect(rect,999,999,page,'se',true);
+  assert.ok(clamped.left+clamped.width<=500&&clamped.top+clamped.height<=400);
+});

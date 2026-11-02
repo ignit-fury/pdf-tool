@@ -109,3 +109,24 @@ def test_two_style_variants_share_one_subset_each(tmp_path: Path) -> None:
     with pikepdf.open(output) as pdf:
         embedded = [font for font in pdf.pages[0].Resources.Font.values() if font.get("/Subtype") == pikepdf.Name("/Type0")]
         assert len(embedded) == 2
+
+
+def test_untouched_character_and_word_spacing_are_kept_on_the_replacement(tmp_path: Path) -> None:
+    source, output = tmp_path / 'in.pdf', tmp_path / 'out.pdf'
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(400, 200))
+    font = pdf.make_indirect(pikepdf.Dictionary(
+        Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name('/Times-BoldItalic')))
+    page = pdf.pages[0]
+    page.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font))
+    page.Contents = pdf.make_stream(b'BT /F1 14 Tf 0.5 Tc 2 Tw 20 150 Td (Hello brave world) Tj ET')
+    pdf.save(source)
+    run, _ = classify_document(source).runs[0]
+    assert apply_recipe(source, (RecipeOp(run.run_id, 'Hello bright world'),), output).ok
+    with pikepdf.open(output) as out:
+        shown = [(str(i.operator), list(i.operands)) for i in pikepdf.parse_content_stream(out.pages[0])]
+    show = next(k for k, (op, _) in enumerate(shown) if op in ('TJ', 'Tj'))
+    tc = next(float(shown[k][1][0]) for k in range(show, -1, -1) if shown[k][0] == 'Tc')
+    assert tc == 0.5  # shown under the run's own Tc, not 0
+    kerns = [float(v) for v in shown[show][1][0] if not isinstance(v, pikepdf.String)]
+    assert kerns[:2] == pytest.approx([-2 / 14 * 1000] * 2)  # Tw 2pt drawn at each of the two spaces

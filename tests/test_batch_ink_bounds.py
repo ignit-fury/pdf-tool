@@ -43,7 +43,7 @@ def test_real_tj_compressed_lines_do_not_expand(tmp_path):
 
 @pytest.mark.parametrize('matrix', ['12 0 0 12 72 700', '0 12 -18 0 300 200'])
 @pytest.mark.parametrize('multi_op', [False, True])
-@pytest.mark.parametrize('replacement', ['a ordinary a ordinary text', 'the ordinary the ordinary texts'])
+@pytest.mark.parametrize('replacement', ['a ordinary a ordinary text', 'the ordinary the ordinary textss'])
 def test_tj_spacing_and_final_pen_are_separate(tmp_path, matrix, multi_op, replacement):
     source, output = tmp_path / 'source.pdf', tmp_path / 'edited.pdf'
     _build_apply_fixture(source)
@@ -59,7 +59,7 @@ def test_tj_spacing_and_final_pen_are_separate(tmp_path, matrix, multi_op, repla
     follower = next(r for r in before if r.display_text == 'FOLLOWER')
     report = apply_recipe(source, (RecipeOp(original.run_id, replacement),), output)
     assert report.ok, report
-    assert report.resolved[0].strategy == ('tz' if replacement.endswith('texts') else 'trailing_kern')
+    assert report.resolved[0].strategy == ('tz' if replacement.endswith('ss') else 'trailing_kern')
     after = [r for r, _ in classify_document(output).runs]
     current = next(r for r in after if 'ordinary' in r.display_text)
     following = next(r for r in after if r.display_text == 'FOLLOWER')

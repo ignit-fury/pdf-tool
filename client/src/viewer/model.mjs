@@ -35,7 +35,21 @@ export function historyTransition({past,future,current},direction) {
 export function moveImageRect(rect,dx,dy,page,kind='move',locked=true) {
   const w=page.visibleWidth,h=page.visibleHeight;
   if(kind==='move')return {...rect,left:Math.max(0,Math.min(w-rect.width,rect.left+dx)),top:Math.max(0,Math.min(h-rect.height,rect.top+dy))};
-  let width=Math.max(1,Math.min(w-rect.left,rect.width+dx)),height=Math.max(1,Math.min(h-rect.top,rect.height+dy));
-  if(locked){height=width/(rect.width/rect.height);if(height>h-rect.top){height=h-rect.top;width=height*(rect.width/rect.height);}}
-  return {...rect,width,height};
+  // Resize from a handle: kind is a compass direction (n, se, w, …); 'resize' is the legacy corner.
+  const k=kind==='resize'?'se':kind,l=rect.left,t=rect.top,r=rect.left+rect.width,b=rect.top+rect.height;
+  let left=l,top=t,right=r,bottom=b;
+  if(k.includes('e'))right=Math.min(w,Math.max(l+1,r+dx));
+  if(k.includes('w'))left=Math.max(0,Math.min(r-1,l+dx));
+  if(k.includes('s'))bottom=Math.min(h,Math.max(t+1,b+dy));
+  if(k.includes('n'))top=Math.max(0,Math.min(b-1,t+dy));
+  let width=right-left,height=bottom-top;
+  if(locked) {
+    const ratio=rect.width/rect.height,vertical=!/[ew]/.test(k);
+    if(vertical)width=height*ratio;else height=width/ratio;
+    const anchorRight=k.includes('w'),anchorBottom=k.includes('n');
+    const scale=Math.min(1,(anchorRight?r:w-l)/width,(anchorBottom?b:h-t)/height);
+    width*=scale;height*=scale;
+    left=anchorRight?r-width:l;top=anchorBottom?b-height:t;
+  }
+  return {...rect,left,top,width,height};
 }

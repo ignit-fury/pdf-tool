@@ -71,9 +71,14 @@
 .image-edit-layer{position:absolute;inset:0;z-index:10;pointer-events:none}
 .image-hit-target,.image-selection{position:absolute;border:1px solid #2458df;pointer-events:auto;background:transparent;min-height:0;min-width:0;box-sizing:border-box;padding:0;border-radius:0}
 .image-hit-target:hover{background:#2458df0c}
+/* Beat the global button:hover:enabled so a hovered image never gets an opaque fill that hides it. */
+button.image-hit-target:hover:enabled{background:#2458df14;border-color:#2458df}
+button.image-drag-handle:hover:enabled{background:transparent;border-color:transparent}
+button.image-resize-handle:hover:enabled{background:#2458df;border-color:#fff}
 .image-selection{outline:1px solid #fff}
 .image-drag-handle{position:absolute;inset:0;width:100%;height:100%;padding:0;min-height:0;min-width:0;border:0;background:transparent;cursor:move;touch-action:none}
-.image-resize-handle{position:absolute;right:-6px;bottom:-6px;width:13px;height:13px;min-height:0;min-width:0;padding:0;border:2px solid #fff;background:#2458df;border-radius:0;cursor:nwse-resize;touch-action:none}
+.image-resize-handle{position:absolute;width:13px;height:13px;min-height:0;min-width:0;padding:0;border:2px solid #fff;background:#2458df;border-radius:0;touch-action:none}
+.handle-nw{left:-6px;top:-6px;cursor:nwse-resize}.handle-n{left:calc(50% - 6px);top:-6px;cursor:ns-resize}.handle-ne{right:-6px;top:-6px;cursor:nesw-resize}.handle-e{right:-6px;top:calc(50% - 6px);cursor:ew-resize}.handle-se{right:-6px;bottom:-6px;cursor:nwse-resize}.handle-s{left:calc(50% - 6px);bottom:-6px;cursor:ns-resize}.handle-sw{left:-6px;bottom:-6px;cursor:nesw-resize}.handle-w{left:-6px;top:calc(50% - 6px);cursor:ew-resize}
 .context-toolbar .aspect-lock{display:flex;flex-direction:row;align-items:center;min-height:34px;gap:5px}
 .context-toolbar .aspect-lock input{min-height:0;width:16px;height:16px}
 @media(min-width:1600px){.document-workspace{grid-template-columns:130px minmax(0,1fr)}.document-workspace.with-panel{grid-template-columns:130px minmax(0,1fr) 330px}}

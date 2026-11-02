@@ -2,6 +2,7 @@ import {attachManagedImage,findManagedImage,removeManagedImage} from './managedI
 import {PDFName,PDFNumber,degrees} from '@cantoo/pdf-lib';
 import {loadLocalPdf,describePage,isolatePageResources,inspectSignatures,MAX_LOCAL_PDF_BYTES,pdfError} from './pdfDocument.mjs';
 import {fitImage,placementMatrix} from './imageGeometry.mjs';
+import {rewriteOriginalImage} from './originalImages.mjs';
 
 export const MAX_IMAGE_BYTES=20*1024*1024;
 export const MAX_IMAGE_PIXELS=16000000;
@@ -210,7 +211,20 @@ export async function writeImage(bytes,pngBytes,{password,destination,pageIndex,
 export async function updateManagedImage(bytes,pngBytes,{password,pageIndex,id,rect,rotation=0,remove=false,acknowledged=false}={}) {
   const pdf=await loadLocalPdf(bytes,{password}),signed=inspectSignatures(pdf),encrypted=!!(pdf.isEncrypted||pdf.context.isDecrypted),notices=[];
   if(signed&&!acknowledged)refuse('SIGNATURE_ACK_REQUIRED');
-  const geometry=describePage(pdf,pageIndex),page=pdf.getPage(pageIndex),record=findManagedImage(page,id,geometry);
+  const geometry=describePage(pdf,pageIndex),page=pdf.getPage(pageIndex);
+  if(/^oi_\d+$/.test(id??'')) {
+    // Original image: edit its own `cm Do` in place; replacements get a new XObject name.
+    let key;
+    if(remove!==true&&pngBytes!==undefined) {
+      const png=pngBytes instanceof ArrayBuffer?new Uint8Array(pngBytes):pngBytes;
+      if(!(png instanceof Uint8Array))refuse('IMAGE_INVALID');if(png.byteLength>MAX_IMAGE_PNG_BYTES)refuse('IMAGE_PNG_TOO_LARGE');
+      const info=inspectImage(png);if(info.mime!=='image/png'||info.orientation!==1)refuse('IMAGE_INVALID');
+      let image;try{image=await pdf.embedPng(png);await image.embed();}catch(error){if(error.code)throw error;refuse('IMAGE_INVALID');}
+      isolatePageResources(page);key=`PdfToolReplace${globalThis.crypto.randomUUID().replaceAll('-','')}`;page.node.setXObject(PDFName.of(key),image.ref);
+    }
+    rewriteOriginalImage(page,id,geometry,{rect,rotation,remove:remove===true,key});
+  }else {
+  const record=findManagedImage(page,id,geometry);
   if(remove===true)removeManagedImage(page,record);
   else {
     let image={ref:record.imageRef};
@@ -222,6 +236,7 @@ export async function updateManagedImage(bytes,pngBytes,{password,pageIndex,id,r
     }
     isolatePageResources(page);
     attachManagedImage(pdf,page,image,rect,geometry,{id,rotation,replace:record});
+  }
   }
   if(encrypted)notices.push({code:'ENCRYPTED_COPY_UNLOCKED'});
   const output=await pdf.save({updateFieldAppearances:false});if(output.byteLength>MAX_LOCAL_PDF_BYTES)refuse('LOCAL_PDF_TOO_LARGE');

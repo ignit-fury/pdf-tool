@@ -85,3 +85,11 @@ test('clampRect keeps a rebuild rect inside the visible page',()=>{
   assert.deepEqual(clampRect({left:390,top:299.5,width:30,height:20},page),{left:390,top:299,width:10,height:1});
   assert.deepEqual(clampRect({left:30,top:50,width:90,height:26},page),{left:30,top:50,width:90,height:26});
 });
+
+test('a one-line paragraph widens to the room on its right, stopping at the next item',async()=>{
+  const {widenSingleLine}=await import('./paragraphs.mjs'),page={visibleWidth:500},rect={left:40,top:20,width:180,height:16},one={lines:[['a']]};
+  assert.equal(widenSingleLine(rect,one,[],page).width,420);
+  assert.equal(widenSingleLine(rect,one,[{left:300,top:10,width:50,height:30}],page).width,260);
+  assert.equal(widenSingleLine(rect,one,[{left:300,top:100,width:50,height:30}],page).width,420);
+  assert.equal(widenSingleLine(rect,{lines:[['a'],['b']]},[],page),rect);
+});

@@ -8,7 +8,7 @@ async(page)=>{
   await handle.scrollIntoViewIfNeeded();const a=await handle.boundingBox();
   await page.mouse.move(a.x+a.width/2,a.y+a.height/2);await page.mouse.down();await page.mouse.move(a.x+a.width/2+23,a.y+a.height/2+11.5,{steps:3});await page.mouse.up();
   if(Math.abs(Number(await left.inputValue())-initial-20)>.05)throw new Error('Pointer move did not use physical page coordinates');
-  const resize=page.getByRole('button',{name:'Resize selected image',exact:true});
+  const resize=page.getByRole('button',{name:'Resize selected image se',exact:true});
   await resize.scrollIntoViewIfNeeded();const b=await resize.boundingBox();
   const oldWidth=Number(await page.getByRole('spinbutton',{name:'Image width',exact:true}).inputValue());
   await page.mouse.move(b.x+b.width/2,b.y+b.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width/2+23,b.y+b.height/2+10,{steps:3});await page.mouse.up();

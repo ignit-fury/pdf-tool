@@ -74,3 +74,10 @@ export function placementMatrix(rect,pageGeometry) {
   const {left,top,width,height}=validation.rect,bl=inverse(left,top+height),br=inverse(left+width,top+height),tl=inverse(left,top);
   return [br[0]-bl[0],br[1]-bl[1],tl[0]-bl[0],tl[1]-bl[1],...bl].map(n=>Object.is(n,-0)?0:n);
 }
+/** Bounding box, in the top-left visible physical frame, of PDF user-space points. */
+export function visibleRect(points,pageGeometry) {
+  const b=basis(pageGeometry);
+  const to=([x,y])=>{let l,t;switch(b.rotation){case 0:l=x-b.x;t=b.top-y;break;case 90:t=x-b.x;l=y-b.y;break;case 180:l=b.right-x;t=y-b.y;break;default:t=b.right-x;l=b.top-y;}return [l*b.u,t*b.u];};
+  const p=points.map(to),xs=p.map(q=>q[0]),ys=p.map(q=>q[1]),left=Math.min(...xs),top=Math.min(...ys);
+  return {left,top,width:Math.max(...xs)-left,height:Math.max(...ys)-top};
+}

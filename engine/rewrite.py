@@ -1008,7 +1008,7 @@ def _substitution_triggered(
 
 
 def _trailing_fit_for_written_font(
-    fit: FitResult, font: pikepdf.Object, codes: list[int], font_size: float
+    fit: FitResult, font: pikepdf.Object, codes: list[int], font_size: float, spaces: int = 0
 ) -> FitResult:
     """Preserve pen advance using the widths the PDF viewer will actually read.
 
@@ -1020,10 +1020,15 @@ def _trailing_fit_for_written_font(
         actual = advance_pt_for_codes(font, codes, font_size) + len(codes) * fit.replacement_charspace
         ratio = (fit.condensed_scale or 100.0) / 100.0 if fit.strategy == 'tz' else 1.0
         interior = list(fit.kerns) if fit.strategy == 'inter_word_kern' else []
+        # The run's word spacing (Tw) cannot act on the replacement's two-byte codes, so it is
+        # drawn as a negative kern per space: it widens each gap exactly as Tw did.
+        spacing = fit.source_wordspace * spaces
         if interior:
             # Reconcile program/serialized width rounding before distributing spacing.
-            total = (actual - fit.original_advance_pt) / font_size * 1000.0
+            total = (actual + spacing - fit.original_advance_pt) / font_size * 1000.0
             interior = [total / len(interior)] * len(interior)
+        elif spacing:
+            interior = [-fit.source_wordspace / font_size * 1000.0] * spaces
         pen = actual - sum(interior) / 1000 * font_size
         terminal = (pen - fit.source_pen_advance_pt / ratio) / font_size * 1000.0
         return replace(fit, replacement_shaped_advance_pt=actual,
@@ -1093,7 +1098,7 @@ def _show_instruction(
         return pikepdf.ContentStreamInstruction(
             [pikepdf.String(all_bytes)], pikepdf.Operator("Tj")
         )
-    if fit_result.strategy in ("trailing_kern", "tz"):
+    if fit_result.strategy in ("trailing_kern", "tz") and len(kerns) == 1:
         return pikepdf.ContentStreamInstruction(
             [pikepdf.Array([*([leading] if leading else []), pikepdf.String(all_bytes), *kerns])],
             pikepdf.Operator("TJ"),
@@ -1233,7 +1238,8 @@ def _resolve_substituted_operand(
             return RewriteOutcome(ok=False, reason=str(exc))
         raise
     fitted = _trailing_fit_for_written_font(
-        fit_result, font_obj, [int.from_bytes(code, "big") for code, _ in units], replacement_size)
+        fit_result, font_obj, [int.from_bytes(code, "big") for code, _ in units], replacement_size,
+        sum(1 for _, ch in units if ch == " "))
     replacement = _show_instruction(units, fitted)
     resource_key = _substitution_resource_key(resources, font_obj, subset)
     tf_new = pikepdf.ContentStreamInstruction(
@@ -1333,7 +1339,8 @@ def _resolve_non_substituted_operand(
     if active is None:
         return RewriteOutcome(ok=False, reason="no_active_font_for_original_encoding")
     fitted = _trailing_fit_for_written_font(
-        fit_result, font, [code_map[ch] for ch in new_text], fit_result.replacement_font_size or active[1])
+        fit_result, font, [code_map[ch] for ch in new_text], fit_result.replacement_font_size or active[1],
+        new_text.count(" "))
     return _show_instruction(tuple((bytes([code_map[ch]]), ch) for ch in new_text), fitted)
 
 

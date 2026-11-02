@@ -44,7 +44,7 @@ def test_size_and_spacing_change_native_state_restore_following_text(tmp_path: P
         objects = [(o.matrix, o.gstate.fontsize, o.gstate.charspace, o.gstate.wordspace)
                    for _, _, _, o in walk_page(doc.pages[0], doc)]
         assert objects[0][1] == style.get('font_size', 12)
-        assert objects[0][2] == style.get('character_spacing', 0)
+        assert objects[0][2] == style.get('character_spacing', 0.5)  # unstyled: the run's own Tc is kept
         assert objects[-1][0] == pytest.approx(following_position, abs=1e-6)
         assert objects[-1][1] == following_size
         assert objects[-1][2] == 0.5

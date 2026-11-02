@@ -64,3 +64,13 @@ export function clampRect(rect,{visibleWidth:w,visibleHeight:h}){
   const left=Math.min(Math.max(0,rect.left),w-1),top=Math.min(Math.max(0,rect.top),h-1);
   return {left,top,width:Math.min(Math.max(1,rect.width),w-left),height:Math.min(Math.max(1,rect.height),h-top)};
 }
+// A one-line paragraph wraps at its own ink width, which is not its real line width: widen the
+// rebuild rect to the room on its right (mirrored page margin, or the next item in its band).
+// Multi-line paragraphs keep their column width so existing wrapping does not move.
+export function widenSingleLine(rect,paragraph,obstacles,{visibleWidth}){
+  if(paragraph.lines.length!==1)return rect;
+  const edge=rect.left+rect.width,bottom=rect.top+rect.height;
+  let right=visibleWidth-rect.left;
+  for(const o of obstacles)if(o.left>=edge-1e-6&&o.top<bottom&&o.top+o.height>rect.top)right=Math.min(right,o.left);
+  return right>edge?{...rect,width:right-rect.left}:rect;
+}

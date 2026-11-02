@@ -2,18 +2,20 @@ import React,{useRef,useState} from 'react';
 import {moveImageRect} from './model.mjs';
 import ToolbarDetails from './ToolbarDetails.jsx';
 
-export function ImageHandles({images,selected,geometry,viewport,disabled,onSelect,onChange}) {
+export function ImageHandles({images,selected,geometry,viewport,disabled,onSelect,onChange,onCommit}) {
   const drag=useRef(null),sx=viewport.width/geometry.visibleWidth,sy=viewport.height/geometry.visibleHeight;
   const pointerDown=(event,kind)=>{
     if(disabled||!selected)return;event.preventDefault();event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     drag.current={x:event.clientX,y:event.clientY,rect:{...selected.rect},kind};
   };
-  const pointerMove=event=>{if(!drag.current||disabled)return;onChange({...selected,rect:moveImageRect(drag.current.rect,(event.clientX-drag.current.x)/sx,(event.clientY-drag.current.y)/sy,geometry,drag.current.kind,selected.locked!==false)});};
+  const pointerMove=event=>{if(!drag.current||disabled)return;const next={...selected,rect:moveImageRect(drag.current.rect,(event.clientX-drag.current.x)/sx,(event.clientY-drag.current.y)/sy,geometry,drag.current.kind,selected.locked!==false&&!event.shiftKey)};drag.current.last=next;onChange(next);};
+  // Releasing a drag saves the move/resize at once; a click without movement saves nothing.
+  const release=()=>{const last=drag.current?.last;drag.current=null;if(last&&onCommit)onCommit(last);};
   const box=item=>({left:item.rect.left*sx,top:item.rect.top*sy,width:item.rect.width*sx,height:item.rect.height*sy,transform:`rotate(${item.rotation||0}deg)`});
   return <div className="image-edit-layer" aria-label="Image edit targets">
     {images.filter(item=>item.id!==selected?.id).map((image,i)=><button key={image.id} className="image-hit-target" disabled={disabled} style={box(image)} aria-label={`Select image ${i+1} on page`} onClick={()=>onSelect(image)}/>)}
-    {selected&&<div className="image-selection" style={box(selected)}><button className="image-drag-handle" aria-label="Move selected image" disabled={disabled} onPointerDown={event=>pointerDown(event,'move')} onPointerMove={pointerMove} onPointerUp={()=>drag.current=null} onPointerCancel={()=>drag.current=null} onKeyDown={event=>{if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();const dx=event.key==='ArrowLeft'?-1:event.key==='ArrowRight'?1:0,dy=event.key==='ArrowUp'?-1:event.key==='ArrowDown'?1:0;onChange({...selected,rect:moveImageRect(selected.rect,dx*(event.shiftKey?10:1),dy*(event.shiftKey?10:1),geometry)});}}}/><button className="image-resize-handle" aria-label="Resize selected image" disabled={disabled} onPointerDown={event=>pointerDown(event,'resize')} onPointerMove={pointerMove} onPointerUp={()=>drag.current=null} onPointerCancel={()=>drag.current=null}/></div>}
+    {selected&&<div className="image-selection" style={box(selected)}><button className="image-drag-handle" aria-label="Move selected image" disabled={disabled} onPointerDown={event=>pointerDown(event,'move')} onPointerMove={pointerMove} onPointerUp={release} onPointerCancel={()=>drag.current=null} onKeyDown={event=>{if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();const dx=event.key==='ArrowLeft'?-1:event.key==='ArrowRight'?1:0,dy=event.key==='ArrowUp'?-1:event.key==='ArrowDown'?1:0;onChange({...selected,rect:moveImageRect(selected.rect,dx*(event.shiftKey?10:1),dy*(event.shiftKey?10:1),geometry)});}}}/>{['nw','n','ne','e','se','s','sw','w'].map(dir=><button key={dir} className={`image-resize-handle handle-${dir}`} aria-label={`Resize selected image ${dir}`} disabled={disabled} onPointerDown={event=>pointerDown(event,dir)} onPointerMove={pointerMove} onPointerUp={release} onPointerCancel={()=>drag.current=null}/>)}</div>}
   </div>;
 }
 
@@ -31,7 +33,7 @@ export default function ImageToolbar({image,newImage,busy,valid,error,onChange,o
       <label className="aspect-lock"><input type="checkbox" checked={image.locked!==false} onChange={event=>onChange({...image,locked:event.target.checked})}/> Lock aspect ratio</label>
     </fieldset>
     <ToolbarDetails label="Edit details">
-      <p className="context-guidance">Drag the outline to move; drag its corner to resize. Position and bounds are previewed before Apply. Existing PDF content stays unchanged until then. Original, unowned PDF images cannot be altered safely here.</p>
+      <p className="context-guidance">Drag the outline to move; drag a handle to resize. Each move or resize is saved when you let go; Undo reverts it. Original, unowned PDF images cannot be altered safely here.</p>
     </ToolbarDetails>
     {error&&<p className="context-warning" role="status">{error}</p>}
     {!valid&&<p className="context-warning">Keep the entire image within this page. Rotation may require a smaller size.</p>}
