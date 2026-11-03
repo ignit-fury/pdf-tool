@@ -46,7 +46,8 @@ echo "==> Python dependencies (production set)"
 uv sync --frozen --no-dev --no-install-project
 
 echo "==> Client build"
-(cd client && npm ci --include=dev && npm run build)  # vite is a devDependency; NODE_ENV=production would skip it
+# vite is a devDependency; a shell-wide NODE_ENV=production makes npm omit it.
+(cd client && NODE_ENV=development npm ci --include=dev && npm run build)
 
 echo "==> Service"
 sudo tee "/etc/systemd/system/${SERVICE}.service" >/dev/null <<UNIT
