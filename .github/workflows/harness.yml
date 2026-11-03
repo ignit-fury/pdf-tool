@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
 
+# A newer push makes older runs on the same branch pointless; cancel them.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   corpus-harness:
     runs-on: ubuntu-latest

@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: pdf-tool-production
@@ -22,6 +23,21 @@ jobs:
     environment: pdf
 
     steps:
+      # workflow_run would be cleaner, but GitHub only fires it from workflows on the default branch.
+      - name: Wait for Tests to pass on this commit
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          for i in $(seq 30); do
+            id=$(gh run list --workflow tests.yml --commit "$GITHUB_SHA" --event push --json databaseId -q '.[0].databaseId')
+            [ -n "$id" ] && break
+            sleep 10
+          done
+          [ -n "$id" ] || { echo "::error::No Tests run found for $GITHUB_SHA."; exit 1; }
+          gh run watch "$id" --interval 60 --exit-status >/dev/null || { echo "::error::Tests did not pass (run $id); not deploying."; exit 1; }
+
       - name: Configure SSH
         env:
           SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
@@ -41,6 +57,7 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      # shortcut: setup.sh deploys the branch tip, not the tested SHA; a push landing between test finish and deploy goes out untested. Pass the SHA to setup.sh if that ever bites.
       - name: Deploy application
         env:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
