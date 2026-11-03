@@ -1,3 +1,4 @@
+import '../randomUUID.mjs';
 import {inspectLocalPdf,transformPages,subsetPages} from './pdfDocument.mjs';
 import {inspectPdfImport,mergePdf} from './mergePdf.mjs';
 import {writeImage,updateManagedImage} from './images.mjs';
