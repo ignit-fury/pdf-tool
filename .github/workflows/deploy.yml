@@ -25,7 +25,12 @@ jobs:
         env:
           SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.SERVER_KNOWN_HOSTS }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
+          for name in SSH_KEY KNOWN_HOSTS SERVER_HOST SERVER_USER; do
+            [ -n "${!name}" ] || { echo "::error::Missing repo secret for $name (Settings > Secrets and variables > Actions)."; exit 1; }
+          done
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
@@ -40,15 +45,15 @@ jobs:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
-          ssh "$SERVER_USER@$SERVER_HOST" \
-            'cd /home/ubuntu/pdf-tool && bash deploy/setup.sh'
+          ssh -o BatchMode=yes "$SERVER_USER@$SERVER_HOST" \
+            'cd /home/ubuntu/pdf-tool && PORT=8090 bash deploy/setup.sh'
 
       - name: Verify deployment
         env:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
-          ssh "$SERVER_USER@$SERVER_HOST" \
+          ssh -o BatchMode=yes "$SERVER_USER@$SERVER_HOST" \
             'sudo systemctl is-active pdf-tool &&
              curl -fsS http://127.0.0.1:8090/'
 
